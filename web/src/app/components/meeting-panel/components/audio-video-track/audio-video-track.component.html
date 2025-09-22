@@ -1,0 +1,8 @@
+<video
+    #videoTrack
+    autoplay
+    muted
+    playsinline
+    [ngClass]="{ 'horizontal-flip-video': mirrorVideoStream }"
+    class="rounded w-full h-full object-cover"></video>
+<audio #audioTrack autoplay [muted]="muted"></audio>

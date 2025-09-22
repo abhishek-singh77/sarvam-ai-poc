@@ -1,0 +1,12 @@
+<!-- KYC Session Window -->
+<div class="h-screen">
+    <app-vkyc-session (sessionEnded)="returnToHome()"></app-vkyc-session>
+</div>
+
+<!-- Error Modal -->
+<app-error-modal
+    [isVisible]="showErrorModal"
+    [errorData]="errorModalData"
+    (closeModal)="onErrorModalClose()"
+    (retryAction)="onErrorModalRetry()">
+</app-error-modal>

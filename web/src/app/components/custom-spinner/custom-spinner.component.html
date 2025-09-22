@@ -1,0 +1,7 @@
+<div class="spinner-container" [style.width.px]="size" [style.height.px]="size">
+    <div
+        class="spinner"
+        [style.border-color]="color + '20'"
+        [style.border-top-color]="color"></div>
+    <div *ngIf="text" class="spinner-text">{{ text }}</div>
+</div>

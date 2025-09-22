@@ -1,0 +1,119 @@
+{
+    "steps": [
+        {
+            "id": "introduction",
+            "type": "introduction",
+            "title": "Welcome",
+            "description": "Welcome to the KYC process. I will guide you step by step.",
+            "status": "pending",
+            "data": null
+        },
+        {
+            "id": "selfie_capture",
+            "type": "selfie_capture",
+            "title": "Take Selfie",
+            "description": "Please capture a selfie for liveness verification.",
+            "status": "pending",
+            "data": null,
+            "instructions": "Look directly at the camera and smile naturally. Ensure good lighting and clear visibility of your face."
+        },
+        {
+            "id": "questionnaire",
+            "type": "questionnaire",
+            "title": "Personal Information",
+            "description": "Please provide your basic information.",
+            "status": "pending",
+            "data": null,
+            "questions": [
+                {
+                    "id": "full_name",
+                    "question": "What is your full name?",
+                    "type": "text",
+                    "required": true
+                },
+                {
+                    "id": "age",
+                    "question": "What is your age?",
+                    "type": "number",
+                    "required": true
+                },
+                {
+                    "id": "date_of_birth",
+                    "question": "What is your date of birth?",
+                    "type": "date",
+                    "required": true
+                },
+                {
+                    "id": "phone_number",
+                    "question": "What is your phone number?",
+                    "type": "text",
+                    "required": true
+                },
+                {
+                    "id": "email",
+                    "question": "What is your email address?",
+                    "type": "text",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "id": "id_upload",
+            "type": "id_upload",
+            "title": "ID Document Upload",
+            "description": "Please upload your ID document (PAN Card, Aadhaar Card, or Passport).",
+            "status": "pending",
+            "data": null,
+            "document_types": [
+                "PAN Card",
+                "Aadhaar Card",
+                "Passport",
+                "Driving License",
+                "Voter ID"
+            ],
+            "instructions": "Upload a clear photo of your ID document. Ensure all text is readable and the document is not damaged."
+        },
+        {
+            "id": "address_verification",
+            "type": "address_verification",
+            "title": "Address Verification",
+            "description": "Please provide your current address details.",
+            "status": "pending",
+            "data": null,
+            "questions": [
+                {
+                    "id": "current_address",
+                    "question": "What is your current address?",
+                    "type": "text",
+                    "required": true
+                },
+                {
+                    "id": "city",
+                    "question": "Which city do you live in?",
+                    "type": "text",
+                    "required": true
+                },
+                {
+                    "id": "state",
+                    "question": "Which state do you live in?",
+                    "type": "text",
+                    "required": true
+                },
+                {
+                    "id": "pincode",
+                    "question": "What is your PIN code?",
+                    "type": "text",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "id": "verification",
+            "type": "verification",
+            "title": "Verification Complete",
+            "description": "Your KYC verification has been completed successfully.",
+            "status": "pending",
+            "data": null
+        }
+    ]
+}

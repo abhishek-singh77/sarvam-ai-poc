@@ -1,0 +1,34 @@
+/* Audio Video Track Component Styles */
+video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 0.5rem;
+    background-color: #f3f4f6;
+}
+
+audio {
+    display: none; /* Hidden audio elements */
+}
+
+/* Mirror video for local stream */
+.horizontal-flip-video {
+    transform: scaleX(-1);
+}
+
+/* Ensure video fills container */
+.rounded {
+    border-radius: 0.5rem;
+}
+
+.w-full {
+    width: 100%;
+}
+
+.h-full {
+    height: 100%;
+}
+
+.object-cover {
+    object-fit: cover;
+}

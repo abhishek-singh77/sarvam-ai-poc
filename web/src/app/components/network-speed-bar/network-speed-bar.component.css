@@ -1,0 +1,67 @@
+/* Network Speed Bar Component Styles */
+.flex {
+    display: flex;
+}
+
+.items-center {
+    align-items: center;
+}
+
+.gap-1 {
+    gap: 0.25rem;
+}
+
+.text-xs {
+    font-size: 0.75rem;
+    line-height: 1rem;
+}
+
+.text-green-600 {
+    color: rgb(22 163 74);
+}
+
+.text-blue-600 {
+    color: rgb(37 99 235);
+}
+
+.text-yellow-600 {
+    color: rgb(202 138 4);
+}
+
+.text-red-600 {
+    color: rgb(220 38 38);
+}
+
+.text-gray-600 {
+    color: rgb(75 85 99);
+}
+
+.text-gray-400 {
+    color: rgb(156 163 175);
+}
+
+.hover\:text-gray-600:hover {
+    color: rgb(75 85 99);
+}
+
+.transition-colors {
+    transition-property: color, background-color, border-color,
+        text-decoration-color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+}
+
+button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+.w-3 {
+    width: 0.75rem;
+}
+
+.h-3 {
+    height: 0.75rem;
+}

@@ -1,0 +1,42 @@
+fastapi
+httpx
+sqlalchemy
+pymysql
+aiomysql
+alembic
+pydantic
+pydantic-settings
+python-dotenv
+uvicorn
+videosdk
+videosdk-agents
+videosdk-plugins-sarvamai
+videosdk-plugins-google
+videosdk-plugins-silero
+videosdk-plugins-turn-detector
+videosdk-plugins-rnnoise
+PyJWT
+
+
+# fastapi==0.116.1
+# httpx==0.28.1
+# SQLAlchemy==2.0.43
+# PyMySQL==1.1.2
+# alembic==1.16.5
+# pydantic==2.11.9
+# pydantic-settings==2.10.1
+# python-dotenv==1.1.1
+# uvicorn==0.35.0
+# videosdk==0.2.5
+# videosdk-agents==0.0.34
+# videosdk-plugins-google==0.0.32
+# videosdk-plugins-rnnoise==0.0.32
+# videosdk-plugins-sarvamai==0.0.32
+# videosdk-plugins-silero==0.0.32
+# videosdk-plugins-turn-detector==0.0.32
+# PyJWT==2.10.1
+# structlog==25.4.0
+# redis==6.4.0
+# asyncpg==0.30.0
+# psycopg2-binary==2.9.10
+# aiosqlite==0.21.0

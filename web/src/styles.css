@@ -1,0 +1,664 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Material Symbols Font Configuration */
+.material-symbols-outlined {
+    font-family: 'Material Symbols Outlined';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Video mirror effect for local video */
+.horizontal-flip-video {
+    transform: scaleX(-1);
+}
+
+@layer base {
+    body {
+        @apply font-sans bg-background-primary text-text-primary min-h-screen leading-relaxed text-sm antialiased;
+    }
+}
+
+@layer components {
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 px-6 py-3 border border-transparent rounded-md text-sm font-medium leading-5 no-underline cursor-pointer transition-all duration-200 whitespace-nowrap select-none;
+    }
+
+    .btn:disabled {
+        @apply opacity-50 cursor-not-allowed pointer-events-none;
+    }
+
+    .btn-primary {
+        @apply bg-primary text-white border-primary;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        @apply bg-primary-hover border-primary-hover shadow-md;
+    }
+
+    .btn-secondary {
+        @apply bg-background-primary text-text-primary border-border;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+        @apply bg-background-secondary border-border-hover shadow-sm;
+    }
+
+    .btn-success {
+        @apply bg-success text-white border-success;
+    }
+
+    .btn-success:hover:not(:disabled) {
+        @apply bg-green-700 border-green-700 shadow-md;
+    }
+
+    .btn-danger {
+        @apply bg-error text-white border-error;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+        @apply bg-red-700 border-red-700 shadow-md;
+    }
+
+    .btn-outline {
+        @apply bg-transparent text-primary border-primary;
+    }
+
+    .btn-outline:hover:not(:disabled) {
+        @apply bg-primary-light text-primary-hover;
+    }
+
+    .btn-sm {
+        @apply px-4 py-2 text-xs;
+    }
+
+    .btn-lg {
+        @apply px-8 py-4 text-base;
+    }
+}
+
+.card {
+    @apply bg-background-primary border border-border rounded-lg shadow-sm overflow-hidden transition-shadow duration-200;
+}
+
+.card:hover {
+    @apply shadow-md;
+}
+
+.card-header {
+    @apply px-6 pt-6 pb-0 border-b border-border mb-6;
+}
+
+.card-body {
+    @apply p-6;
+}
+
+.card-footer {
+    @apply px-6 pb-6 pt-0 border-t border-border mt-6;
+}
+
+.container {
+    @apply max-w-6xl mx-auto px-4;
+}
+
+.text-primary {
+    @apply text-text-primary;
+}
+.text-secondary {
+    @apply text-text-secondary;
+}
+.text-muted {
+    @apply text-text-muted;
+}
+.text-success {
+    @apply text-green-600;
+}
+.text-warning {
+    @apply text-yellow-600;
+}
+.text-error {
+    @apply text-red-600;
+}
+
+/* Status System */
+.status-badge {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-sm text-xs font-medium uppercase tracking-wide;
+}
+
+.status-success {
+    @apply bg-success-light text-success;
+}
+
+.status-warning {
+    @apply bg-warning-light text-warning;
+}
+
+.status-error {
+    @apply bg-error-light text-error;
+}
+
+.status-info {
+    @apply bg-primary-light text-primary;
+}
+
+/* Video Components */
+.video-container {
+    @apply relative bg-background-tertiary rounded-lg overflow-hidden border border-border;
+}
+
+.video-container video {
+    @apply w-full h-auto block bg-black;
+}
+
+.video-overlay {
+    @apply absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center text-white font-medium;
+}
+
+.video-overlay .btn {
+    @apply bg-white text-black border-white shadow-lg;
+}
+
+.video-overlay .btn:hover {
+    @apply bg-gray-100 text-black border-gray-100;
+}
+
+/* Log System */
+.log-container {
+    @apply bg-background-secondary border border-border rounded-md p-4 max-h-96 overflow-y-auto font-mono text-xs leading-snug;
+}
+
+.log-entry {
+    @apply mb-2 py-1 border-b border-border last:border-b-0 last:mb-0;
+}
+
+.log-timestamp {
+    @apply text-text-muted font-medium;
+}
+
+.log-message {
+    @apply text-text-primary ml-2;
+}
+
+/* Header */
+.app-header {
+    @apply bg-background-primary border-b border-border py-4 sticky top-0 z-50 backdrop-blur-sm;
+}
+
+.header-logo {
+    @apply flex items-center gap-3;
+}
+
+.logo-icon {
+    @apply w-10 h-10 bg-primary rounded-md flex items-center justify-center text-white font-bold text-lg;
+}
+
+.logo-text {
+    @apply flex flex-col;
+}
+
+.logo-title {
+    @apply text-lg font-bold text-text-primary leading-tight;
+}
+
+.logo-subtitle {
+    @apply text-xs text-text-muted leading-tight;
+}
+
+/* Meeting View */
+.meeting-container {
+    @apply max-w-7xl mx-auto p-8;
+}
+
+.meeting-header {
+    @apply flex items-center justify-between mb-8 p-6 bg-background-primary border border-border rounded-lg shadow-sm;
+}
+
+.meeting-title {
+    @apply text-xl font-semibold text-text-primary;
+}
+
+.participants-grid {
+    @apply grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-6;
+}
+
+.participant-card {
+    @apply bg-background-primary border border-border rounded-lg overflow-hidden shadow-sm transition-shadow duration-200 hover:shadow-md;
+}
+
+.participant-video {
+    @apply relative bg-black aspect-video;
+}
+
+.participant-info {
+    @apply p-4 flex items-center justify-between;
+}
+
+.participant-name {
+    @apply font-medium text-text-primary;
+}
+
+.participant-status {
+    @apply flex items-center gap-2;
+}
+
+.status-indicator {
+    @apply w-2 h-2 rounded-full bg-success;
+}
+
+/* Loading States */
+.loading {
+    @apply inline-flex items-center gap-2;
+}
+
+.spinner {
+    @apply w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin;
+}
+
+/* Focus States */
+.btn:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    @apply outline-2 outline-primary outline-offset-2;
+}
+
+/* Agent-specific styles */
+.agent-tile {
+    @apply border-2 border-blue-400 shadow-lg;
+}
+
+.agent-tile.speaking {
+    @apply border-blue-500 shadow-xl ring-2 ring-blue-200;
+    animation: agentSpeaking 2s ease-in-out infinite;
+}
+
+.agent-name {
+    @apply text-blue-600 font-semibold;
+}
+
+.agent-badge {
+    @apply inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full ml-2;
+}
+
+.grid-responsive {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4;
+}
+
+.participant-tile {
+    @apply bg-background-primary border border-border rounded-lg overflow-hidden shadow-sm transition-all duration-200 hover:shadow-md;
+}
+
+.participant-tile.speaking {
+    @apply border-green-400 shadow-lg ring-1 ring-green-200;
+}
+
+.participant-name {
+    @apply p-3 font-medium text-text-primary text-center;
+}
+
+/* Video wrapper for overlays */
+.video-wrapper {
+    @apply relative bg-black aspect-video overflow-hidden;
+}
+
+/* Speaking indicator styles */
+.speaking-indicator {
+    @apply absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-300;
+}
+
+.speaking-indicator.active {
+    @apply opacity-100;
+}
+
+.speaking-pulse {
+    @apply absolute inset-0 border-4 border-green-400 rounded-lg;
+    animation: speakingPulse 1.5s ease-in-out infinite;
+}
+
+.speaking-waves {
+    @apply absolute inset-0 flex items-center justify-center;
+}
+
+.wave {
+    @apply w-2 h-2 bg-green-400 rounded-full mx-1;
+    animation: waveAnimation 1.5s ease-in-out infinite;
+}
+
+.wave:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.wave:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+/* Agent overlay styles */
+.agent-overlay {
+    @apply absolute top-2 left-2 bg-black bg-opacity-75 text-white rounded-lg p-2 backdrop-blur-sm;
+}
+
+.agent-status {
+    @apply flex items-center gap-2;
+}
+
+.agent-icon {
+    @apply text-lg transition-transform duration-300;
+}
+
+.agent-icon.speaking {
+    @apply scale-110;
+    animation: agentIconPulse 1s ease-in-out infinite;
+}
+
+.agent-status-text {
+    @apply text-xs;
+}
+
+.status-line {
+    @apply leading-tight;
+}
+
+.status-line.active {
+    @apply text-green-400 font-medium;
+}
+
+/* Speech indicator for agent */
+.speech-indicator {
+    @apply flex items-center gap-1 mt-1;
+}
+
+.speech-dot {
+    @apply w-1 h-1 bg-green-400 rounded-full;
+    animation: speechDotPulse 1.5s ease-in-out infinite;
+}
+
+.speech-dot:nth-child(2) {
+    animation-delay: 0.3s;
+}
+
+.speech-dot:nth-child(3) {
+    animation-delay: 0.6s;
+}
+
+/* Participant info styles */
+.participant-info {
+    @apply p-3 bg-background-primary;
+}
+
+.participant-status {
+    @apply flex items-center gap-2 mt-1;
+}
+
+.status-indicator {
+    @apply w-2 h-2 rounded-full bg-gray-400 transition-colors duration-300;
+}
+
+.status-indicator.speaking {
+    @apply bg-green-400;
+    animation: statusPulse 1s ease-in-out infinite;
+}
+
+.status-text {
+    @apply text-xs text-text-muted;
+}
+
+/* Animations */
+@keyframes agentSpeaking {
+    0%,
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+    }
+    50% {
+        transform: scale(1.02);
+        box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+    }
+}
+
+@keyframes speakingPulse {
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.05);
+        opacity: 0.7;
+    }
+}
+
+@keyframes waveAnimation {
+    0%,
+    100% {
+        transform: scaleY(1);
+        opacity: 0.7;
+    }
+    50% {
+        transform: scaleY(2);
+        opacity: 1;
+    }
+}
+
+@keyframes statusPulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+@keyframes agentIconPulse {
+    0%,
+    100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+@keyframes speechDotPulse {
+    0%,
+    100% {
+        opacity: 0.3;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+}
+
+/* Audio elements should be hidden but still functional */
+.audio-container {
+    @apply hidden;
+    /* Ensure audio is still functional even when hidden */
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+}
+
+/* Agent Speaking Banner */
+.agent-speaking-banner {
+    @apply fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-blue-600 text-white rounded-lg shadow-lg p-4 max-w-md;
+    animation: agentSpeakingBanner 0.5s ease-out;
+}
+
+.agent-speaking-content {
+    @apply flex items-center gap-3;
+}
+
+.agent-icon-speaking {
+    @apply text-2xl animate-pulse;
+}
+
+.agent-speaking-text {
+    @apply flex-1;
+}
+
+.agent-name {
+    @apply font-semibold text-sm;
+}
+
+.agent-message {
+    @apply text-xs opacity-90;
+}
+
+.speaking-animation {
+    @apply flex items-center gap-1;
+}
+
+.sound-wave {
+    @apply w-1 h-4 bg-white rounded-full;
+    animation: soundWave 1.5s ease-in-out infinite;
+}
+
+.sound-wave:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.sound-wave:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes agentSpeakingBanner {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -20px);
+    }
+    100% {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+@keyframes soundWave {
+    0%,
+    100% {
+        height: 0.5rem;
+        opacity: 0.5;
+    }
+    50% {
+        height: 1.5rem;
+        opacity: 1;
+    }
+}
+
+/* Responsive Layout Improvements */
+@media (max-width: 1023px) {
+    /* Mobile optimizations */
+    .mobile-stack > * {
+        margin-bottom: 1rem;
+    }
+
+    /* Better mobile layout for workflow steps */
+    .workflow-steps-mobile {
+        max-height: 50vh;
+        overflow-y: auto;
+    }
+
+    /* Mobile header adjustments */
+    .mobile-header {
+        padding: 0.75rem 1rem;
+    }
+
+    .mobile-header .text-lg {
+        font-size: 0.875rem;
+    }
+
+    .mobile-header .text-sm {
+        font-size: 0.75rem;
+    }
+
+    /* Adjust video aspect ratio for mobile */
+    .aspect-video {
+        aspect-ratio: 4 / 3;
+    }
+}
+
+/* Tablet optimizations */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .tablet-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    .tablet-full-width {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Desktop optimizations */
+@media (min-width: 1024px) {
+    .desktop-layout {
+        display: grid;
+        grid-template-columns: 2fr 2fr 1fr;
+        gap: 1rem;
+        height: calc(100vh - 4rem); /* Account for header height */
+    }
+
+    .desktop-video-section {
+        min-height: 0;
+    }
+
+    .desktop-workflow-section {
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .desktop-logs-section {
+        min-height: 0;
+    }
+}
+
+/* Workflow Steps Overflow Fix */
+.workflow-steps-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+.workflow-steps-header {
+    flex-shrink: 0;
+}
+
+.workflow-steps-content {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+/* Custom scrollbar for workflow steps */
+.workflow-steps-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.workflow-steps-content::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.workflow-steps-content::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.workflow-steps-content::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}

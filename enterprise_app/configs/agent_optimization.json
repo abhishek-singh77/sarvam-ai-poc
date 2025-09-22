@@ -1,0 +1,30 @@
+{
+    "voice_activity_detection": {
+        "threshold": 0.1,
+        "description": "Lower threshold for more sensitive voice detection and faster interruption handling"
+    },
+    "turn_detection": {
+        "threshold": 0.3,
+        "description": "Lower threshold for faster turn detection and better interruption handling"
+    },
+    "conversation_flow": {
+        "enabled": true,
+        "description": "Basic conversation flow management (advanced parameters not supported by current VideoSDK version)"
+    },
+    "llm_optimization": {
+        "temperature": 0.3,
+        "max_output_tokens": 500,
+        "description": "Optimized for faster, more consistent responses"
+    },
+    "tts_optimization": {
+        "pace": 1.2,
+        "description": "Optimized for faster speech delivery (streaming not supported by SarvamAITTS)"
+    },
+    "response_filtering": {
+        "enabled": true,
+        "remove_function_calls": true,
+        "remove_technical_terms": true,
+        "remove_urls": true,
+        "description": "Filters out technical details and function calls from spoken responses"
+    }
+}

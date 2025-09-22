@@ -1,0 +1,207 @@
+<div
+    class="image-manipulator-container"
+    (keydown)="onKeyDown($event)"
+    tabindex="0"
+    role="dialog"
+    aria-labelledby="image-manipulator-title"
+    aria-describedby="image-manipulator-description">
+    <!-- Header -->
+    <header class="image-manipulator-header">
+        <h2 id="image-manipulator-title" class="image-manipulator-title">
+            Image Preview
+        </h2>
+        <button
+            type="button"
+            [disabled]="isProcessing"
+            (click)="
+                closeDialog(false, uploadSuccess ? croppedImage : undefined)
+            "
+            [attr.aria-label]="'Close image manipulator'"
+            class="close-button">
+            <span class="material-symbols-outlined" aria-hidden="true"
+                >close</span
+            >
+        </button>
+    </header>
+
+    <!-- Error Display -->
+    <div *ngIf="hasErrors" class="error-container" role="alert">
+        <div class="error-icon">
+            <span class="material-symbols-outlined">error</span>
+        </div>
+        <div class="error-content">
+            <h3>Error</h3>
+            <ul>
+                <li *ngFor="let error of validationErrors">{{ error }}</li>
+                <li *ngIf="uploadError">{{ uploadError }}</li>
+            </ul>
+        </div>
+    </div>
+    <!-- Main Content -->
+    <main class="image-manipulator-main">
+        <!-- Loading State -->
+        <div *ngIf="loading" class="loading-overlay" aria-live="polite">
+            <app-custom-spinner [size]="32"></app-custom-spinner>
+            <p>Loading image...</p>
+        </div>
+
+        <!-- Image Cropper -->
+        <div class="cropper-container" id="image-manipulator-description">
+            <image-cropper
+                [imageBase64]="config.base64"
+                [maintainAspectRatio]="
+                    manipulationState.containWithinAspectRatio
+                "
+                [onlyScaleDown]="true"
+                [roundCropper]="false"
+                [canvasRotation]="manipulationState.canvasRotation"
+                [transform]="manipulationState.transform"
+                [alignImage]="'center'"
+                [style.display]="showCropper ? null : 'none'"
+                format="jpeg"
+                output="blob"
+                (imageCropped)="imageCropped($event)"
+                (imageLoaded)="imageLoaded()"
+                (cropperReady)="cropperReady($event)"
+                (loadImageFailed)="loadImageFailed()"
+                class="image-cropper"
+                aria-label="Image cropper" />
+        </div>
+
+        <!-- Floating Zoom Controls -->
+        <div class="floating-controls" aria-label="Zoom controls">
+            <button
+                type="button"
+                [disabled]="isProcessing"
+                (click)="zoomOut()"
+                [attr.aria-label]="'Zoom out'"
+                class="zoom-button zoom-out">
+                <span class="material-symbols-outlined" aria-hidden="true"
+                    >zoom_out</span
+                >
+            </button>
+            <button
+                type="button"
+                [disabled]="isProcessing"
+                (click)="zoomIn()"
+                [attr.aria-label]="'Zoom in'"
+                class="zoom-button zoom-in">
+                <span class="material-symbols-outlined" aria-hidden="true"
+                    >zoom_in</span
+                >
+            </button>
+        </div>
+    </main>
+    <!-- Controls Section -->
+    <section class="controls-section">
+        <!-- Manipulation Controls -->
+        <div class="manipulation-controls">
+            <div class="rotation-controls">
+                <button
+                    type="button"
+                    [disabled]="isProcessing"
+                    (click)="rotateLeft()"
+                    [attr.aria-label]="'Rotate left'"
+                    class="control-button">
+                    <span class="material-symbols-outlined" aria-hidden="true"
+                        >rotate_left</span
+                    >
+                </button>
+                <button
+                    type="button"
+                    [disabled]="isProcessing"
+                    (click)="rotateRight()"
+                    [attr.aria-label]="'Rotate right'"
+                    class="control-button">
+                    <span class="material-symbols-outlined" aria-hidden="true"
+                        >rotate_right</span
+                    >
+                </button>
+                <button
+                    type="button"
+                    [disabled]="isProcessing"
+                    (click)="toggleContainWithinAspectRatio()"
+                    [attr.aria-label]="'Toggle aspect ratio constraint'"
+                    [attr.aria-pressed]="
+                        manipulationState.containWithinAspectRatio
+                    "
+                    class="control-button aspect-ratio-button">
+                    <span
+                        class="material-symbols-outlined {{
+                            !manipulationState.containWithinAspectRatio
+                                ? 'aspect-ratio-off'
+                                : 'aspect-ratio-on'
+                        }}"
+                        aria-hidden="true"
+                        >aspect_ratio</span
+                    >
+                </button>
+            </div>
+
+            <!-- Rotation Slider -->
+            <div class="rotation-slider-container">
+                <label for="rotation-slider" class="slider-label">
+                    <span class="material-symbols-outlined" aria-hidden="true"
+                        >rotate_90_degrees_cw</span
+                    >
+                    Rotation: {{ manipulationState.rotation }}°
+                </label>
+                <input
+                    id="rotation-slider"
+                    type="range"
+                    (input)="updateRotation($event)"
+                    [value]="manipulationState.rotation"
+                    min="-180"
+                    max="180"
+                    step="5"
+                    class="rotation-slider"
+                    aria-label="Image rotation slider" />
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button
+                type="button"
+                [disabled]="!canRetake"
+                (click)="retakePhoto()"
+                class="secondary-button">
+                <span class="material-symbols-outlined" aria-hidden="true"
+                    >refresh</span
+                >
+                Retake Photo
+            </button>
+
+            <button
+                type="button"
+                [disabled]="!canApprove"
+                (click)="approveImage(croppedImage!)"
+                class="primary-button">
+                <span class="button-content">
+                    <span class="button-text">
+                        {{ uploadError ? 'Retry Upload' : 'Approve Image' }}
+                    </span>
+                    <app-custom-spinner
+                        *ngIf="uploading"
+                        class="button-spinner"
+                        [size]="16"
+                        aria-hidden="true"></app-custom-spinner>
+                </span>
+            </button>
+        </div>
+    </section>
+
+    <!-- Status Messages -->
+    <div *ngIf="uploading" class="status-message uploading" aria-live="polite">
+        <app-custom-spinner [size]="20"></app-custom-spinner>
+        <span>Uploading image...</span>
+    </div>
+
+    <div
+        *ngIf="uploadSuccess"
+        class="status-message success"
+        aria-live="polite">
+        <span class="material-symbols-outlined">check_circle</span>
+        <span>Image uploaded successfully!</span>
+    </div>
+</div>

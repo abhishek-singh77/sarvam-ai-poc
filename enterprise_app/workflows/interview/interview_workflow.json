@@ -1,0 +1,255 @@
+{
+    "id": "interview_workflow_v1",
+    "name": "Job Interview Workflow",
+    "description": "Comprehensive job interview process with behavioral questions, technical assessment, and evaluation",
+    "version": "1.0.0",
+    "type": "interview",
+    "settings": {
+        "timeout_minutes": 60,
+        "max_retries": 2,
+        "enable_parallel_steps": false,
+        "require_all_steps": true
+    },
+    "steps": [
+        {
+            "id": "introduction",
+            "type": "introduction",
+            "title": "Interview Introduction",
+            "description": "Welcome and introduction to the interview process",
+            "order": 1,
+            "required": true,
+            "instructions": "Welcome the candidate and explain the interview process. Be professional and put them at ease.",
+            "data": {
+                "welcome_message": "Hello! Welcome to your interview. I'm here to guide you through the process. This interview will include some questions about your experience and skills. Please feel free to ask any questions you may have."
+            }
+        },
+        {
+            "id": "candidate_info",
+            "type": "questionnaire",
+            "title": "Candidate Information",
+            "description": "Collect basic candidate information",
+            "order": 2,
+            "required": true,
+            "instructions": "Ask for basic information about the candidate.",
+            "questions": [
+                {
+                    "id": "name",
+                    "question": "What is your full name?",
+                    "type": "text",
+                    "required": true
+                },
+                {
+                    "id": "position",
+                    "question": "What position are you applying for?",
+                    "type": "text",
+                    "required": true
+                },
+                {
+                    "id": "experience_years",
+                    "question": "How many years of relevant experience do you have?",
+                    "type": "number",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "id": "behavioral_questions",
+            "type": "question_sequence",
+            "title": "Behavioral Questions",
+            "description": "Ask behavioral interview questions",
+            "order": 3,
+            "required": true,
+            "instructions": "Ask behavioral questions to assess the candidate's experience and problem-solving abilities.",
+            "questions": [
+                {
+                    "id": "tell_me_about_yourself",
+                    "question": "Tell me about yourself and your professional background.",
+                    "type": "open_ended",
+                    "required": true,
+                    "evaluation_criteria": [
+                        "clarity_of_communication",
+                        "relevant_experience",
+                        "professional_presentation"
+                    ],
+                    "expected_duration_minutes": 3
+                },
+                {
+                    "id": "challenging_situation",
+                    "question": "Describe a challenging situation you faced at work and how you handled it.",
+                    "type": "situation_behavior_outcome",
+                    "required": true,
+                    "evaluation_criteria": [
+                        "problem_solving_skills",
+                        "decision_making",
+                        "resilience",
+                        "communication"
+                    ],
+                    "expected_duration_minutes": 5
+                },
+                {
+                    "id": "teamwork_example",
+                    "question": "Give me an example of a time when you had to work with a difficult team member.",
+                    "type": "situation_behavior_outcome",
+                    "required": true,
+                    "evaluation_criteria": [
+                        "interpersonal_skills",
+                        "conflict_resolution",
+                        "teamwork",
+                        "emotional_intelligence"
+                    ],
+                    "expected_duration_minutes": 4
+                }
+            ]
+        },
+        {
+            "id": "technical_assessment",
+            "type": "technical_evaluation",
+            "title": "Technical Skills Assessment",
+            "description": "Assess technical skills and knowledge",
+            "order": 4,
+            "required": true,
+            "instructions": "Ask technical questions relevant to the position.",
+            "data": {
+                "assessment_type": "technical_questions",
+                "questions": [
+                    {
+                        "id": "technical_concept",
+                        "question": "Explain a technical concept relevant to this role.",
+                        "type": "technical_explanation",
+                        "evaluation_criteria": [
+                            "technical_knowledge",
+                            "explanation_clarity",
+                            "depth_of_understanding"
+                        ]
+                    },
+                    {
+                        "id": "problem_solving",
+                        "question": "How would you approach solving a complex technical problem?",
+                        "type": "problem_solving",
+                        "evaluation_criteria": [
+                            "analytical_thinking",
+                            "methodology",
+                            "creativity",
+                            "practical_approach"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "id": "motivation_fit",
+            "type": "questionnaire",
+            "title": "Motivation and Cultural Fit",
+            "description": "Assess motivation and cultural fit",
+            "order": 5,
+            "required": true,
+            "instructions": "Ask questions about motivation and cultural fit.",
+            "questions": [
+                {
+                    "id": "why_this_company",
+                    "question": "Why do you want to work for our company?",
+                    "type": "open_ended",
+                    "required": true,
+                    "evaluation_criteria": [
+                        "research_about_company",
+                        "genuine_interest",
+                        "alignment_with_values"
+                    ]
+                },
+                {
+                    "id": "career_goals",
+                    "question": "Where do you see yourself in 5 years?",
+                    "type": "open_ended",
+                    "required": true,
+                    "evaluation_criteria": [
+                        "career_planning",
+                        "ambition",
+                        "realistic_expectations"
+                    ]
+                },
+                {
+                    "id": "questions_for_us",
+                    "question": "Do you have any questions for us?",
+                    "type": "open_ended",
+                    "required": false,
+                    "evaluation_criteria": [
+                        "engagement",
+                        "curiosity",
+                        "preparation"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "evaluation",
+            "type": "evaluation",
+            "title": "Interview Evaluation",
+            "description": "Complete interview evaluation and scoring",
+            "order": 6,
+            "required": true,
+            "instructions": "Evaluate the candidate based on all responses and provide a score.",
+            "data": {
+                "evaluation_criteria": [
+                    {
+                        "criterion": "communication_skills",
+                        "weight": 0.2,
+                        "description": "Clarity, articulation, and professional communication"
+                    },
+                    {
+                        "criterion": "technical_skills",
+                        "weight": 0.3,
+                        "description": "Technical knowledge and problem-solving abilities"
+                    },
+                    {
+                        "criterion": "behavioral_fit",
+                        "weight": 0.25,
+                        "description": "Behavioral responses and situational judgment"
+                    },
+                    {
+                        "criterion": "motivation_fit",
+                        "weight": 0.15,
+                        "description": "Motivation and cultural alignment"
+                    },
+                    {
+                        "criterion": "overall_impression",
+                        "weight": 0.1,
+                        "description": "Overall impression and potential"
+                    }
+                ],
+                "scoring_scale": {
+                    "min_score": 1,
+                    "max_score": 10,
+                    "passing_score": 7
+                }
+            }
+        },
+        {
+            "id": "completion",
+            "type": "completion",
+            "title": "Interview Complete",
+            "description": "Interview process completed",
+            "order": 7,
+            "required": true,
+            "instructions": "Thank the candidate and explain next steps.",
+            "data": {
+                "completion_message": "Thank you for your time today. We appreciate you taking the time to interview with us. We will review your responses and get back to you within the next few business days.",
+                "next_steps": [
+                    "We will review your interview responses",
+                    "You will hear from us within 3-5 business days",
+                    "If selected, we will schedule the next round of interviews"
+                ]
+            }
+        }
+    ],
+    "metadata": {
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z",
+        "author": "Enterprise Interview System",
+        "tags": [
+            "interview",
+            "hiring",
+            "assessment",
+            "evaluation"
+        ]
+    }
+}

@@ -1,0 +1,137 @@
+<!-- Notification Container - Positioned at top-right corner -->
+<div class="fixed top-4 right-4 z-50 space-y-3 max-w-sm w-full">
+    <!-- Individual Notification -->
+    <div
+        *ngFor="let notification of notifications"
+        class="notification-card bg-white shadow-2xl rounded-xl border border-gray-100 pointer-events-auto overflow-hidden transform transition-all duration-500 ease-out backdrop-blur-sm"
+        [class.animate-slide-in]="true"
+        [class.animate-slide-out]="notification.removing"
+        [class.border-l-4]="true"
+        [class.border-l-green-500]="notification.type === 'success'"
+        [class.border-l-red-500]="notification.type === 'error'"
+        [class.border-l-yellow-500]="notification.type === 'warning'"
+        [class.border-l-blue-500]="notification.type === 'info'">
+        <!-- Notification Content -->
+        <div class="p-5">
+            <div class="flex items-start space-x-3">
+                <!-- Icon Container -->
+                <div class="flex-shrink-0">
+                    <!-- Success Icon -->
+                    <div
+                        *ngIf="notification.type === 'success'"
+                        class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                        <svg
+                            class="w-5 h-5 text-green-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </div>
+
+                    <!-- Error Icon -->
+                    <div
+                        *ngIf="notification.type === 'error'"
+                        class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                        <svg
+                            class="w-5 h-5 text-red-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </div>
+
+                    <!-- Warning Icon -->
+                    <div
+                        *ngIf="notification.type === 'warning'"
+                        class="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                        <svg
+                            class="w-5 h-5 text-yellow-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    </div>
+
+                    <!-- Info Icon -->
+                    <div
+                        *ngIf="notification.type === 'info'"
+                        class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                        <svg
+                            class="w-5 h-5 text-blue-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Text Content -->
+                <div class="flex-1 min-w-0">
+                    <h4 class="text-sm font-semibold text-gray-900 mb-1">
+                        {{ notification.title }}
+                    </h4>
+                    <p class="text-sm text-gray-600 leading-relaxed">
+                        {{ notification.message }}
+                    </p>
+                </div>
+
+                <!-- Close Button -->
+                <div class="flex-shrink-0">
+                    <button
+                        class="w-6 h-6 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors duration-200 group"
+                        (click)="removeNotification(notification.id)"
+                        type="button">
+                        <span class="sr-only">Close notification</span>
+                        <svg
+                            class="w-4 h-4 text-gray-400 group-hover:text-gray-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div *ngIf="notification.duration" class="h-1 bg-gray-100">
+            <div
+                class="h-1 transition-all duration-100 ease-linear rounded-full"
+                [style.width.%]="getProgressWidth(notification)"
+                [class.bg-gradient-to-r]="true"
+                [class.from-green-500]="notification.type === 'success'"
+                [class.to-green-400]="notification.type === 'success'"
+                [class.from-red-500]="notification.type === 'error'"
+                [class.to-red-400]="notification.type === 'error'"
+                [class.from-yellow-500]="notification.type === 'warning'"
+                [class.to-yellow-400]="notification.type === 'warning'"
+                [class.from-blue-500]="notification.type === 'info'"
+                [class.to-blue-400]="notification.type === 'info'"></div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,84 @@
+{
+    "name": "KYC Verification Workflow",
+    "description": "Complete KYC verification process with document upload and liveness check",
+    "steps": [
+        {
+            "id": "introduction",
+            "type": "introduction",
+            "title": "Welcome",
+            "description": "Welcome to the KYC process. I will guide you step by step.",
+            "status": "pending",
+            "data": null,
+            "instructions": "Welcome the user and explain the KYC process"
+        },
+        {
+            "id": "room_id_input",
+            "type": "room_id_input",
+            "title": "Enter Room ID",
+            "description": "Please enter the Room ID to join the KYC session.",
+            "status": "pending",
+            "data": null,
+            "instructions": "Enter the Room ID provided to you to join the existing KYC session."
+        },
+        {
+            "id": "selfie_capture",
+            "type": "selfie_capture",
+            "title": "Take Selfie",
+            "description": "Please capture a selfie for liveness verification.",
+            "status": "pending",
+            "data": null,
+            "instructions": "Look directly at the camera and smile naturally. Ensure good lighting and clear visibility of your face."
+        },
+        {
+            "id": "questionnaire",
+            "type": "questionnaire",
+            "title": "Personal Information",
+            "description": "Please provide your basic information.",
+            "status": "pending",
+            "data": null,
+            "questions": [
+                {
+                    "id": "full_name",
+                    "question": "What is your full name?",
+                    "type": "text",
+                    "required": true
+                },
+                {
+                    "id": "age",
+                    "question": "What is your age?",
+                    "type": "number",
+                    "required": true
+                },
+                {
+                    "id": "date_of_birth",
+                    "question": "What is your date of birth?",
+                    "type": "date",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "id": "id_upload",
+            "type": "id_upload",
+            "title": "ID Document Upload",
+            "description": "Please upload your ID document (PAN Card, Aadhaar Card, or Passport).",
+            "status": "pending",
+            "data": null,
+            "document_types": [
+                "PAN Card",
+                "Aadhaar Card",
+                "Passport"
+            ],
+            "instructions": "Upload a clear photo of your ID document. Ensure all text is readable and the document is not damaged."
+        },
+        {
+            "id": "verification",
+            "type": "verification",
+            "title": "Verification Complete",
+            "description": "Your KYC verification has been completed successfully.",
+            "status": "pending",
+            "data": null,
+            "instructions": "Thank the user and confirm completion"
+        }
+    ]
+}

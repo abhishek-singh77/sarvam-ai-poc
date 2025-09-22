@@ -1,0 +1,144 @@
+{
+    "agent": {
+        "agent_id": "survey_agent_001",
+        "agent_type": "survey",
+        "instructions": "You are a friendly survey assistant. Help users complete surveys by asking questions clearly, providing context when needed, and maintaining an engaging conversation flow.",
+        "language": "en",
+        "model": "gpt-3.5-turbo",
+        "temperature": 0.8,
+        "max_tokens": 800,
+        "system_prompt": "You are a survey assistant designed to help users complete surveys in a conversational and engaging manner. Be friendly, clear, and encouraging. Provide context for questions when helpful and ensure users understand what information is being collected.",
+        "metadata": {
+            "version": "1.0.0",
+            "category": "data_collection",
+            "survey_type": "customer_satisfaction"
+        }
+    },
+    "workflow": {
+        "workflow_id": "survey_workflow_001",
+        "workflow_type": "survey",
+        "name": "Customer Satisfaction Survey",
+        "description": "Comprehensive customer satisfaction survey to gather feedback and insights",
+        "version": "1.0.0",
+        "steps": [
+            {
+                "id": "introduction",
+                "title": "Survey Introduction",
+                "type": "introduction",
+                "description": "Welcome the user and explain the survey purpose",
+                "required": true,
+                "order": 1
+            },
+            {
+                "id": "overall_satisfaction",
+                "title": "Overall Satisfaction Rating",
+                "type": "rating",
+                "description": "Rate overall satisfaction with the service",
+                "required": true,
+                "order": 2,
+                "scale": {
+                    "type": "numeric",
+                    "min": 1,
+                    "max": 10,
+                    "labels": {
+                        "1": "Very Dissatisfied",
+                        "5": "Neutral",
+                        "10": "Very Satisfied"
+                    }
+                }
+            },
+            {
+                "id": "service_quality",
+                "title": "Service Quality Assessment",
+                "type": "rating",
+                "description": "Rate the quality of service received",
+                "required": true,
+                "order": 3,
+                "scale": {
+                    "type": "numeric",
+                    "min": 1,
+                    "max": 5,
+                    "labels": {
+                        "1": "Poor",
+                        "3": "Average",
+                        "5": "Excellent"
+                    }
+                }
+            },
+            {
+                "id": "nps_rating",
+                "title": "Net Promoter Score",
+                "type": "rating",
+                "description": "How likely are you to recommend our service?",
+                "required": true,
+                "order": 4,
+                "scale": {
+                    "type": "numeric",
+                    "min": 0,
+                    "max": 10,
+                    "labels": {
+                        "0": "Not at all likely",
+                        "5": "Neutral",
+                        "10": "Extremely likely"
+                    }
+                }
+            },
+            {
+                "id": "feedback",
+                "title": "Open Feedback",
+                "type": "text_input",
+                "description": "Please provide any additional feedback or suggestions",
+                "required": false,
+                "order": 5,
+                "max_length": 500
+            },
+            {
+                "id": "improvement_areas",
+                "title": "Areas for Improvement",
+                "type": "multiple_choice",
+                "description": "What areas would you like to see improved?",
+                "required": false,
+                "order": 6,
+                "options": [
+                    "Customer service",
+                    "Product quality",
+                    "Website/app usability",
+                    "Pricing",
+                    "Delivery speed",
+                    "Communication",
+                    "Other"
+                ],
+                "allow_multiple": true
+            },
+            {
+                "id": "completion",
+                "title": "Survey Completion",
+                "type": "completion",
+                "description": "Thank the user and provide survey completion confirmation",
+                "required": true,
+                "order": 7
+            }
+        ],
+        "metadata": {
+            "estimated_duration": "5-10 minutes",
+            "difficulty": "low",
+            "survey_categories": [
+                "satisfaction",
+                "quality",
+                "nps",
+                "feedback"
+            ]
+        }
+    },
+    "session": {
+        "timeout_minutes": 20,
+        "max_retries": 1,
+        "auto_save": true,
+        "progress_tracking": true,
+        "notifications": {
+            "email": false,
+            "sms": false,
+            "push": false
+        }
+    }
+}
