@@ -1,0 +1,570 @@
+<div class="enhanced-kyc-container">
+    <!-- Header -->
+    <div class="header">
+        <h1 class="title">Enhanced KYC Verification</h1>
+        <div class="status-bar">
+            <div class="status-message">{{ statusMessage }}</div>
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" [style.width.%]="progress"></div>
+                </div>
+                <span class="progress-text"
+                    >{{ progress | number : '1.0-1' }}%</span
+                >
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Video Section -->
+        <div class="video-section">
+            <div class="video-container">
+                <video
+                    #userVideoRef
+                    class="user-video"
+                    autoplay
+                    playsinline
+                    muted
+                    [class.hidden]="!isCameraEnabled"></video>
+                <div class="video-overlay" *ngIf="!isCameraEnabled">
+                    <div class="overlay-content">
+                        <svg
+                            class="w-12 h-12 text-gray-400 mb-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                        </svg>
+                        <p class="text-gray-600">Camera not enabled</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Media Controls -->
+            <div class="media-controls">
+                <button
+                    class="control-btn"
+                    [class.active]="isCameraEnabled"
+                    (click)="toggleCamera()"
+                    [disabled]="isLoading">
+                    <svg
+                        class="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                    </svg>
+                    {{ isCameraEnabled ? 'Disable Camera' : 'Enable Camera' }}
+                </button>
+
+                <button
+                    class="control-btn"
+                    [class.active]="isMicrophoneEnabled"
+                    (click)="toggleMicrophone()"
+                    [disabled]="isLoading">
+                    <svg
+                        class="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                    </svg>
+                    {{ isMicrophoneEnabled ? 'Disable Mic' : 'Enable Mic' }}
+                </button>
+            </div>
+        </div>
+
+        <!-- Workflow Section -->
+        <div class="workflow-section">
+            <!-- Start Session -->
+            <div *ngIf="!kycSession" class="start-section">
+                <div class="start-content">
+                    <h2 class="section-title">Start KYC Verification</h2>
+                    <p class="section-description">
+                        Begin your identity verification process with our
+                        enhanced AI-powered KYC system. Our intelligent agent
+                        will guide you through each step.
+                    </p>
+                    <button
+                        class="start-btn"
+                        (click)="startKYCSession()"
+                        [disabled]="isLoading">
+                        <span
+                            *ngIf="isLoading"
+                            class="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></span>
+                        {{
+                            isLoading ? 'Starting...' : 'Start KYC Verification'
+                        }}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Workflow Steps -->
+            <div *ngIf="kycSession" class="workflow-steps">
+                <h2 class="section-title">KYC Verification Steps</h2>
+
+                <!-- Step 1: Selfie Capture -->
+                <div
+                    class="workflow-step"
+                    [class.active]="isStepActive('selfie_capture')"
+                    [class.completed]="isStepCompleted('selfie_capture')">
+                    <div class="step-header">
+                        <div class="step-icon">
+                            <svg
+                                *ngIf="
+                                    getStepStatus('selfie_capture') ===
+                                    'completed'
+                                "
+                                class="w-6 h-6 text-green-600"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <svg
+                                *ngIf="
+                                    getStepStatus('selfie_capture') !==
+                                    'completed'
+                                "
+                                class="w-6 h-6"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                        </div>
+                        <div class="step-info">
+                            <h3 class="step-title">
+                                Selfie Capture & Liveness Detection
+                            </h3>
+                            <p class="step-description">
+                                Take a clear selfie for identity verification
+                            </p>
+                        </div>
+                        <div class="step-status">
+                            <span
+                                class="status-badge"
+                                [ngClass]="
+                                    'status-' + getStepStatus('selfie_capture')
+                                ">
+                                {{
+                                    getStepStatus('selfie_capture') | titlecase
+                                }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div
+                        *ngIf="isStepActive('selfie_capture')"
+                        class="step-content">
+                        <div class="step-instructions">
+                            <p>
+                                Please ensure you're in good lighting and
+                                looking directly at the camera.
+                            </p>
+                        </div>
+                        <button
+                            class="action-btn"
+                            (click)="handleSelfieCapture()"
+                            [disabled]="!isCameraEnabled || isProcessing">
+                            <span
+                                *ngIf="isProcessing"
+                                class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
+                            {{
+                                isProcessing
+                                    ? 'Processing...'
+                                    : 'Capture Selfie'
+                            }}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Document Upload -->
+                <div
+                    class="workflow-step"
+                    [class.active]="isStepActive('document_upload')"
+                    [class.completed]="isStepCompleted('document_upload')">
+                    <div class="step-header">
+                        <div class="step-icon">
+                            <svg
+                                *ngIf="
+                                    getStepStatus('document_upload') ===
+                                    'completed'
+                                "
+                                class="w-6 h-6 text-green-600"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <svg
+                                *ngIf="
+                                    getStepStatus('document_upload') !==
+                                    'completed'
+                                "
+                                class="w-6 h-6"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <div class="step-info">
+                            <h3 class="step-title">
+                                Document Upload & Verification
+                            </h3>
+                            <p class="step-description">
+                                Upload your identity document for verification
+                            </p>
+                        </div>
+                        <div class="step-status">
+                            <span
+                                class="status-badge"
+                                [ngClass]="
+                                    'status-' + getStepStatus('document_upload')
+                                ">
+                                {{
+                                    getStepStatus('document_upload') | titlecase
+                                }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div
+                        *ngIf="isStepActive('document_upload')"
+                        class="step-content">
+                        <div class="upload-area">
+                            <input
+                                type="file"
+                                id="documentUpload"
+                                accept="image/*,.pdf"
+                                (change)="handleDocumentUpload($event)"
+                                class="hidden" />
+                            <label for="documentUpload" class="upload-label">
+                                <svg
+                                    class="w-12 h-12 text-gray-400 mb-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                </svg>
+                                <p class="upload-text">
+                                    Click to upload document
+                                </p>
+                                <p class="upload-hint">
+                                    Supported: JPG, PNG, PDF
+                                </p>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Questionnaire -->
+                <div
+                    class="workflow-step"
+                    [class.active]="isStepActive('questionnaire')"
+                    [class.completed]="isStepCompleted('questionnaire')">
+                    <div class="step-header">
+                        <div class="step-icon">
+                            <svg
+                                *ngIf="
+                                    getStepStatus('questionnaire') ===
+                                    'completed'
+                                "
+                                class="w-6 h-6 text-green-600"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <svg
+                                *ngIf="
+                                    getStepStatus('questionnaire') !==
+                                    'completed'
+                                "
+                                class="w-6 h-6"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div class="step-info">
+                            <h3 class="step-title">Information Collection</h3>
+                            <p class="step-description">
+                                Answer questions to verify your identity
+                            </p>
+                        </div>
+                        <div class="step-status">
+                            <span
+                                class="status-badge"
+                                [ngClass]="
+                                    'status-' + getStepStatus('questionnaire')
+                                ">
+                                {{ getStepStatus('questionnaire') | titlecase }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div
+                        *ngIf="isStepActive('questionnaire')"
+                        class="step-content">
+                        <div class="questionnaire-form">
+                            <div
+                                *ngFor="let question of currentStep?.questions"
+                                class="question-item">
+                                <label class="question-label">{{
+                                    question.question
+                                }}</label>
+                                <input
+                                    *ngIf="question.type === 'text'"
+                                    type="text"
+                                    [(ngModel)]="
+                                        questionnaireAnswers[question.id]
+                                    "
+                                    class="question-input"
+                                    [required]="question.required"
+                                    placeholder="Enter your answer" />
+                                <input
+                                    *ngIf="question.type === 'number'"
+                                    type="number"
+                                    [(ngModel)]="
+                                        questionnaireAnswers[question.id]
+                                    "
+                                    class="question-input"
+                                    [required]="question.required"
+                                    placeholder="Enter your answer" />
+                                <input
+                                    *ngIf="question.type === 'date'"
+                                    type="date"
+                                    [(ngModel)]="
+                                        questionnaireAnswers[question.id]
+                                    "
+                                    class="question-input"
+                                    [required]="question.required" />
+                            </div>
+                            <button
+                                class="action-btn"
+                                (click)="handleQuestionnaireSubmit()"
+                                [disabled]="isProcessing">
+                                <span
+                                    *ngIf="isProcessing"
+                                    class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
+                                {{
+                                    isProcessing
+                                        ? 'Processing...'
+                                        : 'Submit Answers'
+                                }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Verification Processing -->
+                <div
+                    class="workflow-step"
+                    [class.active]="isStepActive('verification_processing')"
+                    [class.completed]="
+                        isStepCompleted('verification_processing')
+                    ">
+                    <div class="step-header">
+                        <div class="step-icon">
+                            <svg
+                                *ngIf="
+                                    getStepStatus('verification_processing') ===
+                                    'completed'
+                                "
+                                class="w-6 h-6 text-green-600"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <svg
+                                *ngIf="
+                                    getStepStatus('verification_processing') !==
+                                    'completed'
+                                "
+                                class="w-6 h-6"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div class="step-info">
+                            <h3 class="step-title">Verification & Matching</h3>
+                            <p class="step-description">
+                                AI-powered verification and matching
+                            </p>
+                        </div>
+                        <div class="step-status">
+                            <span
+                                class="status-badge"
+                                [ngClass]="
+                                    'status-' +
+                                    getStepStatus('verification_processing')
+                                ">
+                                {{
+                                    getStepStatus('verification_processing')
+                                        | titlecase
+                                }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div
+                        *ngIf="isStepActive('verification_processing')"
+                        class="step-content">
+                        <div class="verification-info">
+                            <p>
+                                Performing comprehensive verification including:
+                            </p>
+                            <ul class="verification-list">
+                                <li>
+                                    Face matching between selfie and document
+                                </li>
+                                <li>Fuzzy name matching</li>
+                                <li>Document authenticity verification</li>
+                                <li>Risk assessment</li>
+                            </ul>
+                        </div>
+                        <button
+                            class="action-btn"
+                            (click)="handleComprehensiveVerification()"
+                            [disabled]="isProcessing">
+                            <span
+                                *ngIf="isProcessing"
+                                class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
+                            {{
+                                isProcessing
+                                    ? 'Processing...'
+                                    : 'Start Verification'
+                            }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Monitoring -->
+    <div *ngIf="activeTasks.length > 0" class="task-monitoring">
+        <h3 class="monitoring-title">Processing Tasks</h3>
+        <div class="task-list">
+            <div *ngFor="let taskId of activeTasks" class="task-item">
+                <div class="task-info">
+                    <span class="task-name">{{
+                        getTaskStatus(taskId)?.name || taskId
+                    }}</span>
+                    <span
+                        class="task-status"
+                        [ngClass]="
+                            'status-' +
+                            (getTaskStatus(taskId)?.status || 'pending')
+                        ">
+                        {{
+                            getTaskStatus(taskId)?.status || 'pending'
+                                | titlecase
+                        }}
+                    </span>
+                </div>
+                <div class="task-progress">
+                    <div class="progress-bar-small">
+                        <div
+                            class="progress-fill-small"
+                            [style.width.%]="getTaskProgress(taskId)"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session Summary -->
+    <div *ngIf="sessionStatus" class="session-summary">
+        <h3 class="summary-title">Session Summary</h3>
+        <div class="summary-content">
+            <div class="summary-item">
+                <span class="summary-label">Risk Score:</span>
+                <span
+                    class="summary-value"
+                    [ngClass]="
+                        'risk-' + getRiskLevel(sessionStatus.risk_score)
+                    ">
+                    {{ sessionStatus.risk_score | number : '1.2-2' }}
+                </span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Compliance Status:</span>
+                <span
+                    class="summary-value"
+                    [ngClass]="'compliance-' + sessionStatus.compliance_status">
+                    {{ sessionStatus.compliance_status | titlecase }}
+                </span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Progress:</span>
+                <span class="summary-value"
+                    >{{ sessionStatus.workflow_progress.completed_steps }}/{{
+                        sessionStatus.workflow_progress.total_steps
+                    }}
+                    steps</span
+                >
+            </div>
+        </div>
+    </div>
+</div>

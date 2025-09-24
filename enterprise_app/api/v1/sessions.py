@@ -337,13 +337,13 @@ async def resume_session(session_id: str) -> Dict[str, Any]:
 @router.post("/selfie/submit")
 async def submit_selfie(request: SelfieSubmissionRequest) -> Dict[str, Any]:
     """
-    Submit selfie data for processing.
+    Submit selfie data for processing and perform liveness detection.
     
     Args:
         request: Selfie submission request
         
     Returns:
-        Selfie submission result
+        Selfie submission result with liveness detection response
         
     Raises:
         HTTPException: If submission fails
@@ -358,30 +358,54 @@ async def submit_selfie(request: SelfieSubmissionRequest) -> Dict[str, Any]:
         logger.info(f"📸 SELFIE DATA: Base64 length: {len(request.selfie_data)} characters")
         logger.info(f"📸 SELFIE DATA: First 100 chars: {request.selfie_data[:100]}...")
         
-        # Log the full base64 data (be careful with large data in production)
-        logger.info("Selfie base64 data received", extra={
+        # Import Digio service for liveness detection
+        from services.digio_service import digio_service
+        
+        # Perform liveness detection using Digio API
+        logger.info("🔍 Performing liveness detection...")
+        async with digio_service as digio:
+            liveness_result = await digio.liveness_detection(
+                request.selfie_data,
+                threshold=0.8,
+                liveness_type='passive'
+            )
+        
+        logger.info(f"✅ Liveness detection completed. Score: {liveness_result.get('liveness_score', 'N/A')}")
+        
+        # Save selfie data and liveness result (in a real implementation, you'd save to database)
+        # For now, we'll just log the results
+        logger.info("Selfie and liveness data processed", extra={
                    "room_id": request.room_id,
-                   "selfie_data": request.selfie_data,
-                   "data_length": len(request.selfie_data)
+                   "selfie_data_length": len(request.selfie_data),
+                   "liveness_score": liveness_result.get('liveness_score', 0),
+                   "is_live": liveness_result.get('is_live', False),
+                   "confidence": liveness_result.get('confidence', 'unknown')
         })
         
-        # Return success response like the old backend
+        # Return success response with liveness detection results
         result = {
             "status": "success",
             "room_id": request.room_id,
-            "message": "Selfie submitted successfully",
-            "data_length": len(request.selfie_data)
+            "message": "Selfie submitted and liveness detection completed successfully",
+            "data_length": len(request.selfie_data),
+            "liveness_detection": {
+                "liveness_score": liveness_result.get('liveness_score', 0),
+                "is_live": liveness_result.get('is_live', False),
+                "confidence": liveness_result.get('confidence', 'unknown'),
+                "timestamp": liveness_result.get('timestamp', None)
+            }
         }
         
-        logger.info("Selfie submitted successfully", extra={"room_id": request.room_id})
+        logger.info("Selfie submitted and liveness detection completed successfully", extra={"room_id": request.room_id})
         return result
         
     except Exception as e:
-        logger.error("Failed to submit selfie", extra={"room_id": request.room_id, "error": str(e)})
+        logger.error("Failed to submit selfie or perform liveness detection", extra={"room_id": request.room_id, "error": str(e)})
         return {
             "status": "error",
             "room_id": request.room_id,
-            "error": str(e)
+            "error": str(e),
+            "message": "Failed to process selfie or perform liveness detection"
         }
 
 

@@ -1,0 +1,255 @@
+{
+    "workflow_id": "flexible_verification",
+    "workflow_type": "flexible_verification",
+    "name": "Flexible Verification Workflow",
+    "description": "A flexible verification workflow that allows steps to be executed in any order based on user input and requirements",
+    "version": "1.0.0",
+    "timeout_minutes": 90,
+    "max_retries": 2,
+    "enable_parallel_steps": true,
+    "steps": [
+        {
+            "id": "welcome",
+            "type": "introduction",
+            "title": "Welcome",
+            "description": "Welcome to our flexible verification system",
+            "order": 1,
+            "required": true,
+            "instructions": "Welcome the user and explain that they can complete verification steps in any order they prefer."
+        },
+        {
+            "id": "selfie_step",
+            "type": "selfie_capture",
+            "title": "Selfie Capture",
+            "description": "Capture your selfie for identity verification",
+            "order": 2,
+            "required": true,
+            "instructions": "Capture a clear selfie with good lighting. This will be used for liveness detection and face matching.",
+            "data": {
+                "allow_retake": true,
+                "max_attempts": 3,
+                "quality_check": true
+            }
+        },
+        {
+            "id": "liveness_step",
+            "type": "liveness_check",
+            "title": "Liveness Detection",
+            "description": "Verify that your selfie is from a live person",
+            "order": 3,
+            "required": true,
+            "instructions": "Automatically verify that the captured selfie is from a live person and not a photo or video.",
+            "data": {
+                "depends_on": "selfie_step",
+                "auto_execute": true
+            }
+        },
+        {
+            "id": "id_upload_step",
+            "type": "document_upload",
+            "title": "ID Document Upload",
+            "description": "Upload your government-issued ID document",
+            "order": 4,
+            "required": true,
+            "instructions": "Upload a clear photo of your government-issued ID document. Supported formats: PAN, Aadhaar, Passport, Driving License.",
+            "document_types": [
+                "PAN Card",
+                "Aadhaar Card",
+                "Passport",
+                "Driving License",
+                "Voter ID"
+            ],
+            "data": {
+                "allow_multiple_documents": false,
+                "auto_rotate": true,
+                "quality_enhancement": true
+            }
+        },
+        {
+            "id": "id_verify_step",
+            "type": "id_verification",
+            "title": "ID Document Verification",
+            "description": "Verify the authenticity of your ID document",
+            "order": 5,
+            "required": true,
+            "instructions": "Automatically verify the authenticity and validity of your uploaded ID document.",
+            "data": {
+                "depends_on": "id_upload_step",
+                "auto_execute": true,
+                "document_type": "auto"
+            }
+        },
+        {
+            "id": "ocr_step",
+            "type": "ocr_extraction",
+            "title": "Information Extraction",
+            "description": "Extract information from your ID document",
+            "order": 6,
+            "required": true,
+            "instructions": "Automatically extract text and structured information from your ID document using OCR technology.",
+            "data": {
+                "depends_on": "id_upload_step",
+                "auto_execute": true,
+                "extract_fields": [
+                    "name",
+                    "date_of_birth",
+                    "document_number",
+                    "address",
+                    "photo_location"
+                ]
+            }
+        },
+        {
+            "id": "face_match_step",
+            "type": "face_match",
+            "title": "Face Matching",
+            "description": "Match your selfie with ID document photo",
+            "order": 7,
+            "required": true,
+            "instructions": "Compare your selfie with the photo on your ID document to verify they belong to the same person.",
+            "data": {
+                "source_reference": "selfie_step",
+                "target_reference": "id_upload_step",
+                "threshold": 0.8,
+                "depends_on": [
+                    "selfie_step",
+                    "id_upload_step"
+                ]
+            }
+        },
+        {
+            "id": "personal_info_step",
+            "type": "questionnaire",
+            "title": "Personal Information",
+            "description": "Provide your personal information",
+            "order": 8,
+            "required": true,
+            "instructions": "Provide your personal information that will be verified against your ID document.",
+            "questions": [
+                {
+                    "id": "full_name",
+                    "question": "Full name as per ID document",
+                    "type": "text",
+                    "required": true,
+                    "validation": {
+                        "min_length": 2,
+                        "max_length": 100
+                    }
+                },
+                {
+                    "id": "date_of_birth",
+                    "question": "Date of birth",
+                    "type": "date",
+                    "required": true,
+                    "validation": {
+                        "min_age": 18,
+                        "max_age": 120
+                    }
+                },
+                {
+                    "id": "phone_number",
+                    "question": "Phone number",
+                    "type": "tel",
+                    "required": true,
+                    "validation": {
+                        "pattern": "^[+]?[0-9]{10,15}$"
+                    }
+                },
+                {
+                    "id": "email",
+                    "question": "Email address",
+                    "type": "email",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "id": "name_match_step",
+            "type": "fuzzy_match",
+            "title": "Name Verification",
+            "description": "Verify name matches between self-reported and ID document",
+            "order": 9,
+            "required": true,
+            "instructions": "Compare the name you provided with the name extracted from your ID document.",
+            "data": {
+                "text1_source": "personal_info_step.full_name",
+                "text2_source": "ocr_step.structured_data.name",
+                "threshold": 0.8,
+                "depends_on": [
+                    "personal_info_step",
+                    "ocr_step"
+                ]
+            }
+        },
+        {
+            "id": "dob_match_step",
+            "type": "fuzzy_match",
+            "title": "Date of Birth Verification",
+            "description": "Verify date of birth matches between self-reported and ID document",
+            "order": 10,
+            "required": true,
+            "instructions": "Compare the date of birth you provided with the date extracted from your ID document.",
+            "data": {
+                "text1_source": "personal_info_step.date_of_birth",
+                "text2_source": "ocr_step.structured_data.date_of_birth",
+                "threshold": 1.0,
+                "depends_on": [
+                    "personal_info_step",
+                    "ocr_step"
+                ]
+            }
+        },
+        {
+            "id": "final_verification",
+            "type": "custom_verification",
+            "title": "Final Verification",
+            "description": "Perform final comprehensive verification",
+            "order": 11,
+            "required": true,
+            "instructions": "Perform final comprehensive verification combining all previous checks.",
+            "data": {
+                "verification_type": "comprehensive",
+                "include_all_checks": true,
+                "depends_on": [
+                    "selfie_step",
+                    "liveness_step",
+                    "id_verify_step",
+                    "face_match_step",
+                    "name_match_step",
+                    "dob_match_step"
+                ]
+            }
+        },
+        {
+            "id": "completion_step",
+            "type": "completion",
+            "title": "Verification Complete",
+            "description": "Your verification process is complete",
+            "order": 12,
+            "required": true,
+            "instructions": "Thank the user and provide a summary of the verification results."
+        }
+    ],
+    "settings": {
+        "allow_step_skipping": false,
+        "require_all_steps": true,
+        "enable_retry": true,
+        "max_retry_attempts": 2,
+        "auto_proceed_on_success": true,
+        "notify_on_completion": true,
+        "allow_parallel_execution": true,
+        "enable_step_dependencies": true
+    },
+    "custom_settings": {
+        "face_match_threshold": 0.8,
+        "fuzzy_match_threshold": 0.8,
+        "liveness_confidence_threshold": 0.7,
+        "id_verification_strict_mode": true,
+        "enable_biometric_verification": true,
+        "store_verification_data": true,
+        "data_retention_days": 30,
+        "enable_quality_checks": true,
+        "auto_enhance_images": true,
+        "enable_fallback_verification": true
+    }
+}

@@ -380,6 +380,82 @@ export class EnterpriseApiService {
             .pipe(catchError(this.handleError))
     }
 
+    // Verification Methods
+    performLivenessDetection(
+        image: File,
+        threshold: number = 0.8
+    ): Observable<any> {
+        const formData = new FormData()
+        formData.append('image', image)
+        formData.append('threshold', threshold.toString())
+
+        return this.http
+            .post(`${this.API_BASE}/workflows/verification/liveness`, formData)
+            .pipe(catchError(this.handleError))
+    }
+
+    performFaceMatch(
+        sourceImage: File,
+        targetImage: File,
+        threshold: number = 0.75
+    ): Observable<any> {
+        const formData = new FormData()
+        formData.append('source_image', sourceImage)
+        formData.append('target_image', targetImage)
+        formData.append('threshold', threshold.toString())
+
+        return this.http
+            .post(
+                `${this.API_BASE}/workflows/verification/face-match`,
+                formData
+            )
+            .pipe(catchError(this.handleError))
+    }
+
+    performFuzzyMatch(
+        sourceText: string,
+        targetText: string,
+        threshold: number = 0.85
+    ): Observable<any> {
+        return this.http
+            .post(`${this.API_BASE}/workflows/verification/fuzzy-match`, {
+                source_text: sourceText,
+                target_text: targetText,
+                threshold: threshold,
+            })
+            .pipe(catchError(this.handleError))
+    }
+
+    performIdVerification(
+        documentImage: File,
+        confidenceThreshold: number = 0.8
+    ): Observable<any> {
+        const formData = new FormData()
+        formData.append('document_image', documentImage)
+        formData.append('confidence_threshold', confidenceThreshold.toString())
+
+        return this.http
+            .post(
+                `${this.API_BASE}/workflows/verification/id-verification`,
+                formData
+            )
+            .pipe(catchError(this.handleError))
+    }
+
+    performBatchVerification(verificationTasks: any[]): Observable<any> {
+        return this.http
+            .post(`${this.API_BASE}/workflows/verification/batch`, {
+                verification_tasks: verificationTasks,
+            })
+            .pipe(catchError(this.handleError))
+    }
+
+    checkVerificationHealth(): Observable<any> {
+        return this.http
+            .get(`${this.API_BASE}/workflows/verification/health`)
+            .pipe(catchError(this.handleError))
+    }
+
     // Utility Methods
     getCurrentSession(): SessionResponse | null {
         return this.currentSessionSubject.value

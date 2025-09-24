@@ -1,0 +1,177 @@
+{
+    "workflow_id": "enhanced_kyc_verification",
+    "workflow_type": "kyc_verification",
+    "name": "Enhanced KYC Verification Workflow",
+    "description": "Comprehensive KYC verification process with flexible steps including selfie capture, liveness detection, face matching, fuzzy matching, and ID verification",
+    "version": "2.0.0",
+    "timeout_minutes": 60,
+    "max_retries": 3,
+    "enable_parallel_steps": false,
+    "steps": [
+        {
+            "id": "introduction",
+            "type": "introduction",
+            "title": "Welcome to KYC Verification",
+            "description": "Welcome to our comprehensive KYC verification process. We'll guide you through each step.",
+            "order": 1,
+            "required": true,
+            "instructions": "Welcome the user and explain the KYC verification process. Mention that we'll be capturing their selfie, verifying their identity document, and performing various security checks."
+        },
+        {
+            "id": "selfie_capture",
+            "type": "selfie_capture",
+            "title": "Capture Selfie",
+            "description": "Please capture a clear selfie for identity verification.",
+            "order": 2,
+            "required": true,
+            "instructions": "Ask the user to capture a clear selfie. Ensure good lighting, face is clearly visible, and no sunglasses or masks. This will be used for liveness detection and face matching."
+        },
+        {
+            "id": "liveness_check",
+            "type": "liveness_check",
+            "title": "Liveness Verification",
+            "description": "Verifying that the selfie is from a live person.",
+            "order": 3,
+            "required": true,
+            "instructions": "Automatically perform liveness detection on the captured selfie to ensure it's from a live person and not a photo or video."
+        },
+        {
+            "id": "personal_info_questionnaire",
+            "type": "questionnaire",
+            "title": "Personal Information",
+            "description": "Please provide your basic personal information.",
+            "order": 4,
+            "required": true,
+            "instructions": "Collect basic personal information from the user that will be used for verification against their ID document.",
+            "questions": [
+                {
+                    "id": "full_name",
+                    "question": "What is your full name as it appears on your ID document?",
+                    "type": "text",
+                    "required": true,
+                    "placeholder": "Enter your full name"
+                },
+                {
+                    "id": "date_of_birth",
+                    "question": "What is your date of birth?",
+                    "type": "date",
+                    "required": true
+                },
+                {
+                    "id": "phone_number",
+                    "question": "What is your phone number?",
+                    "type": "tel",
+                    "required": true,
+                    "placeholder": "+91-XXXXXXXXXX"
+                },
+                {
+                    "id": "email",
+                    "question": "What is your email address?",
+                    "type": "email",
+                    "required": false,
+                    "placeholder": "your.email@example.com"
+                }
+            ]
+        },
+        {
+            "id": "id_document_upload",
+            "type": "document_upload",
+            "title": "Upload ID Document",
+            "description": "Please upload a clear photo of your government-issued ID document.",
+            "order": 5,
+            "required": true,
+            "instructions": "Ask the user to upload a clear photo of their government-issued ID document (PAN Card, Aadhaar Card, Passport, or Driving License). Ensure all text is readable and the document is not damaged.",
+            "document_types": [
+                "PAN Card",
+                "Aadhaar Card",
+                "Passport",
+                "Driving License",
+                "Voter ID"
+            ]
+        },
+        {
+            "id": "id_verification",
+            "type": "id_verification",
+            "title": "ID Document Verification",
+            "description": "Verifying the authenticity of your ID document.",
+            "order": 6,
+            "required": true,
+            "instructions": "Automatically verify the authenticity of the uploaded ID document using Digio's verification services."
+        },
+        {
+            "id": "ocr_extraction",
+            "type": "ocr_extraction",
+            "title": "Extract Information from ID",
+            "description": "Extracting information from your ID document.",
+            "order": 7,
+            "required": true,
+            "instructions": "Automatically extract text and structured data from the ID document using OCR technology."
+        },
+        {
+            "id": "face_match_verification",
+            "type": "face_match",
+            "title": "Face Matching",
+            "description": "Matching your selfie with the photo on your ID document.",
+            "order": 8,
+            "required": true,
+            "instructions": "Automatically compare the captured selfie with the photo on the ID document to verify they belong to the same person.",
+            "data": {
+                "source_reference": "selfie_capture",
+                "target_reference": "id_document_upload"
+            }
+        },
+        {
+            "id": "name_fuzzy_match",
+            "type": "fuzzy_match",
+            "title": "Name Verification",
+            "description": "Verifying that the name you provided matches the name on your ID document.",
+            "order": 9,
+            "required": true,
+            "instructions": "Automatically compare the name provided by the user with the name extracted from the ID document to ensure they match.",
+            "data": {
+                "text1_source": "personal_info_questionnaire.full_name",
+                "text2_source": "ocr_extraction.structured_data.name",
+                "threshold": 0.8
+            }
+        },
+        {
+            "id": "comprehensive_verification",
+            "type": "custom_verification",
+            "title": "Comprehensive Security Check",
+            "description": "Performing final comprehensive security verification.",
+            "order": 10,
+            "required": true,
+            "instructions": "Perform a comprehensive verification combining all previous checks to ensure the highest level of security.",
+            "data": {
+                "verification_type": "comprehensive",
+                "include_all_checks": true
+            }
+        },
+        {
+            "id": "completion",
+            "type": "completion",
+            "title": "Verification Complete",
+            "description": "Your KYC verification has been completed successfully.",
+            "order": 11,
+            "required": true,
+            "instructions": "Thank the user and provide a summary of the verification results. Confirm that their KYC process is complete."
+        }
+    ],
+    "settings": {
+        "allow_step_skipping": false,
+        "require_all_steps": true,
+        "enable_retry": true,
+        "max_retry_attempts": 3,
+        "auto_proceed_on_success": true,
+        "notify_on_completion": true
+    },
+    "custom_settings": {
+        "face_match_threshold": 0.8,
+        "fuzzy_match_threshold": 0.8,
+        "liveness_confidence_threshold": 0.7,
+        "id_verification_strict_mode": true,
+        "enable_biometric_verification": true,
+        "store_verification_data": true,
+        "data_retention_days": 30
+    }
+}

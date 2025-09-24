@@ -1,0 +1,441 @@
+/* Enhanced KYC Component Styles */
+
+.enhanced-kyc-container {
+    @apply min-h-screen bg-gray-50 p-6;
+}
+
+/* Header */
+.header {
+    @apply bg-white rounded-lg shadow-md p-6 mb-6;
+}
+
+.title {
+    @apply text-3xl font-bold text-gray-900 mb-4;
+}
+
+.status-bar {
+    @apply flex items-center justify-between;
+}
+
+.status-message {
+    @apply text-lg text-gray-700 font-medium;
+}
+
+.progress-container {
+    @apply flex items-center space-x-4;
+}
+
+.progress-bar {
+    @apply w-64 h-3 bg-gray-200 rounded-full overflow-hidden;
+}
+
+.progress-fill {
+    @apply h-full bg-blue-600 transition-all duration-500 ease-out;
+}
+
+.progress-text {
+    @apply text-sm font-medium text-gray-600;
+}
+
+/* Main Content */
+.main-content {
+    @apply grid grid-cols-1 lg:grid-cols-2 gap-6;
+}
+
+/* Video Section */
+.video-section {
+    @apply bg-white rounded-lg shadow-md p-6;
+}
+
+.video-container {
+    @apply relative w-full h-64 bg-gray-200 rounded-lg overflow-hidden mb-4;
+}
+
+.user-video {
+    @apply w-full h-full object-cover;
+}
+
+.video-overlay {
+    @apply absolute inset-0 flex items-center justify-center bg-gray-100;
+}
+
+.overlay-content {
+    @apply text-center;
+}
+
+.media-controls {
+    @apply flex space-x-3;
+}
+
+.control-btn {
+    @apply flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors;
+    @apply bg-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed;
+}
+
+.control-btn.active {
+    @apply bg-green-600 hover:bg-green-700;
+}
+
+/* Workflow Section */
+.workflow-section {
+    @apply bg-white rounded-lg shadow-md p-6;
+}
+
+.start-section {
+    @apply text-center py-12;
+}
+
+.start-content {
+    @apply max-w-md mx-auto;
+}
+
+.section-title {
+    @apply text-2xl font-bold text-gray-900 mb-4;
+}
+
+.section-description {
+    @apply text-gray-600 mb-6 leading-relaxed;
+}
+
+.start-btn {
+    @apply w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-medium;
+    @apply hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed;
+    @apply transition-colors flex items-center justify-center;
+}
+
+/* Workflow Steps */
+.workflow-steps {
+    @apply space-y-4;
+}
+
+.workflow-step {
+    @apply border border-gray-200 rounded-lg p-4 transition-all duration-300;
+}
+
+.workflow-step.active {
+    @apply border-blue-500 bg-blue-50;
+}
+
+.workflow-step.completed {
+    @apply border-green-500 bg-green-50;
+}
+
+.step-header {
+    @apply flex items-center space-x-4;
+}
+
+.step-icon {
+    @apply flex-shrink-0;
+}
+
+.step-info {
+    @apply flex-1;
+}
+
+.step-title {
+    @apply text-lg font-semibold text-gray-900 mb-1;
+}
+
+.step-description {
+    @apply text-sm text-gray-600;
+}
+
+.step-status {
+    @apply flex-shrink-0;
+}
+
+.status-badge {
+    @apply px-3 py-1 rounded-full text-xs font-medium;
+}
+
+.status-pending {
+    @apply bg-gray-100 text-gray-800;
+}
+
+.status-active {
+    @apply bg-blue-100 text-blue-800;
+}
+
+.status-completed {
+    @apply bg-green-100 text-green-800;
+}
+
+.status-failed {
+    @apply bg-red-100 text-red-800;
+}
+
+/* Step Content */
+.step-content {
+    @apply mt-4 pt-4 border-t border-gray-200;
+}
+
+.step-instructions {
+    @apply mb-4 p-3 bg-blue-50 rounded-lg;
+}
+
+.step-instructions p {
+    @apply text-sm text-blue-800;
+}
+
+.action-btn {
+    @apply bg-blue-600 text-white px-4 py-2 rounded-lg font-medium;
+    @apply hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed;
+    @apply transition-colors flex items-center justify-center;
+}
+
+/* Upload Area */
+.upload-area {
+    @apply border-2 border-dashed border-gray-300 rounded-lg p-8 text-center;
+    @apply hover:border-blue-500 transition-colors;
+}
+
+.upload-label {
+    @apply cursor-pointer block;
+}
+
+.upload-text {
+    @apply text-lg font-medium text-gray-700 mb-2;
+}
+
+.upload-hint {
+    @apply text-sm text-gray-500;
+}
+
+/* Questionnaire Form */
+.questionnaire-form {
+    @apply space-y-4;
+}
+
+.question-item {
+    @apply space-y-2;
+}
+
+.question-label {
+    @apply block text-sm font-medium text-gray-700;
+}
+
+.question-input {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-lg;
+    @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+}
+
+/* Verification Info */
+.verification-info {
+    @apply mb-4 p-4 bg-gray-50 rounded-lg;
+}
+
+.verification-list {
+    @apply mt-2 space-y-1 text-sm text-gray-700;
+}
+
+.verification-list li {
+    @apply flex items-center space-x-2;
+}
+
+.verification-list li::before {
+    content: '✓';
+    @apply text-green-600 font-bold;
+}
+
+/* Task Monitoring */
+.task-monitoring {
+    @apply bg-white rounded-lg shadow-md p-6 mt-6;
+}
+
+.monitoring-title {
+    @apply text-lg font-semibold text-gray-900 mb-4;
+}
+
+.task-list {
+    @apply space-y-3;
+}
+
+.task-item {
+    @apply p-3 bg-gray-50 rounded-lg;
+}
+
+.task-info {
+    @apply flex items-center justify-between mb-2;
+}
+
+.task-name {
+    @apply text-sm font-medium text-gray-900;
+}
+
+.task-status {
+    @apply px-2 py-1 rounded-full text-xs font-medium;
+}
+
+.task-progress {
+    @apply w-full;
+}
+
+.progress-bar-small {
+    @apply w-full h-2 bg-gray-200 rounded-full overflow-hidden;
+}
+
+.progress-fill-small {
+    @apply h-full bg-blue-600 transition-all duration-300;
+}
+
+/* Session Summary */
+.session-summary {
+    @apply bg-white rounded-lg shadow-md p-6 mt-6;
+}
+
+.summary-title {
+    @apply text-lg font-semibold text-gray-900 mb-4;
+}
+
+.summary-content {
+    @apply grid grid-cols-1 md:grid-cols-3 gap-4;
+}
+
+.summary-item {
+    @apply flex flex-col space-y-1;
+}
+
+.summary-label {
+    @apply text-sm font-medium text-gray-600;
+}
+
+.summary-value {
+    @apply text-lg font-semibold;
+}
+
+.risk-low {
+    @apply text-green-600;
+}
+
+.risk-medium {
+    @apply text-yellow-600;
+}
+
+.risk-high {
+    @apply text-red-600;
+}
+
+.compliance-approved {
+    @apply text-green-600;
+}
+
+.compliance-pending {
+    @apply text-yellow-600;
+}
+
+.compliance-rejected {
+    @apply text-red-600;
+}
+
+/* Animations */
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .enhanced-kyc-container {
+        @apply p-4;
+    }
+
+    .main-content {
+        @apply grid-cols-1;
+    }
+
+    .status-bar {
+        @apply flex-col space-y-4;
+    }
+
+    .progress-container {
+        @apply w-full;
+    }
+
+    .progress-bar {
+        @apply w-full;
+    }
+
+    .summary-content {
+        @apply grid-cols-1;
+    }
+}
+
+/* Loading States */
+.loading {
+    @apply opacity-50 pointer-events-none;
+}
+
+/* Error States */
+.error {
+    @apply border-red-500 bg-red-50;
+}
+
+/* Success States */
+.success {
+    @apply border-green-500 bg-green-50;
+}
+
+/* Hidden Elements */
+.hidden {
+    @apply hidden;
+}
+
+/* Focus States */
+.focus\:ring-2:focus {
+    @apply ring-2;
+}
+
+.focus\:ring-blue-500:focus {
+    @apply ring-blue-500;
+}
+
+.focus\:border-transparent:focus {
+    @apply border-transparent;
+}
+
+/* Hover States */
+.hover\:bg-blue-700:hover {
+    @apply bg-blue-700;
+}
+
+.hover\:bg-gray-700:hover {
+    @apply bg-gray-700;
+}
+
+.hover\:bg-green-700:hover {
+    @apply bg-green-700;
+}
+
+.hover\:border-blue-500:hover {
+    @apply border-blue-500;
+}
+
+/* Transition Effects */
+.transition-all {
+    transition: all 0.3s ease;
+}
+
+.transition-colors {
+    transition: color 0.3s ease, background-color 0.3s ease,
+        border-color 0.3s ease;
+}
+
+.duration-300 {
+    transition-duration: 300ms;
+}
+
+.duration-500 {
+    transition-duration: 500ms;
+}
+
+.ease-out {
+    transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
+}

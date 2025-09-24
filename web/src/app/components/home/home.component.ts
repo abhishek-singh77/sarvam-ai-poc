@@ -348,6 +348,24 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
         }
     }
 
+    async proceedToEnhancedKYC(): Promise<void> {
+        this.isLoading = true
+        this.setStatus('Initializing Enhanced KYC session...')
+
+        try {
+            // Navigate directly to enhanced KYC route
+            this.router.navigate(['/enhanced-kyc'])
+            this.setStatus('Enhanced KYC session ready')
+        } catch (error: any) {
+            const errorMessage =
+                error.message || 'Failed to initialize Enhanced KYC session'
+            this.setStatus('Error: ' + errorMessage)
+            this.showUserFriendlyError(errorMessage)
+        } finally {
+            this.isLoading = false
+        }
+    }
+
     // Show media-specific error messages
     private showMediaError(error: string): void {
         console.error('Media access error:', error)
@@ -430,6 +448,8 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
     private setStatus(status: string): void {
         this.status = status
     }
+
+    // Navigation methods
 
     private async setupVideoPreview(): Promise<void> {
         console.log('🎯 HOME: setupVideoPreview called')

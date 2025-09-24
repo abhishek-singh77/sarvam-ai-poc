@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     google_api_key: Optional[str] = Field(default=None, alias="GOOGLE_API_KEY")
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
     
+    # Digio API Configuration
+    digio_api_key: Optional[str] = Field(default=None, alias="DIGIO_API_KEY")
+    digio_api_secret: Optional[str] = Field(default=None, alias="DIGIO_API_SECRET")
+    digio_base_url: str = Field(default="https://ext.digio.in:444", alias="DIGIO_BASE_URL")
+    
     # Logging Configuration
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_format: str = Field(default="json", alias="LOG_FORMAT")
@@ -152,6 +157,15 @@ class Settings(BaseSettings):
         }
     
     @property
+    def digio_config(self) -> Dict[str, Any]:
+        """Get Digio API configuration."""
+        return {
+            "api_key": self.digio_api_key,
+            "api_secret": self.digio_api_secret,
+            "base_url": self.digio_base_url
+        }
+    
+    @property
     def security_config(self) -> Dict[str, Any]:
         """Get security configuration."""
         return {
@@ -183,6 +197,8 @@ class Settings(BaseSettings):
             "sarvamai_api_key": mask_sensitive(self.sarvamai_api_key),
             "google_api_key": mask_sensitive(self.google_api_key),
             "openai_api_key": mask_sensitive(self.openai_api_key),
+            "digio_api_key": mask_sensitive(self.digio_api_key),
+            "digio_api_secret": mask_sensitive(self.digio_api_secret),
             "secret_key": mask_sensitive(self.secret_key),
             "log_level": self.log_level,
             "log_format": self.log_format,

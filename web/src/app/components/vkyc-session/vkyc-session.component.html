@@ -439,6 +439,116 @@
                                         ✓ Selfie submitted successfully!
                                     </p>
 
+                                    <!-- Liveness Detection Results -->
+                                    <div
+                                        *ngIf="
+                                            step.data.submitted &&
+                                            step.data.liveness_detection
+                                        "
+                                        class="mt-3 p-3 rounded-lg border"
+                                        [ngClass]="{
+                                            'bg-green-50 border-green-200':
+                                                step.data.liveness_detection
+                                                    .is_live,
+                                            'bg-red-50 border-red-200':
+                                                !step.data.liveness_detection
+                                                    .is_live
+                                        }">
+                                        <h5
+                                            class="text-sm font-medium mb-2 flex items-center">
+                                            <svg
+                                                class="w-4 h-4 mr-1"
+                                                [ngClass]="{
+                                                    'text-green-600':
+                                                        step.data
+                                                            .liveness_detection
+                                                            .is_live,
+                                                    'text-red-600':
+                                                        !step.data
+                                                            .liveness_detection
+                                                            .is_live
+                                                }"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24">
+                                                <path
+                                                    *ngIf="
+                                                        step.data
+                                                            .liveness_detection
+                                                            .is_live
+                                                    "
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                <path
+                                                    *ngIf="
+                                                        !step.data
+                                                            .liveness_detection
+                                                            .is_live
+                                                    "
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            </svg>
+                                            Liveness Detection Results
+                                        </h5>
+                                        <div class="space-y-1 text-xs">
+                                            <div class="flex justify-between">
+                                                <span class="text-gray-600"
+                                                    >Status:</span
+                                                >
+                                                <span
+                                                    [ngClass]="{
+                                                        'text-green-600 font-medium':
+                                                            step.data
+                                                                .liveness_detection
+                                                                .is_live,
+                                                        'text-red-600 font-medium':
+                                                            !step.data
+                                                                .liveness_detection
+                                                                .is_live
+                                                    }">
+                                                    {{
+                                                        step.data
+                                                            .liveness_detection
+                                                            .is_live
+                                                            ? 'LIVE'
+                                                            : 'NOT LIVE'
+                                                    }}
+                                                </span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-gray-600"
+                                                    >Score:</span
+                                                >
+                                                <span class="font-medium">
+                                                    {{
+                                                        (
+                                                            step.data
+                                                                .liveness_detection
+                                                                .liveness_score *
+                                                            100
+                                                        ).toFixed(1)
+                                                    }}%
+                                                </span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-gray-600"
+                                                    >Confidence:</span
+                                                >
+                                                <span class="font-medium">
+                                                    {{
+                                                        step.data
+                                                            .liveness_detection
+                                                            .confidence
+                                                    }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <!-- Action Buttons -->
                                     <div
                                         *ngIf="!step.data.submitted"

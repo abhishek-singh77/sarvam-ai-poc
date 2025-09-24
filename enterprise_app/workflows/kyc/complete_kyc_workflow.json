@@ -1,0 +1,482 @@
+{
+    "id": "complete_kyc_workflow",
+    "name": "Complete KYC Verification Workflow",
+    "version": "2.0",
+    "description": "Comprehensive KYC workflow with AI agent guidance, parallel processing, and real-time verification",
+    "type": "kyc",
+    "is_electronic": true,
+    "active": true,
+    "workflow_structure": {
+        "name": "Complete KYC Verification",
+        "description": "End-to-end KYC verification with AI assistance",
+        "version": "2.0",
+        "parallel_processing": true,
+        "ai_guidance": true,
+        "real_time_verification": true,
+        "steps": [
+            {
+                "id": "session_initialization",
+                "type": "session_initialization",
+                "title": "Session Initialization",
+                "description": "Initialize KYC session and establish video connection",
+                "order": 1,
+                "required": true,
+                "ai_guidance": true,
+                "parallel_processing": false,
+                "sub_actions": [
+                    {
+                        "id": "room_creation",
+                        "type": "room_creation",
+                        "title": "Create Video Room",
+                        "step": "PRE",
+                        "required": true
+                    },
+                    {
+                        "id": "agent_join",
+                        "type": "agent_join",
+                        "title": "AI Agent Join",
+                        "step": "PROCESS",
+                        "required": true
+                    },
+                    {
+                        "id": "session_setup",
+                        "type": "session_setup",
+                        "title": "Session Setup",
+                        "step": "POST",
+                        "required": true
+                    }
+                ]
+            },
+            {
+                "id": "introduction",
+                "type": "introduction",
+                "title": "Welcome & Introduction",
+                "description": "AI agent introduces the KYC process and explains steps",
+                "order": 2,
+                "required": true,
+                "ai_guidance": true,
+                "parallel_processing": false,
+                "sub_actions": [
+                    {
+                        "id": "welcome_message",
+                        "type": "welcome_message",
+                        "title": "Welcome Message",
+                        "step": "PRE",
+                        "required": true
+                    },
+                    {
+                        "id": "process_explanation",
+                        "type": "process_explanation",
+                        "title": "Process Explanation",
+                        "step": "PROCESS",
+                        "required": true
+                    },
+                    {
+                        "id": "consent_collection",
+                        "type": "consent_collection",
+                        "title": "Consent Collection",
+                        "step": "POST",
+                        "required": true
+                    }
+                ]
+            },
+            {
+                "id": "selfie_capture",
+                "type": "selfie_capture",
+                "title": "Selfie Capture & Liveness Detection",
+                "description": "Capture selfie and perform real-time liveness detection",
+                "order": 3,
+                "required": true,
+                "ai_guidance": true,
+                "parallel_processing": true,
+                "verification": {
+                    "liveness_detection": {
+                        "enabled": true,
+                        "threshold": 0.8,
+                        "real_time": true
+                    }
+                },
+                "sub_actions": [
+                    {
+                        "id": "camera_setup",
+                        "type": "camera_setup",
+                        "title": "Camera Setup",
+                        "step": "PRE",
+                        "required": true
+                    },
+                    {
+                        "id": "selfie_guidance",
+                        "type": "selfie_guidance",
+                        "title": "Selfie Guidance",
+                        "step": "PROCESS",
+                        "required": true
+                    },
+                    {
+                        "id": "liveness_detection",
+                        "type": "liveness_detection",
+                        "title": "Liveness Detection",
+                        "step": "PROCESS",
+                        "required": true,
+                        "parallel": true
+                    },
+                    {
+                        "id": "selfie_validation",
+                        "type": "selfie_validation",
+                        "title": "Selfie Validation",
+                        "step": "POST",
+                        "required": true
+                    }
+                ]
+            },
+            {
+                "id": "document_upload",
+                "type": "document_upload",
+                "title": "Document Upload & Processing",
+                "description": "Upload and process identity documents with OCR extraction",
+                "order": 4,
+                "required": true,
+                "ai_guidance": true,
+                "parallel_processing": true,
+                "verification": {
+                    "document_verification": {
+                        "enabled": true,
+                        "ocr_extraction": true,
+                        "data_validation": true
+                    }
+                },
+                "sub_actions": [
+                    {
+                        "id": "document_guidance",
+                        "type": "document_guidance",
+                        "title": "Document Guidance",
+                        "step": "PRE",
+                        "required": true
+                    },
+                    {
+                        "id": "document_upload",
+                        "type": "document_upload",
+                        "title": "Document Upload",
+                        "step": "PROCESS",
+                        "required": true
+                    },
+                    {
+                        "id": "ocr_extraction",
+                        "type": "ocr_extraction",
+                        "title": "OCR Data Extraction",
+                        "step": "PROCESS",
+                        "required": true,
+                        "parallel": true
+                    },
+                    {
+                        "id": "document_validation",
+                        "type": "document_validation",
+                        "title": "Document Validation",
+                        "step": "POST",
+                        "required": true
+                    }
+                ]
+            },
+            {
+                "id": "questionnaire",
+                "type": "questionnaire",
+                "title": "Information Collection",
+                "description": "Collect personal information through AI-guided questionnaire",
+                "order": 5,
+                "required": true,
+                "ai_guidance": true,
+                "parallel_processing": false,
+                "questions": [
+                    {
+                        "id": "full_name",
+                        "type": "text",
+                        "question": "What is your full name as it appears on your ID document?",
+                        "required": true,
+                        "validation": {
+                            "min_length": 2,
+                            "max_length": 100
+                        }
+                    },
+                    {
+                        "id": "father_name",
+                        "type": "text",
+                        "question": "What is your father's name?",
+                        "required": true,
+                        "validation": {
+                            "min_length": 2,
+                            "max_length": 100
+                        }
+                    },
+                    {
+                        "id": "date_of_birth",
+                        "type": "date",
+                        "question": "What is your date of birth?",
+                        "required": true,
+                        "validation": {
+                            "min_age": 18,
+                            "max_age": 100
+                        }
+                    },
+                    {
+                        "id": "address",
+                        "type": "text",
+                        "question": "What is your current address?",
+                        "required": true,
+                        "validation": {
+                            "min_length": 10,
+                            "max_length": 500
+                        }
+                    },
+                    {
+                        "id": "occupation",
+                        "type": "text",
+                        "question": "What is your occupation?",
+                        "required": false,
+                        "validation": {
+                            "max_length": 100
+                        }
+                    },
+                    {
+                        "id": "annual_income",
+                        "type": "number",
+                        "question": "What is your approximate annual income?",
+                        "required": false,
+                        "validation": {
+                            "min_value": 0,
+                            "max_value": 10000000
+                        }
+                    }
+                ],
+                "sub_actions": [
+                    {
+                        "id": "question_guidance",
+                        "type": "question_guidance",
+                        "title": "Question Guidance",
+                        "step": "PRE",
+                        "required": true
+                    },
+                    {
+                        "id": "question_processing",
+                        "type": "question_processing",
+                        "title": "Question Processing",
+                        "step": "PROCESS",
+                        "required": true
+                    },
+                    {
+                        "id": "answer_validation",
+                        "type": "answer_validation",
+                        "title": "Answer Validation",
+                        "step": "POST",
+                        "required": true
+                    }
+                ]
+            },
+            {
+                "id": "verification_processing",
+                "type": "verification_processing",
+                "title": "Verification & Matching",
+                "description": "Perform face matching and fuzzy name matching",
+                "order": 6,
+                "required": true,
+                "ai_guidance": false,
+                "parallel_processing": true,
+                "verification": {
+                    "face_matching": {
+                        "enabled": true,
+                        "threshold": 0.75,
+                        "source": "selfie",
+                        "target": "document_photo"
+                    },
+                    "fuzzy_matching": {
+                        "enabled": true,
+                        "threshold": 0.8,
+                        "source": "questionnaire",
+                        "target": "document_data"
+                    }
+                },
+                "sub_actions": [
+                    {
+                        "id": "face_matching",
+                        "type": "face_matching",
+                        "title": "Face Matching",
+                        "step": "PROCESS",
+                        "required": true,
+                        "parallel": true
+                    },
+                    {
+                        "id": "fuzzy_matching",
+                        "type": "fuzzy_matching",
+                        "title": "Fuzzy Name Matching",
+                        "step": "PROCESS",
+                        "required": true,
+                        "parallel": true
+                    },
+                    {
+                        "id": "verification_consolidation",
+                        "type": "verification_consolidation",
+                        "title": "Verification Consolidation",
+                        "step": "POST",
+                        "required": true
+                    }
+                ]
+            },
+            {
+                "id": "compliance_check",
+                "type": "compliance_check",
+                "title": "Compliance & Risk Assessment",
+                "description": "Perform compliance checks and risk assessment",
+                "order": 7,
+                "required": true,
+                "ai_guidance": false,
+                "parallel_processing": true,
+                "sub_actions": [
+                    {
+                        "id": "sanctions_check",
+                        "type": "sanctions_check",
+                        "title": "Sanctions Check",
+                        "step": "PROCESS",
+                        "required": true,
+                        "parallel": true
+                    },
+                    {
+                        "id": "risk_assessment",
+                        "type": "risk_assessment",
+                        "title": "Risk Assessment",
+                        "step": "PROCESS",
+                        "required": true,
+                        "parallel": true
+                    },
+                    {
+                        "id": "compliance_decision",
+                        "type": "compliance_decision",
+                        "title": "Compliance Decision",
+                        "step": "POST",
+                        "required": true
+                    }
+                ]
+            },
+            {
+                "id": "completion",
+                "type": "completion",
+                "title": "KYC Completion",
+                "description": "Complete KYC process and provide results",
+                "order": 8,
+                "required": true,
+                "ai_guidance": true,
+                "parallel_processing": false,
+                "sub_actions": [
+                    {
+                        "id": "result_summary",
+                        "type": "result_summary",
+                        "title": "Result Summary",
+                        "step": "PRE",
+                        "required": true
+                    },
+                    {
+                        "id": "completion_message",
+                        "type": "completion_message",
+                        "title": "Completion Message",
+                        "step": "PROCESS",
+                        "required": true
+                    },
+                    {
+                        "id": "session_cleanup",
+                        "type": "session_cleanup",
+                        "title": "Session Cleanup",
+                        "step": "POST",
+                        "required": true
+                    }
+                ]
+            }
+        ]
+    },
+    "ai_agent_config": {
+        "agent_type": "kyc_agent",
+        "voice_enabled": true,
+        "interruption_handling": true,
+        "real_time_guidance": true,
+        "personality": {
+            "tone": "professional_friendly",
+            "language": "english",
+            "speaking_speed": "normal"
+        },
+        "capabilities": [
+            "speech_to_text",
+            "text_to_speech",
+            "natural_language_processing",
+            "workflow_guidance",
+            "error_handling",
+            "user_assistance"
+        ]
+    },
+    "verification_config": {
+        "digio_integration": {
+            "enabled": true,
+            "api_version": "v1",
+            "timeout": 30,
+            "retry_attempts": 3
+        },
+        "liveness_detection": {
+            "provider": "digio",
+            "threshold": 0.8,
+            "real_time": true
+        },
+        "face_matching": {
+            "provider": "digio",
+            "threshold": 0.75,
+            "extraction_method": "automatic"
+        },
+        "fuzzy_matching": {
+            "provider": "digio",
+            "algorithm": "levenshtein",
+            "threshold": 0.8
+        },
+        "document_verification": {
+            "provider": "digio",
+            "document_types": [
+                "pan",
+                "aadhaar",
+                "passport",
+                "driving_license"
+            ],
+            "ocr_enabled": true
+        }
+    },
+    "performance_config": {
+        "parallel_processing": true,
+        "max_concurrent_operations": 5,
+        "timeout_settings": {
+            "default": 30,
+            "verification": 60,
+            "upload": 120
+        },
+        "caching": {
+            "enabled": true,
+            "ttl": 3600
+        }
+    },
+    "error_handling": {
+        "retry_policy": {
+            "max_retries": 3,
+            "backoff_factor": 2,
+            "retryable_errors": [
+                "timeout",
+                "network_error",
+                "service_unavailable"
+            ]
+        },
+        "fallback_strategies": {
+            "verification_failure": "manual_review",
+            "ai_agent_failure": "human_agent_handoff",
+            "upload_failure": "retry_with_guidance"
+        }
+    },
+    "audit_config": {
+        "logging_enabled": true,
+        "audit_trail": true,
+        "data_retention": {
+            "session_data": "7_days",
+            "verification_results": "1_year",
+            "audit_logs": "7_years"
+        }
+    }
+}

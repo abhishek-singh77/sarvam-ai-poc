@@ -834,6 +834,12 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         }
 
         try {
+            // Show loading state
+            this.showInfo(
+                'Processing',
+                'Submitting selfie and performing liveness detection...'
+            )
+
             // Submit to API
             const response = await this.roomService.submitSelfie(
                 this.roomData.roomId,
@@ -844,16 +850,44 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                 // Mark as submitted
                 this.currentStep.data.submitted = true
 
-                // Complete the step
+                // Store liveness detection results
+                const livenessResults = response.liveness_detection
+                this.currentStep.data.liveness_detection = livenessResults
+
+                // Complete the step with liveness detection results
                 await this.completeStep('selfie_capture', {
                     selfie: this.currentStep.data.selfie,
                     timestamp: new Date().toISOString(),
                     submitted: true,
+                    liveness_detection: livenessResults,
                 })
 
-                this.showSuccess(
-                    'Selfie Submitted',
-                    'Selfie submitted successfully!'
+                // Show success message with liveness results
+                const livenessScore = livenessResults?.liveness_score || 0
+                const isLive = livenessResults?.is_live || false
+                const confidence = livenessResults?.confidence || 'unknown'
+
+                if (isLive) {
+                    this.showSuccess(
+                        'Liveness Detection Passed',
+                        `Selfie submitted successfully! Liveness score: ${(
+                            livenessScore * 100
+                        ).toFixed(1)}% (${confidence} confidence)`
+                    )
+                } else {
+                    this.showWarning(
+                        'Liveness Detection Failed',
+                        `Selfie submitted but liveness detection failed. Score: ${(
+                            livenessScore * 100
+                        ).toFixed(
+                            1
+                        )}% (${confidence} confidence). Please try again.`
+                    )
+                }
+
+                console.log(
+                    '🎯 VKYC-SESSION: Liveness detection results:',
+                    livenessResults
                 )
             } else {
                 throw new Error(response?.error || 'Failed to submit selfie')
@@ -862,7 +896,7 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             console.error('🎯 VKYC-SESSION: Error submitting selfie:', error)
             this.showError(
                 'Submission Error',
-                'Failed to submit selfie. Please try again.'
+                'Failed to submit selfie or perform liveness detection. Please try again.'
             )
         }
     }

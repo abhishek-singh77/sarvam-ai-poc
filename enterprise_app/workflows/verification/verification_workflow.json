@@ -1,0 +1,277 @@
+{
+    "name": "Flexible Verification Workflow",
+    "description": "A flexible workflow that supports various verification steps including selfie capture, liveness detection, face matching, fuzzy matching, and ID verification",
+    "version": "1.0.0",
+    "workflow_type": "verification",
+    "settings": {
+        "timeout_minutes": 30,
+        "max_retries": 3,
+        "enable_parallel_steps": false,
+        "allow_step_reordering": true,
+        "require_all_steps": false
+    },
+    "steps": [
+        {
+            "id": "introduction",
+            "type": "introduction",
+            "title": "Welcome to Verification",
+            "description": "Welcome to our verification process. We'll guide you through the necessary steps.",
+            "status": "pending",
+            "order": 1,
+            "required": true,
+            "instructions": "Welcome the user and explain the verification process",
+            "data": null
+        },
+        {
+            "id": "selfie_capture",
+            "type": "selfie_capture",
+            "title": "Capture Selfie",
+            "description": "Please capture a clear selfie for verification purposes.",
+            "status": "pending",
+            "order": 2,
+            "required": true,
+            "instructions": "Look directly at the camera and ensure good lighting. Your face should be clearly visible.",
+            "data": {
+                "image_quality": "high",
+                "max_attempts": 3,
+                "validation_rules": {
+                    "min_face_size": 0.1,
+                    "max_face_size": 0.8,
+                    "required_landmarks": [
+                        "eyes",
+                        "nose",
+                        "mouth"
+                    ]
+                }
+            }
+        },
+        {
+            "id": "liveness_detection",
+            "type": "liveness_detection",
+            "title": "Liveness Check",
+            "description": "We'll verify that you're a real person by performing a liveness check.",
+            "status": "pending",
+            "order": 3,
+            "required": true,
+            "instructions": "Follow the on-screen instructions for liveness verification.",
+            "data": {
+                "source_image": "selfie_capture",
+                "liveness_type": "passive",
+                "threshold": 0.8,
+                "actions": [
+                    "blink",
+                    "smile",
+                    "turn_head"
+                ]
+            }
+        },
+        {
+            "id": "id_document_upload",
+            "type": "id_document_upload",
+            "title": "Upload ID Document",
+            "description": "Please upload a clear photo of your government-issued ID document.",
+            "status": "pending",
+            "order": 4,
+            "required": true,
+            "instructions": "Upload a clear photo of your ID document. Ensure all text is readable and the document is not damaged.",
+            "data": {
+                "accepted_document_types": [
+                    "PAN Card",
+                    "Aadhaar Card",
+                    "Passport",
+                    "Driving License",
+                    "Voter ID"
+                ],
+                "image_quality": "high",
+                "max_file_size": "10MB",
+                "validation_rules": {
+                    "min_resolution": "800x600",
+                    "required_fields": [
+                        "name",
+                        "document_number",
+                        "photo"
+                    ]
+                }
+            }
+        },
+        {
+            "id": "face_match_verification",
+            "type": "face_match_verification",
+            "title": "Face Match Verification",
+            "description": "We'll compare your selfie with the photo on your ID document.",
+            "status": "pending",
+            "order": 5,
+            "required": true,
+            "instructions": "Processing face match between your selfie and ID document photo.",
+            "data": {
+                "source_image": "selfie_capture",
+                "target_image": "id_document_upload",
+                "match_threshold": 0.75,
+                "extraction_method": "automatic",
+                "fallback_methods": [
+                    "manual_crop",
+                    "landmark_detection"
+                ]
+            }
+        },
+        {
+            "id": "id_proof_verification",
+            "type": "id_proof_verification",
+            "title": "ID Document Verification",
+            "description": "We'll verify the authenticity of your ID document.",
+            "status": "pending",
+            "order": 6,
+            "required": true,
+            "instructions": "Processing ID document verification and data extraction.",
+            "data": {
+                "source_image": "id_document_upload",
+                "verification_types": [
+                    "document_authenticity",
+                    "data_extraction",
+                    "security_features"
+                ],
+                "extract_fields": [
+                    "name",
+                    "document_number",
+                    "date_of_birth",
+                    "address",
+                    "photo"
+                ],
+                "confidence_threshold": 0.8
+            }
+        },
+        {
+            "id": "fuzzy_name_match",
+            "type": "fuzzy_name_match",
+            "title": "Name Verification",
+            "description": "We'll verify that the name you provided matches the name on your ID document.",
+            "status": "pending",
+            "order": 7,
+            "required": false,
+            "instructions": "Processing name matching between provided information and ID document.",
+            "data": {
+                "source_name": "user_provided_name",
+                "target_name": "id_document_name",
+                "match_threshold": 0.85,
+                "normalization_rules": {
+                    "remove_special_chars": true,
+                    "case_insensitive": true,
+                    "handle_abbreviations": true
+                }
+            }
+        },
+        {
+            "id": "additional_verification",
+            "type": "additional_verification",
+            "title": "Additional Checks",
+            "description": "Performing additional verification checks as required.",
+            "status": "pending",
+            "order": 8,
+            "required": false,
+            "instructions": "Processing additional verification checks.",
+            "data": {
+                "checks": [
+                    {
+                        "type": "age_verification",
+                        "source_date": "user_provided_dob",
+                        "target_date": "id_document_dob",
+                        "tolerance_days": 1
+                    },
+                    {
+                        "type": "address_verification",
+                        "source_address": "user_provided_address",
+                        "target_address": "id_document_address",
+                        "match_threshold": 0.7
+                    }
+                ]
+            }
+        },
+        {
+            "id": "completion",
+            "type": "completion",
+            "title": "Verification Complete",
+            "description": "Your verification has been completed successfully.",
+            "status": "pending",
+            "order": 9,
+            "required": true,
+            "instructions": "Thank the user and provide verification results.",
+            "data": {
+                "show_results": true,
+                "generate_report": true,
+                "send_notification": true
+            }
+        }
+    ],
+    "conditional_flows": {
+        "face_match_failed": {
+            "condition": "face_match_verification.status == 'failed'",
+            "actions": [
+                {
+                    "type": "retry_step",
+                    "step_id": "selfie_capture",
+                    "max_retries": 2
+                },
+                {
+                    "type": "show_alternative",
+                    "message": "Face match failed. Please try capturing a new selfie or contact support."
+                }
+            ]
+        },
+        "liveness_failed": {
+            "condition": "liveness_detection.status == 'failed'",
+            "actions": [
+                {
+                    "type": "retry_step",
+                    "step_id": "liveness_detection",
+                    "max_retries": 2
+                }
+            ]
+        },
+        "id_verification_failed": {
+            "condition": "id_proof_verification.status == 'failed'",
+            "actions": [
+                {
+                    "type": "retry_step",
+                    "step_id": "id_document_upload",
+                    "max_retries": 1
+                },
+                {
+                    "type": "manual_review",
+                    "message": "ID document verification failed. Manual review required."
+                }
+            ]
+        }
+    },
+    "data_mapping": {
+        "selfie_capture": {
+            "output_field": "selfie_image",
+            "storage_type": "file",
+            "format": "base64"
+        },
+        "id_document_upload": {
+            "output_field": "id_document_image",
+            "storage_type": "file",
+            "format": "base64"
+        },
+        "liveness_detection": {
+            "output_field": "liveness_score",
+            "storage_type": "value",
+            "format": "float"
+        },
+        "face_match_verification": {
+            "output_field": "face_match_score",
+            "storage_type": "value",
+            "format": "float"
+        },
+        "id_proof_verification": {
+            "output_field": "extracted_data",
+            "storage_type": "object",
+            "format": "json"
+        },
+        "fuzzy_name_match": {
+            "output_field": "name_match_score",
+            "storage_type": "value",
+            "format": "float"
+        }
+    }
+}
