@@ -13,6 +13,7 @@ import { FormsModule } from '@angular/forms'
 import { Subscription } from 'rxjs'
 import { take } from 'rxjs/operators'
 import { HttpClient } from '@angular/common/http'
+import { environment } from '../../../environments/environment'
 // Removed MatDialog import - using custom modal approach
 import { EnterpriseRoomService } from '../../services/enterprise-room.service'
 import { MediaService } from '../../services/media.service'
@@ -87,6 +88,7 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     private subscriptions: Subscription = new Subscription()
     private agentSpeakingInterval: any = null
+    private videoStatusCheckInterval: any = null
 
     constructor(
         private roomService: EnterpriseRoomService,
@@ -96,7 +98,29 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         private http: HttpClient,
         private cdRef: ChangeDetectorRef
     ) {
-        console.log('🎯 VKYC-SESSION: Component initialized')
+        if (!environment.production) {
+            console.log('🎯 VKYC-SESSION: Component initialized')
+        }
+
+        // Expose debug methods to window for console debugging (development only)
+        if (environment.production === false) {
+            ;(window as any).debugVKYC = {
+                checkParticipants: () =>
+                    this.meetingService.checkParticipants(),
+                getParticipants: () =>
+                    this.meetingService.getCurrentParticipants(),
+                getMeetingState: () =>
+                    this.meetingService.getCurrentMeetingState(),
+                updateAgentVideoState: () => this.updateAgentVideoState(),
+                getCurrentParticipants: () => this.participants,
+                hasAgentVideo: () => this.hasAgentVideo,
+                playAgentVideo: () => this.playAgentVideo(),
+                getAgentVideoElement: () => this.agentVideoRef?.nativeElement,
+                checkVideoStream: () => this.checkVideoStream(),
+                startVideoStatusCheck: () => this.startVideoStatusCheck(),
+                stopVideoStatusCheck: () => this.stopVideoStatusCheck(),
+            }
+        }
     }
 
     ngOnInit(): void {
@@ -174,6 +198,15 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                     participants.length,
                     'participants'
                 )
+                participants.forEach((p) => {
+                    console.log('🎯 VKYC-SESSION: Participant:', {
+                        id: p.id,
+                        displayName: p.displayName,
+                        isAgent: p.isAgent,
+                        hasAudioStream: !!p.audioStream,
+                        hasVideoStream: !!p.videoStream,
+                    })
+                })
                 this.participants = participants
                 this.updateAgentVideoState()
             })
@@ -185,7 +218,11 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                 if (stream) {
                     console.log(
                         '🎯 VKYC-SESSION: Remote stream received:',
-                        stream.kind
+                        stream.kind,
+                        'from participant:',
+                        stream.participantDisplayName,
+                        'isAgent:',
+                        stream.isAgent
                     )
                     this.handleRemoteStream(stream)
                 } else {
@@ -355,11 +392,36 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     private handleRemoteStream(stream: any): void {
         console.log('🎯 VKYC-SESSION: Handling remote stream:', stream.kind)
+        console.log(
+            '🎯 VKYC-SESSION: Stream participant:',
+            stream.participantDisplayName
+        )
+        console.log('🎯 VKYC-SESSION: Stream isAgent:', stream.isAgent)
+        console.log('🎯 VKYC-SESSION: Stream details:', {
+            kind: stream.kind,
+            trackId: stream.track?.id,
+            trackEnabled: stream.track?.enabled,
+            participantId: stream.participantId,
+            participantDisplayName: stream.participantDisplayName,
+            isAgent: stream.isAgent,
+        })
 
-        if (stream.kind === 'audio') {
-            this.setupAgentAudio(stream)
-        } else if (stream.kind === 'video') {
-            this.setupAgentVideo(stream)
+        // Only handle streams from agents
+        if (stream.isAgent) {
+            if (stream.kind === 'audio') {
+                console.log('🎯 VKYC-SESSION: Processing agent audio stream')
+                this.setupAgentAudio(stream)
+            } else if (stream.kind === 'video') {
+                console.log('🎯 VKYC-SESSION: Processing agent video stream')
+                this.setupAgentVideo(stream)
+            } else {
+                console.log(
+                    '🎯 VKYC-SESSION: Unknown stream kind:',
+                    stream.kind
+                )
+            }
+        } else {
+            console.log('🎯 VKYC-SESSION: Ignoring non-agent stream')
         }
     }
 
@@ -400,39 +462,156 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     private setupAgentVideo(stream: any): void {
         console.log('🎯 VKYC-SESSION: Setting up agent video...')
+        console.log('🎯 VKYC-SESSION: Stream details:', {
+            kind: stream.kind,
+            trackId: stream.track?.id,
+            trackEnabled: stream.track?.enabled,
+            participantId: stream.participantId,
+            participantDisplayName: stream.participantDisplayName,
+        })
 
         if (!this.agentVideoRef) {
             console.error('🎯 VKYC-SESSION: Agent video element not available')
             return
         }
 
+        const videoElement = this.agentVideoRef.nativeElement
+
         // Create a MediaStream from the track
         const mediaStream = new MediaStream()
         mediaStream.addTrack(stream.track)
 
-        // Set the stream to the video element
-        this.agentVideoRef.nativeElement.srcObject = mediaStream
+        // Configure video element first
+        videoElement.autoplay = true
+        videoElement.muted = true
+        videoElement.playsInline = true
 
-        // Configure video element
-        this.agentVideoRef.nativeElement.autoplay = true
-        this.agentVideoRef.nativeElement.muted = true
-        this.agentVideoRef.nativeElement.playsInline = true
+        // Add event listeners for video loading
+        const onLoadedMetadata = () => {
+            console.log(
+                '🎯 VKYC-SESSION: Video metadata loaded, readyState:',
+                videoElement.readyState
+            )
+            this.attemptVideoPlay()
+        }
+
+        const onCanPlay = () => {
+            console.log(
+                '🎯 VKYC-SESSION: Video can play, readyState:',
+                videoElement.readyState
+            )
+            this.attemptVideoPlay()
+        }
+
+        const onLoadedData = () => {
+            console.log(
+                '🎯 VKYC-SESSION: Video data loaded, readyState:',
+                videoElement.readyState
+            )
+            this.attemptVideoPlay()
+        }
+
+        const onError = (error: any) => {
+            console.error('🎯 VKYC-SESSION: Video element error:', error)
+            console.error('🎯 VKYC-SESSION: Video element state:', {
+                srcObject: videoElement.srcObject,
+                readyState: videoElement.readyState,
+                paused: videoElement.paused,
+                ended: videoElement.ended,
+                error: videoElement.error,
+            })
+        }
+
+        // Remove existing listeners to avoid duplicates
+        videoElement.removeEventListener('loadedmetadata', onLoadedMetadata)
+        videoElement.removeEventListener('canplay', onCanPlay)
+        videoElement.removeEventListener('loadeddata', onLoadedData)
+        videoElement.removeEventListener('error', onError)
+
+        // Add new listeners
+        videoElement.addEventListener('loadedmetadata', onLoadedMetadata)
+        videoElement.addEventListener('canplay', onCanPlay)
+        videoElement.addEventListener('loadeddata', onLoadedData)
+        videoElement.addEventListener('error', onError)
+
+        // Set the stream to the video element
+        videoElement.srcObject = mediaStream
 
         console.log('🎯 VKYC-SESSION: Agent video stream configured')
 
-        // Play the video
-        this.agentVideoRef.nativeElement
-            .play()
-            .then(() => {
-                console.log('🎯 VKYC-SESSION: Agent video started playing')
-                this.hasAgentVideo = true
-            })
-            .catch((error: any) => {
-                console.error(
-                    '🎯 VKYC-SESSION: Error playing agent video:',
-                    error
-                )
-            })
+        // Update agent video state immediately
+        this.hasAgentVideo = true
+        this.updateAgentVideoState()
+
+        // Start periodic video status check
+        this.startVideoStatusCheck()
+
+        // Try to play immediately (in case the video is already ready)
+        this.attemptVideoPlay()
+    }
+
+    private attemptVideoPlay(): void {
+        if (!this.agentVideoRef) {
+            return
+        }
+
+        const videoElement = this.agentVideoRef.nativeElement
+
+        console.log('🎯 VKYC-SESSION: Attempting to play agent video...')
+        console.log('🎯 VKYC-SESSION: Video element state:', {
+            srcObject: videoElement.srcObject,
+            readyState: videoElement.readyState,
+            paused: videoElement.paused,
+            ended: videoElement.ended,
+            error: videoElement.error,
+            currentTime: videoElement.currentTime,
+            duration: videoElement.duration,
+        })
+
+        // Only attempt to play if the video has some data loaded
+        if (videoElement.readyState >= 1) {
+            // HAVE_METADATA or higher
+            videoElement
+                .play()
+                .then(() => {
+                    console.log(
+                        '🎯 VKYC-SESSION: Agent video started playing successfully'
+                    )
+                    this.cdRef.detectChanges()
+                })
+                .catch((error: any) => {
+                    console.error(
+                        '🎯 VKYC-SESSION: Error playing agent video:',
+                        error
+                    )
+
+                    // Try to play again after a short delay
+                    setTimeout(() => {
+                        console.log(
+                            '🎯 VKYC-SESSION: Retrying to play agent video...'
+                        )
+                        videoElement
+                            .play()
+                            .then(() => {
+                                console.log(
+                                    '🎯 VKYC-SESSION: Agent video started playing on retry'
+                                )
+                                this.cdRef.detectChanges()
+                            })
+                            .catch((retryError: any) => {
+                                console.error(
+                                    '🎯 VKYC-SESSION: Retry failed:',
+                                    retryError
+                                )
+                            })
+                    }, 1000)
+                })
+        } else {
+            console.log(
+                '🎯 VKYC-SESSION: Video not ready yet, waiting for metadata...'
+            )
+            // The event listeners will handle playing when the video is ready
+        }
     }
 
     private clearRemoteStream(): void {
@@ -446,6 +625,9 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             this.agentVideoRef.nativeElement.srcObject = null
             this.hasAgentVideo = false
         }
+
+        this.updateAgentVideoState()
+        this.cdRef.detectChanges()
     }
 
     async toggleCamera(): Promise<void> {
@@ -1021,11 +1203,159 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     // Agent Video Management
     private updateAgentVideoState(): void {
-        // Check if agent is present in participants
-        const agentParticipant = this.participants.find((p) =>
-            p.id.includes('agent')
+        // Check if agent is present in participants and has video stream
+        const agentParticipant = this.participants.find((p) => p.isAgent)
+        this.hasAgentVideo = !!(
+            agentParticipant && agentParticipant.videoStream
         )
-        this.hasAgentVideo = !!agentParticipant
+
+        console.log('🎯 VKYC-SESSION: Agent video state updated:', {
+            hasAgentVideo: this.hasAgentVideo,
+            totalParticipants: this.participants.length,
+            agentParticipant: agentParticipant
+                ? {
+                      id: agentParticipant.id,
+                      displayName: agentParticipant.displayName,
+                      hasVideoStream: !!agentParticipant.videoStream,
+                      hasAudioStream: !!agentParticipant.audioStream,
+                  }
+                : null,
+            allParticipants: this.participants.map((p) => ({
+                id: p.id,
+                displayName: p.displayName,
+                isAgent: p.isAgent,
+                hasVideoStream: !!p.videoStream,
+                hasAudioStream: !!p.audioStream,
+            })),
+        })
+    }
+
+    // Agent Video Event Handlers
+    onAgentVideoLoadStart(): void {
+        console.log('🎯 VKYC-SESSION: Agent video load started')
+    }
+
+    onAgentVideoLoaded(): void {
+        console.log('🎯 VKYC-SESSION: Agent video loaded successfully')
+        // Try to play the video when it's loaded
+        this.attemptVideoPlay()
+    }
+
+    onAgentVideoError(event: any): void {
+        console.error('🎯 VKYC-SESSION: Agent video error:', event)
+        console.error('🎯 VKYC-SESSION: Video element state:', {
+            srcObject: this.agentVideoRef?.nativeElement?.srcObject,
+            readyState: this.agentVideoRef?.nativeElement?.readyState,
+            paused: this.agentVideoRef?.nativeElement?.paused,
+            ended: this.agentVideoRef?.nativeElement?.ended,
+            error: this.agentVideoRef?.nativeElement?.error,
+        })
+    }
+
+    // Debug method to manually play agent video
+    playAgentVideo(): void {
+        if (!this.agentVideoRef) {
+            console.error('🎯 VKYC-SESSION: Agent video element not available')
+            return
+        }
+
+        const videoElement = this.agentVideoRef.nativeElement
+        console.log(
+            '🎯 VKYC-SESSION: Manual play attempt - Video element state:',
+            {
+                srcObject: videoElement.srcObject,
+                readyState: videoElement.readyState,
+                paused: videoElement.paused,
+                ended: videoElement.ended,
+                error: videoElement.error,
+                currentTime: videoElement.currentTime,
+                duration: videoElement.duration,
+            }
+        )
+
+        videoElement
+            .play()
+            .then(() => {
+                console.log('🎯 VKYC-SESSION: Manual play successful')
+            })
+            .catch((error: any) => {
+                console.error('🎯 VKYC-SESSION: Manual play failed:', error)
+            })
+    }
+
+    // Debug method to check video stream status
+    checkVideoStream(): void {
+        if (!this.agentVideoRef) {
+            console.error('🎯 VKYC-SESSION: Agent video element not available')
+            return
+        }
+
+        const videoElement = this.agentVideoRef.nativeElement
+        const mediaStream = videoElement.srcObject as MediaStream
+
+        console.log('🎯 VKYC-SESSION: Video stream check:', {
+            hasSrcObject: !!videoElement.srcObject,
+            mediaStream: mediaStream,
+            videoTracks: mediaStream ? mediaStream.getVideoTracks() : null,
+            audioTracks: mediaStream ? mediaStream.getAudioTracks() : null,
+            videoElementState: {
+                readyState: videoElement.readyState,
+                paused: videoElement.paused,
+                ended: videoElement.ended,
+                error: videoElement.error,
+                currentTime: videoElement.currentTime,
+                duration: videoElement.duration,
+                videoWidth: videoElement.videoWidth,
+                videoHeight: videoElement.videoHeight,
+            },
+        })
+
+        if (mediaStream && mediaStream.getVideoTracks().length > 0) {
+            const videoTrack = mediaStream.getVideoTracks()[0]
+            console.log('🎯 VKYC-SESSION: Video track details:', {
+                id: videoTrack.id,
+                kind: videoTrack.kind,
+                enabled: videoTrack.enabled,
+                muted: videoTrack.muted,
+                readyState: videoTrack.readyState,
+                settings: videoTrack.getSettings(),
+                constraints: videoTrack.getConstraints(),
+            })
+        }
+
+        // If video is not playing but should be, try to play it
+        if (videoElement.readyState >= 1 && videoElement.paused) {
+            console.log(
+                '🎯 VKYC-SESSION: Video is ready but paused, attempting to play...'
+            )
+            this.attemptVideoPlay()
+        }
+    }
+
+    // Method to periodically check video status
+    startVideoStatusCheck(): void {
+        if (this.videoStatusCheckInterval) {
+            clearInterval(this.videoStatusCheckInterval)
+        }
+
+        this.videoStatusCheckInterval = setInterval(() => {
+            if (this.hasAgentVideo && this.agentVideoRef) {
+                const videoElement = this.agentVideoRef.nativeElement
+                if (videoElement.readyState >= 1 && videoElement.paused) {
+                    console.log(
+                        '🎯 VKYC-SESSION: Video should be playing but is paused, attempting to play...'
+                    )
+                    this.attemptVideoPlay()
+                }
+            }
+        }, 2000) // Check every 2 seconds
+    }
+
+    stopVideoStatusCheck(): void {
+        if (this.videoStatusCheckInterval) {
+            clearInterval(this.videoStatusCheckInterval)
+            this.videoStatusCheckInterval = null
+        }
     }
 
     private startAgentSpeakingSimulation(): void {
@@ -1085,6 +1415,9 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
             // Stop agent simulation
             this.stopAgentSpeakingSimulation()
+
+            // Stop video status check
+            this.stopVideoStatusCheck()
 
             // Clean up image manipulator
             if (this.imageManipulatorCloseHandler) {

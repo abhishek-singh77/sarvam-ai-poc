@@ -9,7 +9,7 @@ import json
 import time
 import os
 import threading
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from utils.config.settings import get_settings
 from utils.logging.logger import get_logger
 from .conversation_logger import conversation_logger
@@ -21,8 +21,24 @@ from videosdk.plugins.google import GoogleLLM, GoogleTTS
 from videosdk.plugins.silero import SileroVAD
 from videosdk.plugins.turn_detector import TurnDetector, pre_download_model
 from videosdk.plugins.rnnoise import RNNoise
+from plugins.wav2lip import Wav2LipAvatar
 
 logger = get_logger(__name__)
+
+
+class CustomCascadingPipeline(CascadingPipeline):
+    """
+    Custom CascadingPipeline that adds video handling capabilities.
+    """
+    
+    async def on_video_delta(self, frame):
+        """
+        Handle video frame processing.
+        This method is called by VideoSDK when video frames are received.
+        """
+        # For now, just pass through without processing
+        # This prevents the AttributeError
+        pass
 
 class KYCVoiceAgent(Agent):
     """
@@ -106,6 +122,16 @@ class ProperAgentService:
         # Thread lock to prevent race conditions
         self._agent_start_lock = threading.Lock()
         
+        # Initialize Wav2Lip avatar if enabled
+        self.wav2lip_avatar = None
+        if self.settings.wav2lip_enabled:
+            try:
+                self.wav2lip_avatar = Wav2LipAvatar(wav2lip_url=self.settings.wav2lip_url)
+                logger.info("✅ Wav2Lip avatar initialized successfully")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Wav2Lip avatar: {e}")
+                self.wav2lip_avatar = None
+        
         # Pre-download the Turn Detector model
         try:
             pre_download_model()
@@ -156,11 +182,9 @@ class ProperAgentService:
                 
                 # Load workflow for this room
                 if workflow_json:
-                    # workflow_service.load_workflow(room_id, workflow_json)
-                    pass
+                    workflow_service.load_workflow(room_id, workflow_json)
                 else:
-                    # workflow_service.load_workflow(room_id)
-                    pass
+                    workflow_service.load_workflow(room_id)
                 
                 # Store the original token if it exists
                 original_token = os.environ.get("VIDEOSDK_AUTH_TOKEN")
@@ -172,9 +196,15 @@ class ProperAgentService:
                 try:
                     # Create the worker job using the proper VideoSDK pattern
                     options = Options(register=False)
+                    context = self._make_job_context(room_id, agent_token)
+                    
+                    # Set connection info for Wav2Lip avatar if enabled
+                    # Wav2Lip avatar connection info will be set during the connect() call
+                    # No need for separate set_connection_info call
+                    
                     job = WorkerJob(
                         entrypoint=self._start_agent_session,
-                        jobctx=self._make_job_context(room_id, agent_token),
+                        jobctx=context,
                         options=options
                     )
                     
@@ -227,7 +257,9 @@ class ProperAgentService:
             room_id=room_id,
             auth_token=agent_token,
             name="KYC AI Agent",
-            playground=False  # Set to False for production use
+            playground=False,  # Set to False for production use
+            vision=True,  # Enable vision for video streaming
+            avatar=self.wav2lip_avatar  # Pass the Wav2Lip avatar
         )
         
         return JobContext(room_options=room_options)
@@ -468,14 +500,21 @@ class ProperAgentService:
             turn_detector = TurnDetector(threshold=0.3)  # Lower threshold for faster turn detection
             denoise = RNNoise()
             
-            # Create the cascading pipeline with all components
-            pipeline = CascadingPipeline(
+            # Initialize Wav2Lip avatar if enabled
+            avatar = None
+            if self.wav2lip_avatar:
+                avatar = self.wav2lip_avatar
+                logger.info("🎯 Wav2Lip avatar will be used in pipeline")
+            
+            # Create the custom cascading pipeline with all components
+            pipeline = CustomCascadingPipeline(
                 stt=stt,
                 tts=tts,
                 llm=llm,
                 vad=vad,
                 turn_detector=turn_detector,
-                denoise=denoise
+                denoise=denoise,
+                avatar=avatar
             )
             
             # Create conversation flow for better conversation management
@@ -513,6 +552,9 @@ class ProperAgentService:
                 elif "401" in str(e) or "unauthorized" in str(e).lower():
                     logger.error("🎯 Authentication error - check token validity and permissions")
                     raise  # Re-raise auth errors as they're critical
+                elif "wav2lip" in str(e).lower() or "provide text or voice input" in str(e).lower():
+                    logger.warning("🎯 Wav2Lip avatar connection failed - agent will continue without avatar")
+                    logger.info("🎯 Agent will function normally but without lip-sync video")
                 else:
                     logger.warning("🎯 Unknown connection error - continuing with agent setup")
                 
@@ -529,6 +571,9 @@ class ProperAgentService:
                 raise
             
             logger.info("🎯 KYC Agent session started successfully")
+            
+            # Wav2Lip video track is now handled through the pipeline avatar integration
+            # No manual publishing needed - VideoSDK handles it automatically
             
             # Send initial greeting
             try:
@@ -579,32 +624,48 @@ class ProperAgentService:
     async def stop_agent(self, room_id: str) -> Dict[str, Any]:
         """Stop the agent for a specific room"""
         try:
-            if room_id in self.active_agents:
-                # Stop the agent session
-                if room_id in self.agent_sessions:
+            logger.info(f"🛑 Stopping agent for room {room_id}")
+            logger.info(f"🛑 Active agents: {list(self.active_agents.keys())}")
+            logger.info(f"🛑 Agent sessions: {list(self.agent_sessions.keys())}")
+            logger.info(f"🛑 Agent jobs: {list(self.agent_jobs.keys())}")
+            
+            # Always try to stop Wav2Lip avatar if enabled, regardless of agent tracking
+            if self.wav2lip_avatar:
+                try:
+                    await self.wav2lip_avatar.disconnect()
+                    logger.info(f"✅ Wav2Lip avatar disconnected for room {room_id}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to disconnect Wav2Lip avatar for room {room_id}: {e}")
+            
+            # Stop the agent session if it exists
+            if room_id in self.agent_sessions:
+                try:
                     await self.agent_sessions[room_id].stop()
                     del self.agent_sessions[room_id]
-                
-                # Stop the job
-                if room_id in self.agent_jobs:
+                    logger.info(f"✅ Agent session stopped for room {room_id}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to stop agent session for room {room_id}: {e}")
+            
+            # Stop the job if it exists
+            if room_id in self.agent_jobs:
+                try:
                     self.agent_jobs[room_id].stop()
                     del self.agent_jobs[room_id]
-                
-                # Clean up tracking
+                    logger.info(f"✅ Agent job stopped for room {room_id}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to stop agent job for room {room_id}: {e}")
+            
+            # Clean up tracking if it exists
+            if room_id in self.active_agents:
                 del self.active_agents[room_id]
-                
-                logger.info(f"✅ Agent stopped for room {room_id}")
-                return {
-                    "status": "success",
-                    "room_id": room_id,
-                    "message": "Agent stopped successfully"
-                }
-            else:
-                return {
-                    "status": "error",
-                    "room_id": room_id,
-                    "error": "No active agent found for this room"
-                }
+                logger.info(f"✅ Agent tracking cleaned up for room {room_id}")
+            
+            logger.info(f"✅ Agent cleanup completed for room {room_id}")
+            return {
+                "status": "success",
+                "room_id": room_id,
+                "message": "Agent stopped successfully"
+            }
                 
         except Exception as e:
             logger.error(f"❌ Failed to stop agent for room {room_id}: {e}")
@@ -654,6 +715,8 @@ class ProperAgentService:
                 "room_id": room_id,
                 "error": str(e)
             }
+    
+    
 
 # Global instance
 proper_agent_service = ProperAgentService()

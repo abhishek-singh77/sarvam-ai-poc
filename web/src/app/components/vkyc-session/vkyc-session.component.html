@@ -213,8 +213,13 @@
                                 #agentVideoRef
                                 playsinline
                                 autoplay
+                                muted
+                                controls="false"
                                 class="w-full h-full object-cover bg-gray-200"
-                                [class.hidden]="!hasAgentVideo"></video>
+                                [class.hidden]="!hasAgentVideo"
+                                (loadstart)="onAgentVideoLoadStart()"
+                                (loadeddata)="onAgentVideoLoaded()"
+                                (error)="onAgentVideoError($event)"></video>
 
                             <!-- Agent Audio (hidden) -->
                             <audio

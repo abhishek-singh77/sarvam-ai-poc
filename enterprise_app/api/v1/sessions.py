@@ -4,6 +4,7 @@ Session management API endpoints.
 This module provides endpoints for creating, managing, and monitoring sessions.
 """
 
+import time
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
@@ -62,6 +63,13 @@ class WorkflowStepRequest(BaseModel):
     room_id: str = Field(..., description="Room ID")
     step_id: str = Field(..., description="Step ID")
     data: Optional[Any] = Field(default=None, description="Step data")
+
+
+class Wav2LipStatusResponse(BaseModel):
+    """Response model for Wav2Lip status."""
+    status: str
+    wav2lip_url: Optional[str] = None
+    message: Optional[str] = None
 
 
 @router.post("/create")
@@ -241,10 +249,10 @@ async def list_sessions(
 @router.delete("/{session_id}")
 async def delete_session(session_id: str) -> Dict[str, Any]:
     """
-    Delete a session.
+    Delete a session and stop the associated agent.
     
     Args:
-        session_id: Session identifier
+        session_id: Session identifier (room_id)
         
     Returns:
         Deletion result
@@ -255,11 +263,20 @@ async def delete_session(session_id: str) -> Dict[str, Any]:
     logger.info("Deleting session", extra={"session_id": session_id})
     
     try:
-        # This would delete from the session service
+        # Stop the agent for this room/session
+        stop_result = await proper_agent_service.stop_agent(session_id)
+        
+        if stop_result["status"] == "success":
+            logger.info("Agent stopped successfully", extra={"session_id": session_id})
+        else:
+            logger.warning("Agent stop result", extra={"session_id": session_id, "result": stop_result})
+        
+        # Return success response
         result = {
             "status": "success",
             "session_id": session_id,
-            "message": "Session deleted successfully"
+            "message": "Session deleted and agent stopped successfully",
+            "agent_stop_result": stop_result
         }
         
         logger.info("Session deleted successfully", extra={"session_id": session_id})
@@ -354,15 +371,11 @@ async def submit_selfie(request: SelfieSubmissionRequest) -> Dict[str, Any]:
     })
     
     try:
-        # Log the base64 data as requested (like the old backend)
-        logger.info(f"📸 SELFIE DATA: Base64 length: {len(request.selfie_data)} characters")
-        logger.info(f"📸 SELFIE DATA: First 100 chars: {request.selfie_data[:100]}...")
-        
-        # Log the full base64 data (be careful with large data in production)
+        # Log the base64 data (be careful with large data in production)
         logger.info("Selfie base64 data received", extra={
                    "room_id": request.room_id,
-                   "selfie_data": request.selfie_data,
-                   "data_length": len(request.selfie_data)
+                   "data_length": len(request.selfie_data),
+                   "first_100_chars": request.selfie_data[:100] if len(request.selfie_data) > 100 else request.selfie_data
         })
         
         # Return success response like the old backend
@@ -590,3 +603,39 @@ async def clear_conversation_controller(room_id: str) -> Dict[str, Any]:
             "room_id": room_id,
             "error": str(e)
         }
+
+
+
+
+@router.get("/wav2lip/status", response_model=Wav2LipStatusResponse)
+async def get_wav2lip_status() -> Wav2LipStatusResponse:
+    """
+    Get Wav2Lip plugin status.
+    
+    Returns:
+        Wav2Lip plugin status information
+    """
+    logger.info("Getting Wav2Lip plugin status")
+    
+    try:
+        if proper_agent_service.wav2lip_avatar:
+            logger.info("✅ Wav2Lip avatar is enabled and available")
+            return Wav2LipStatusResponse(
+                status="enabled",
+                wav2lip_url=proper_agent_service.settings.wav2lip_url,
+                message="Wav2Lip avatar is enabled and available"
+            )
+        else:
+            logger.info("ℹ️ Wav2Lip avatar is disabled")
+            return Wav2LipStatusResponse(
+                status="disabled",
+                message="Wav2Lip avatar is disabled"
+            )
+            
+    except Exception as e:
+        logger.error(f"❌ Failed to get Wav2Lip status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
