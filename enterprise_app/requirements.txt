@@ -16,6 +16,10 @@ videosdk-plugins-silero
 videosdk-plugins-turn-detector
 videosdk-plugins-rnnoise
 PyJWT
+aiohttp
+Pillow
+numpy
+av
 
 
 # fastapi==0.116.1

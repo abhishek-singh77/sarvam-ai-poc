@@ -74,6 +74,10 @@ class Settings(BaseSettings):
     enable_metrics: bool = Field(default=True, alias="ENABLE_METRICS")
     metrics_port: int = Field(default=9090, alias="METRICS_PORT")
     
+    # Wav2Lip Plugin Configuration
+    wav2lip_enabled: bool = Field(default=True, alias="WAV2LIP_ENABLED")
+    wav2lip_url: str = Field(default="http://35.207.229.235:8001", alias="WAV2LIP_URL")
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -158,6 +162,14 @@ class Settings(BaseSettings):
             "secret_key": self.secret_key,
             "jwt_algorithm": self.jwt_algorithm,
             "jwt_expiration_hours": self.jwt_expiration_hours
+        }
+    
+    @property
+    def wav2lip_config(self) -> Dict[str, Any]:
+        """Get Wav2Lip plugin configuration."""
+        return {
+            "enabled": self.wav2lip_enabled,
+            "url": self.wav2lip_url
         }
     
     def get_masked_config(self) -> Dict[str, Any]:

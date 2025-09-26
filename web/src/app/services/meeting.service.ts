@@ -35,7 +35,6 @@ export class MeetingService {
                 joinConfig
             )
             console.log('🎯 MEETING-SERVICE: Using token:', joinConfig.token)
-            debugger
             // Configure VideoSDK with token first (required for 0.3.1)
             VideoSDK.config(joinConfig.token)
 
@@ -150,6 +149,24 @@ export class MeetingService {
             this.meetingStateSubject.next('joined')
             this.hasActiveMeetingSubject.next(true)
 
+            // Log all existing participants
+            console.log(
+                '🎯 MEETING-SERVICE: Existing participants:',
+                this.meeting.participants.size
+            )
+            this.meeting.participants.forEach(
+                (participant: any, id: string) => {
+                    console.log(
+                        `🎯 MEETING-SERVICE: Existing participant ${id}:`,
+                        {
+                            displayName: participant.displayName,
+                            isLocal: participant.isLocal,
+                            streams: participant.streams.size,
+                        }
+                    )
+                }
+            )
+
             // Add local participant to the list
             const localParticipant = this.meeting.localParticipant
             if (localParticipant) {
@@ -171,6 +188,9 @@ export class MeetingService {
                 this.participants.push(participantData)
                 this.participantsSubject.next([...this.participants])
             }
+
+            // Start periodic check for new participants (in case agent joins later)
+            this.startParticipantCheck()
         })
 
         // Meeting left
@@ -207,11 +227,20 @@ export class MeetingService {
                 '🎯 MEETING-SERVICE: Participant isLocal:',
                 participant.isLocal
             )
+            console.log(
+                '🎯 MEETING-SERVICE: Participant streams:',
+                participant.streams
+            )
+            console.log(
+                '🎯 MEETING-SERVICE: Total participants now:',
+                this.meeting.participants.size
+            )
 
             const isAgent =
                 participant.displayName === 'KYC AI Agent' ||
                 participant.displayName === 'AI Agent' ||
-                participant.displayName?.includes('Agent')
+                participant.displayName?.includes('Agent') ||
+                participant.displayName?.includes('agent')
 
             const participantData = {
                 id: participant.id,
@@ -223,6 +252,8 @@ export class MeetingService {
                 isSpeaking: false,
                 audioLevel: 0,
                 lastSpeechTime: 0,
+                audioStream: null,
+                videoStream: null,
             }
 
             console.log(
@@ -232,59 +263,8 @@ export class MeetingService {
             this.participants.push(participantData)
             this.participantsSubject.next([...this.participants])
 
-            // Set participant quality
-            participant.quality = 'high'
-
-            // Handle participant stream events
-            participant.on('stream-enabled', (stream: any) => {
-                console.log(
-                    '🎯 MEETING-SERVICE: Participant stream enabled:',
-                    stream
-                )
-                console.log('🎯 MEETING-SERVICE: Stream kind:', stream.kind)
-                console.log(
-                    '🎯 MEETING-SERVICE: Stream participantId:',
-                    participant.id
-                )
-
-                this.remoteStreamSubject.next(stream)
-
-                if (stream.kind === 'audio') {
-                    const mediaStream = new MediaStream()
-                    mediaStream.addTrack(stream.track)
-                    console.log(
-                        '🎯 MEETING-SERVICE: Setting remote audio stream'
-                    )
-
-                    // Add track ended listener
-                    mediaStream
-                        .getAudioTracks()
-                        .forEach((track: MediaStreamTrack) => {
-                            track.addEventListener('ended', () => {
-                                console.log(
-                                    '🎯 MEETING-SERVICE: REMOTE AUDIO TRACK ENDED'
-                                )
-                            })
-                        })
-                }
-            })
-
-            participant.on('stream-disabled', (stream: any) => {
-                console.log(
-                    '🎯 MEETING-SERVICE: Participant stream disabled:',
-                    stream
-                )
-                this.remoteStreamSubject.next(null)
-            })
-
-            participant.on('media-status-changed', (data: any) => {
-                const { kind, newStatus } = data
-                console.log(
-                    '🎯 MEETING-SERVICE: Media status changed:',
-                    kind,
-                    newStatus
-                )
-            })
+            // Set up stream event listeners for this participant
+            this.setupParticipantStreamListeners(participant)
         })
 
         // Participant left
@@ -397,5 +377,242 @@ export class MeetingService {
     isLocalCameraEnabled(): boolean {
         if (!this.meeting || !this.meeting.localParticipant) return false
         return this.meeting.localParticipant.webcam
+    }
+
+    // Debug method to manually check for participants
+    checkParticipants(): void {
+        if (!this.meeting) {
+            console.log('🎯 MEETING-SERVICE: No meeting available')
+            return
+        }
+
+        console.log('🎯 MEETING-SERVICE: Manual participant check')
+        console.log(
+            '🎯 MEETING-SERVICE: Total participants:',
+            this.meeting.participants.size
+        )
+        console.log(
+            '🎯 MEETING-SERVICE: Our participants list:',
+            this.participants.length
+        )
+
+        this.meeting.participants.forEach((participant: any, id: string) => {
+            const existingParticipant = this.participants.find(
+                (p) => p.id === id
+            )
+            console.log(`🎯 MEETING-SERVICE: Participant ${id}:`, {
+                displayName: participant.displayName,
+                isLocal: participant.isLocal,
+                streams: participant.streams.size,
+                inOurList: !!existingParticipant,
+                isAgent: existingParticipant?.isAgent || false,
+            })
+        })
+    }
+
+    private startParticipantCheck(): void {
+        // Check for new participants every 2 seconds for the first 30 seconds
+        let checkCount = 0
+        const maxChecks = 15 // 30 seconds total
+
+        const checkInterval = setInterval(() => {
+            if (!this.meeting || checkCount >= maxChecks) {
+                clearInterval(checkInterval)
+                return
+            }
+
+            checkCount++
+            console.log(
+                `🎯 MEETING-SERVICE: Checking for new participants (${checkCount}/${maxChecks})`
+            )
+
+            // Check if there are new participants not in our list
+            this.meeting.participants.forEach(
+                (participant: any, id: string) => {
+                    const existingParticipant = this.participants.find(
+                        (p) => p.id === id
+                    )
+                    if (!existingParticipant) {
+                        console.log(
+                            `🎯 MEETING-SERVICE: Found new participant: ${id}`,
+                            {
+                                displayName: participant.displayName,
+                                isLocal: participant.isLocal,
+                                streams: participant.streams.size,
+                            }
+                        )
+
+                        // Add the new participant
+                        const isAgent =
+                            participant.displayName === 'KYC AI Agent' ||
+                            participant.displayName === 'AI Agent' ||
+                            participant.displayName?.includes('Agent') ||
+                            participant.displayName?.includes('agent')
+
+                        const participantData = {
+                            id: participant.id,
+                            displayName: participant.displayName,
+                            isLocal: participant.isLocal,
+                            stream: participant.stream,
+                            participant: participant,
+                            isAgent: isAgent,
+                            isSpeaking: false,
+                            audioLevel: 0,
+                            lastSpeechTime: 0,
+                            audioStream: null,
+                            videoStream: null,
+                        }
+
+                        this.participants.push(participantData)
+                        this.participantsSubject.next([...this.participants])
+
+                        // Set up stream event listeners for this participant
+                        this.setupParticipantStreamListeners(participant)
+                    }
+                }
+            )
+        }, 2000)
+    }
+
+    private setupParticipantStreamListeners(participant: any): void {
+        // Set participant quality
+        participant.quality = 'high'
+
+        // Handle participant stream events
+        participant.on('stream-enabled', (stream: any) => {
+            console.log(
+                '🎯 MEETING-SERVICE: Participant stream enabled:',
+                stream
+            )
+            console.log('🎯 MEETING-SERVICE: Stream kind:', stream.kind)
+            console.log(
+                '🎯 MEETING-SERVICE: Stream participantId:',
+                participant.id
+            )
+
+            // Find the participant in our list and update their stream
+            const participantIndex = this.participants.findIndex(
+                (p) => p.id === participant.id
+            )
+            if (participantIndex !== -1) {
+                if (stream.kind === 'audio') {
+                    this.participants[participantIndex].audioStream = stream
+                    console.log(
+                        '🎯 MEETING-SERVICE: Updated participant audio stream for:',
+                        participant.displayName
+                    )
+                } else if (stream.kind === 'video') {
+                    this.participants[participantIndex].videoStream = stream
+                    console.log(
+                        '🎯 MEETING-SERVICE: Updated participant video stream for:',
+                        participant.displayName,
+                        'isAgent:',
+                        this.participants[participantIndex].isAgent
+                    )
+                }
+
+                // Update the participants list
+                this.participantsSubject.next([...this.participants])
+
+                // Log the updated participant for debugging
+                console.log('🎯 MEETING-SERVICE: Updated participant:', {
+                    id: this.participants[participantIndex].id,
+                    displayName:
+                        this.participants[participantIndex].displayName,
+                    isAgent: this.participants[participantIndex].isAgent,
+                    hasAudioStream:
+                        !!this.participants[participantIndex].audioStream,
+                    hasVideoStream:
+                        !!this.participants[participantIndex].videoStream,
+                })
+            } else {
+                console.log(
+                    '🎯 MEETING-SERVICE: Participant not found in our list:',
+                    participant.id
+                )
+            }
+
+            // Emit the stream for immediate handling
+            this.remoteStreamSubject.next({
+                ...stream,
+                participantId: participant.id,
+                participantDisplayName: participant.displayName,
+                isAgent:
+                    this.participants.find((p) => p.id === participant.id)
+                        ?.isAgent || false,
+            })
+
+            if (stream.kind === 'audio') {
+                const mediaStream = new MediaStream()
+                mediaStream.addTrack(stream.track)
+                console.log('🎯 MEETING-SERVICE: Setting remote audio stream')
+
+                // Add track ended listener
+                mediaStream
+                    .getAudioTracks()
+                    .forEach((track: MediaStreamTrack) => {
+                        track.addEventListener('ended', () => {
+                            console.log(
+                                '🎯 MEETING-SERVICE: REMOTE AUDIO TRACK ENDED'
+                            )
+                        })
+                    })
+            } else if (stream.kind === 'video') {
+                console.log('🎯 MEETING-SERVICE: Setting remote video stream')
+                console.log('🎯 MEETING-SERVICE: Video stream details:', {
+                    trackId: stream.track?.id,
+                    trackEnabled: stream.track?.enabled,
+                    trackKind: stream.track?.kind,
+                    participantId: participant.id,
+                    participantDisplayName: participant.displayName,
+                    isAgent:
+                        this.participants.find((p) => p.id === participant.id)
+                            ?.isAgent || false,
+                })
+            }
+        })
+
+        participant.on('stream-disabled', (stream: any) => {
+            console.log(
+                '🎯 MEETING-SERVICE: Participant stream disabled:',
+                stream
+            )
+
+            // Find the participant in our list and clear their stream
+            const participantIndex = this.participants.findIndex(
+                (p) => p.id === participant.id
+            )
+            if (participantIndex !== -1) {
+                if (stream.kind === 'audio') {
+                    this.participants[participantIndex].audioStream = null
+                } else if (stream.kind === 'video') {
+                    this.participants[participantIndex].videoStream = null
+                }
+
+                // Update the participants list
+                this.participantsSubject.next([...this.participants])
+            }
+
+            // Only clear remote stream if this was the last stream from this participant
+            const participantData = this.participants.find(
+                (p) => p.id === participant.id
+            )
+            if (
+                participantData &&
+                !participantData.audioStream &&
+                !participantData.videoStream
+            ) {
+                this.remoteStreamSubject.next(null)
+            }
+        })
+
+        participant.on('media-status-changed', (data: any) => {
+            const { kind, newStatus } = data
+            console.log(
+                '🎯 MEETING-SERVICE: Media status changed:',
+                kind,
+                newStatus
+            )
+        })
     }
 }
