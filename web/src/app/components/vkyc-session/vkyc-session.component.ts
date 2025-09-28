@@ -64,7 +64,17 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     // Video streams
     hasAgentVideo: boolean = false
+    hasAgentAudio: boolean = false
     isAgentSpeaking: boolean = false
+
+    // Participant tracking
+    aiAgentParticipant: any = null
+    avatarParticipant: any = null
+    isAgentJoining: boolean = false
+    agentJoinStatus: string = 'Connecting...'
+
+    // Avatar implementation
+    avatarImplementation: string = 'unknown'
 
     // Workflow
     workflowSteps: WorkflowStep[] = []
@@ -125,6 +135,9 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     ngOnInit(): void {
         console.log('🎯 VKYC-SESSION: Component ngOnInit started')
+
+        // Load avatar implementation configuration
+        this.loadAvatarConfiguration()
 
         // Subscribe to room data changes
         this.subscriptions.add(
@@ -205,9 +218,12 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                         isAgent: p.isAgent,
                         hasAudioStream: !!p.audioStream,
                         hasVideoStream: !!p.videoStream,
+                        audioStream: p.audioStream,
+                        videoStream: p.videoStream,
                     })
                 })
                 this.participants = participants
+                this.updateParticipantTracking()
                 this.updateAgentVideoState()
             })
         )
@@ -409,10 +425,16 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         // Only handle streams from agents
         if (stream.isAgent) {
             if (stream.kind === 'audio') {
-                console.log('🎯 VKYC-SESSION: Processing agent audio stream')
+                console.log(
+                    '🎯 VKYC-SESSION: Processing agent audio stream from:',
+                    stream.participantDisplayName
+                )
                 this.setupAgentAudio(stream)
             } else if (stream.kind === 'video') {
-                console.log('🎯 VKYC-SESSION: Processing agent video stream')
+                console.log(
+                    '🎯 VKYC-SESSION: Processing agent video stream from:',
+                    stream.participantDisplayName
+                )
                 this.setupAgentVideo(stream)
             } else {
                 console.log(
@@ -426,12 +448,37 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     }
 
     private setupAgentAudio(stream: any): void {
-        console.log('🎯 VKYC-SESSION: Setting up agent audio...')
+        console.log(
+            '🎯 VKYC-SESSION: Setting up agent audio from:',
+            stream.participantDisplayName
+        )
 
         if (!this.agentAudioRef) {
             console.error('🎯 VKYC-SESSION: Agent audio element not available')
             return
         }
+
+        // For True Sync mode, prioritize avatar participant audio
+        // For basic mode, use any agent audio
+        const isAvatarParticipant = stream.participantDisplayName
+            ?.toLowerCase()
+            .includes('avatar')
+        const shouldUseThisAudio =
+            this.avatarImplementation === 'true_sync'
+                ? isAvatarParticipant
+                : true
+
+        if (!shouldUseThisAudio) {
+            console.log(
+                '🎯 VKYC-SESSION: Ignoring audio from non-avatar participant in True Sync mode'
+            )
+            return
+        }
+
+        console.log(
+            '🎯 VKYC-SESSION: Using audio from participant:',
+            stream.participantDisplayName
+        )
 
         // Create a MediaStream from the track
         const mediaStream = new MediaStream()
@@ -444,24 +491,38 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         this.agentAudioRef.nativeElement.autoplay = true
         this.agentAudioRef.nativeElement.muted = false
 
-        console.log('🎯 VKYC-SESSION: Agent audio stream configured')
+        console.log(
+            '🎯 VKYC-SESSION: Agent audio stream configured for:',
+            stream.participantDisplayName
+        )
+
+        // Update audio state
+        this.hasAgentAudio = true
 
         // Play the audio
         this.agentAudioRef.nativeElement
             .play()
             .then(() => {
-                console.log('🎯 VKYC-SESSION: Agent audio started playing')
+                console.log(
+                    '🎯 VKYC-SESSION: Agent audio started playing from:',
+                    stream.participantDisplayName
+                )
             })
             .catch((error: any) => {
                 console.error(
-                    '🎯 VKYC-SESSION: Error playing agent audio:',
+                    '🎯 VKYC-SESSION: Error playing agent audio from',
+                    stream.participantDisplayName,
+                    ':',
                     error
                 )
             })
     }
 
     private setupAgentVideo(stream: any): void {
-        console.log('🎯 VKYC-SESSION: Setting up agent video...')
+        console.log(
+            '🎯 VKYC-SESSION: Setting up agent video from:',
+            stream.participantDisplayName
+        )
         console.log('🎯 VKYC-SESSION: Stream details:', {
             kind: stream.kind,
             trackId: stream.track?.id,
@@ -469,6 +530,28 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             participantId: stream.participantId,
             participantDisplayName: stream.participantDisplayName,
         })
+
+        // For True Sync mode, prioritize avatar participant video
+        // For basic mode, use any agent video
+        const isAvatarParticipant = stream.participantDisplayName
+            ?.toLowerCase()
+            .includes('avatar')
+        const shouldUseThisVideo =
+            this.avatarImplementation === 'true_sync'
+                ? isAvatarParticipant
+                : true
+
+        if (!shouldUseThisVideo) {
+            console.log(
+                '🎯 VKYC-SESSION: Ignoring video from non-avatar participant in True Sync mode'
+            )
+            return
+        }
+
+        console.log(
+            '🎯 VKYC-SESSION: Using video from participant:',
+            stream.participantDisplayName
+        )
 
         if (!this.agentVideoRef) {
             console.error('🎯 VKYC-SESSION: Agent video element not available')
@@ -480,6 +563,17 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         // Create a MediaStream from the track
         const mediaStream = new MediaStream()
         mediaStream.addTrack(stream.track)
+
+        // Log track details for debugging
+        console.log('🎯 VKYC-SESSION: Video track details:', {
+            id: stream.track.id,
+            kind: stream.track.kind,
+            enabled: stream.track.enabled,
+            muted: stream.track.muted,
+            readyState: stream.track.readyState,
+            settings: stream.track.getSettings(),
+            constraints: stream.track.getConstraints(),
+        })
 
         // Configure video element first
         videoElement.autoplay = true
@@ -519,7 +613,18 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                 paused: videoElement.paused,
                 ended: videoElement.ended,
                 error: videoElement.error,
+                networkState: videoElement.networkState,
+                currentTime: videoElement.currentTime,
+                duration: videoElement.duration,
             })
+
+            // Try to recover from error
+            if (videoElement.error) {
+                console.error('🎯 VKYC-SESSION: Video error details:', {
+                    code: videoElement.error.code,
+                    message: videoElement.error.message,
+                })
+            }
         }
 
         // Remove existing listeners to avoid duplicates
@@ -619,6 +724,7 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
         if (this.agentAudioRef) {
             this.agentAudioRef.nativeElement.srcObject = null
+            this.hasAgentAudio = false
         }
 
         if (this.agentVideoRef) {
@@ -1201,33 +1307,215 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         }
     }
 
-    // Agent Video Management
-    private updateAgentVideoState(): void {
-        // Check if agent is present in participants and has video stream
-        const agentParticipant = this.participants.find((p) => p.isAgent)
-        this.hasAgentVideo = !!(
-            agentParticipant && agentParticipant.videoStream
+    // Participant Management
+    private updateParticipantTracking(): void {
+        // Track different types of participants
+        this.aiAgentParticipant = this.participants.find(
+            (p) =>
+                p.isAgent &&
+                p.displayName?.toLowerCase().includes('agent') &&
+                !p.displayName?.toLowerCase().includes('avatar')
         )
 
-        console.log('🎯 VKYC-SESSION: Agent video state updated:', {
-            hasAgentVideo: this.hasAgentVideo,
-            totalParticipants: this.participants.length,
-            agentParticipant: agentParticipant
+        this.avatarParticipant = this.participants.find(
+            (p) => p.isAgent && p.displayName?.toLowerCase().includes('avatar')
+        )
+
+        // Update agent joining status
+        if (this.aiAgentParticipant || this.avatarParticipant) {
+            this.isAgentJoining = false
+            this.agentJoinStatus = 'Connected'
+        } else if (this.participants.length > 1) {
+            // If we have participants but no agent yet, it's still joining
+            this.isAgentJoining = true
+            this.agentJoinStatus = 'Joining...'
+        } else {
+            this.isAgentJoining = true
+            this.agentJoinStatus = 'Connecting...'
+        }
+
+        console.log('🎯 VKYC-SESSION: Participant tracking updated:', {
+            avatarImplementation: this.avatarImplementation,
+            aiAgentParticipant: this.aiAgentParticipant
                 ? {
-                      id: agentParticipant.id,
-                      displayName: agentParticipant.displayName,
-                      hasVideoStream: !!agentParticipant.videoStream,
-                      hasAudioStream: !!agentParticipant.audioStream,
+                      id: this.aiAgentParticipant.id,
+                      displayName: this.aiAgentParticipant.displayName,
+                      hasVideo: !!this.aiAgentParticipant.videoStream,
+                      hasAudio: !!this.aiAgentParticipant.audioStream,
                   }
                 : null,
+            avatarParticipant: this.avatarParticipant
+                ? {
+                      id: this.avatarParticipant.id,
+                      displayName: this.avatarParticipant.displayName,
+                      hasVideo: !!this.avatarParticipant.videoStream,
+                      hasAudio: !!this.avatarParticipant.audioStream,
+                  }
+                : null,
+            isAgentJoining: this.isAgentJoining,
+            agentJoinStatus: this.agentJoinStatus,
             allParticipants: this.participants.map((p) => ({
                 id: p.id,
                 displayName: p.displayName,
                 isAgent: p.isAgent,
-                hasVideoStream: !!p.videoStream,
-                hasAudioStream: !!p.audioStream,
+                hasVideo: !!p.videoStream,
+                hasAudio: !!p.audioStream,
             })),
         })
+
+        // Debug audio streams
+        this.checkAvatarAudioStreams()
+
+        // Re-evaluate audio streams if avatar participant becomes available
+        this.reEvaluateAudioStreams()
+    }
+
+    // Agent Video Management
+    private updateAgentVideoState(): void {
+        // For True Sync mode, prioritize avatar participant
+        // For basic mode, use AI agent participant
+        let targetParticipant = null
+
+        if (
+            this.avatarImplementation === 'true_sync' &&
+            this.avatarParticipant
+        ) {
+            targetParticipant = this.avatarParticipant
+        } else if (this.aiAgentParticipant) {
+            targetParticipant = this.aiAgentParticipant
+        }
+
+        this.hasAgentVideo = !!(
+            targetParticipant && targetParticipant.videoStream
+        )
+
+        console.log('🎯 VKYC-SESSION: Agent video state updated:', {
+            hasAgentVideo: this.hasAgentVideo,
+            avatarImplementation: this.avatarImplementation,
+            targetParticipant: targetParticipant
+                ? {
+                      id: targetParticipant.id,
+                      displayName: targetParticipant.displayName,
+                      hasVideo: !!targetParticipant.videoStream,
+                      hasAudio: !!targetParticipant.audioStream,
+                  }
+                : null,
+            totalParticipants: this.participants.length,
+        })
+    }
+
+    // Audio Stream Management
+    reEvaluateAudioStreams(): void {
+        // If we're in True Sync mode and avatar participant has audio, switch to it
+        if (
+            this.avatarImplementation === 'true_sync' &&
+            this.avatarParticipant &&
+            this.avatarParticipant.audioStream
+        ) {
+            console.log(
+                '🎯 VKYC-SESSION: Re-evaluating audio streams - switching to Avatar Agent audio'
+            )
+
+            // Check if the audio stream has a track property (VideoSDK format)
+            let audioTrack = null
+            if (this.avatarParticipant.audioStream.track) {
+                audioTrack = this.avatarParticipant.audioStream.track
+            } else if (this.avatarParticipant.audioStream.getAudioTracks) {
+                // Standard MediaStream format
+                const tracks =
+                    this.avatarParticipant.audioStream.getAudioTracks()
+                audioTrack = tracks.length > 0 ? tracks[0] : null
+            }
+
+            if (audioTrack) {
+                // Create a mock stream object to trigger audio setup
+                const avatarAudioStream = {
+                    kind: 'audio',
+                    track: audioTrack,
+                    participantDisplayName: this.avatarParticipant.displayName,
+                    participantId: this.avatarParticipant.id,
+                    isAgent: true,
+                }
+
+                // Set up the avatar audio
+                this.setupAgentAudio(avatarAudioStream)
+            } else {
+                console.log(
+                    '🎯 VKYC-SESSION: No audio track found in Avatar Agent audio stream'
+                )
+            }
+        }
+    }
+
+    // Manual Audio Control
+    switchToAvatarAudio(): void {
+        if (this.avatarParticipant && this.avatarParticipant.audioStream) {
+            console.log(
+                '🎯 VKYC-SESSION: Manually switching to Avatar Agent audio'
+            )
+            this.reEvaluateAudioStreams()
+        } else {
+            console.log(
+                '🎯 VKYC-SESSION: Avatar participant or audio stream not available'
+            )
+        }
+    }
+
+    // Audio Debug Methods
+    checkAvatarAudioStreams(): void {
+        console.log('🎯 VKYC-SESSION: Checking avatar audio streams...')
+
+        if (this.avatarParticipant) {
+            // Check audio track availability
+            let audioTrackInfo = 'No audio track'
+            if (this.avatarParticipant.audioStream) {
+                if (this.avatarParticipant.audioStream.track) {
+                    audioTrackInfo = `VideoSDK track: ${this.avatarParticipant.audioStream.track.id}`
+                } else if (this.avatarParticipant.audioStream.getAudioTracks) {
+                    const tracks =
+                        this.avatarParticipant.audioStream.getAudioTracks()
+                    audioTrackInfo = `MediaStream tracks: ${tracks.length}`
+                } else {
+                    audioTrackInfo = 'Unknown audio stream format'
+                }
+            }
+
+            console.log('🎯 VKYC-SESSION: Avatar participant found:', {
+                id: this.avatarParticipant.id,
+                displayName: this.avatarParticipant.displayName,
+                hasAudio: !!this.avatarParticipant.audioStream,
+                audioStream: this.avatarParticipant.audioStream,
+                audioTrackInfo: audioTrackInfo,
+            })
+        } else {
+            console.log('🎯 VKYC-SESSION: No avatar participant found')
+        }
+
+        if (this.aiAgentParticipant) {
+            // Check audio track availability
+            let audioTrackInfo = 'No audio track'
+            if (this.aiAgentParticipant.audioStream) {
+                if (this.aiAgentParticipant.audioStream.track) {
+                    audioTrackInfo = `VideoSDK track: ${this.aiAgentParticipant.audioStream.track.id}`
+                } else if (this.aiAgentParticipant.audioStream.getAudioTracks) {
+                    const tracks =
+                        this.aiAgentParticipant.audioStream.getAudioTracks()
+                    audioTrackInfo = `MediaStream tracks: ${tracks.length}`
+                } else {
+                    audioTrackInfo = 'Unknown audio stream format'
+                }
+            }
+
+            console.log('🎯 VKYC-SESSION: AI Agent participant found:', {
+                id: this.aiAgentParticipant.id,
+                displayName: this.aiAgentParticipant.displayName,
+                hasAudio: !!this.aiAgentParticipant.audioStream,
+                audioStream: this.aiAgentParticipant.audioStream,
+                audioTrackInfo: audioTrackInfo,
+            })
+        } else {
+            console.log('🎯 VKYC-SESSION: No AI Agent participant found')
+        }
     }
 
     // Agent Video Event Handlers
@@ -1250,6 +1538,58 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             ended: this.agentVideoRef?.nativeElement?.ended,
             error: this.agentVideoRef?.nativeElement?.error,
         })
+    }
+
+    onAgentVideoCanPlay(): void {
+        console.log('🎯 VKYC-SESSION: Agent video can play')
+        this.attemptVideoPlay()
+    }
+
+    onAgentVideoPlaying(): void {
+        console.log('🎯 VKYC-SESSION: Agent video is playing')
+    }
+
+    onAgentVideoWaiting(): void {
+        console.log('🎯 VKYC-SESSION: Agent video is waiting for data')
+    }
+
+    debugVideoStream(): void {
+        console.log('🎯 VKYC-SESSION: Debugging video stream...')
+        if (this.agentVideoRef) {
+            const videoElement = this.agentVideoRef.nativeElement
+            console.log('🎯 VKYC-SESSION: Video element state:', {
+                srcObject: videoElement.srcObject,
+                readyState: videoElement.readyState,
+                paused: videoElement.paused,
+                ended: videoElement.ended,
+                error: videoElement.error,
+                networkState: videoElement.networkState,
+                currentTime: videoElement.currentTime,
+                duration: videoElement.duration,
+                videoWidth: videoElement.videoWidth,
+                videoHeight: videoElement.videoHeight,
+                hasAgentVideo: this.hasAgentVideo,
+                avatarImplementation: this.avatarImplementation,
+            })
+
+            if (videoElement.srcObject) {
+                const stream = videoElement.srcObject as MediaStream
+                console.log('🎯 VKYC-SESSION: MediaStream details:', {
+                    id: stream.id,
+                    active: stream.active,
+                    tracks: stream.getTracks().map((track) => ({
+                        id: track.id,
+                        kind: track.kind,
+                        enabled: track.enabled,
+                        muted: track.muted,
+                        readyState: track.readyState,
+                        settings: track.getSettings(),
+                    })),
+                })
+            }
+        } else {
+            console.log('🎯 VKYC-SESSION: No video element available')
+        }
     }
 
     // Debug method to manually play agent video
@@ -1440,6 +1780,7 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             this.isMicrophoneEnabled = false
             this.hasMedia = false
             this.hasAgentVideo = false
+            this.hasAgentAudio = false
             this.isAgentSpeaking = false
 
             // Clear video elements
@@ -1521,5 +1862,37 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     private showInfo(title: string, message: string): void {
         console.log('🎯 VKYC-SESSION: Info:', message)
         this.notificationService.showInfo(title, message)
+    }
+
+    // Avatar Configuration Methods
+    private loadAvatarConfiguration(): void {
+        try {
+            // Default to true_sync for better experience
+            // This can be enhanced to fetch from API or environment variables
+            this.avatarImplementation = 'true_sync'
+            console.log(
+                '🎯 VKYC-SESSION: Avatar implementation loaded:',
+                this.avatarImplementation
+            )
+        } catch (error) {
+            console.warn(
+                '🎯 VKYC-SESSION: Failed to load avatar configuration:',
+                error
+            )
+            this.avatarImplementation = 'true_sync' // Default to true_sync
+        }
+    }
+
+    getAvatarImplementationLabel(): string {
+        switch (this.avatarImplementation) {
+            case 'true_sync':
+                return 'True Sync'
+            case 'wav2lip':
+                return 'Basic Wav2Lip'
+            case 'unknown':
+                return 'Unknown'
+            default:
+                return 'Disabled'
+        }
     }
 }

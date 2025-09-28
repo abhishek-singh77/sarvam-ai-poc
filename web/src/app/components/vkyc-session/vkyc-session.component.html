@@ -203,9 +203,60 @@
 
                     <!-- Agent Video Stream -->
                     <div class="relative">
-                        <h3 class="text-sm font-medium text-gray-600 mb-2">
-                            AI Agent
-                        </h3>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-sm font-medium text-gray-600">
+                                {{
+                                    avatarImplementation === 'true_sync'
+                                        ? 'Avatar Agent'
+                                        : 'AI Agent'
+                                }}
+                            </h3>
+                            <!-- Avatar Implementation Status -->
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs text-gray-500"
+                                    >Avatar:</span
+                                >
+                                <span
+                                    class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                                    [class.bg-green-100]="
+                                        avatarImplementation === 'true_sync'
+                                    "
+                                    [class.text-green-800]="
+                                        avatarImplementation === 'true_sync'
+                                    "
+                                    [class.bg-blue-100]="
+                                        avatarImplementation === 'wav2lip'
+                                    "
+                                    [class.text-blue-800]="
+                                        avatarImplementation === 'wav2lip'
+                                    "
+                                    [class.bg-gray-100]="!avatarImplementation"
+                                    [class.text-gray-800]="
+                                        !avatarImplementation
+                                    ">
+                                    {{ getAvatarImplementationLabel() }}
+                                </span>
+                                <!-- Debug Audio Button -->
+                                <button
+                                    *ngIf="avatarImplementation === 'true_sync'"
+                                    class="text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-2 py-1 rounded"
+                                    (click)="checkAvatarAudioStreams()"
+                                    title="Debug Audio Streams">
+                                    🔍 Audio
+                                </button>
+                                <!-- Switch to Avatar Audio Button -->
+                                <button
+                                    *ngIf="
+                                        avatarImplementation === 'true_sync' &&
+                                        avatarParticipant
+                                    "
+                                    class="text-xs bg-green-100 hover:bg-green-200 text-green-800 px-2 py-1 rounded"
+                                    (click)="switchToAvatarAudio()"
+                                    title="Switch to Avatar Audio">
+                                    🔊 Avatar
+                                </button>
+                            </div>
+                        </div>
                         <div
                             class="relative bg-gray-200 rounded-lg overflow-hidden aspect-video">
                             <!-- Agent Video (if available) -->
@@ -219,13 +270,18 @@
                                 [class.hidden]="!hasAgentVideo"
                                 (loadstart)="onAgentVideoLoadStart()"
                                 (loadeddata)="onAgentVideoLoaded()"
-                                (error)="onAgentVideoError($event)"></video>
+                                (error)="onAgentVideoError($event)"
+                                (canplay)="onAgentVideoCanPlay()"
+                                (playing)="onAgentVideoPlaying()"
+                                (waiting)="onAgentVideoWaiting()"></video>
 
-                            <!-- Agent Audio (hidden) -->
+                            <!-- Agent Audio (visible for debugging) -->
                             <audio
                                 #agentAudioRef
                                 autoplay
-                                class="hidden"></audio>
+                                controls
+                                class="w-full mt-2"
+                                [class.hidden]="!hasAgentAudio"></audio>
 
                             <!-- Agent Placeholder -->
                             <div
@@ -234,19 +290,48 @@
                                 <div class="text-center">
                                     <div
                                         class="w-20 h-20 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-3"
-                                        [class.animate-pulse]="isAgentSpeaking">
+                                        [class.animate-pulse]="
+                                            isAgentJoining || isAgentSpeaking
+                                        ">
                                         <span
                                             class="text-white font-bold text-2xl"
-                                            >A</span
+                                            >{{
+                                                avatarImplementation ===
+                                                'true_sync'
+                                                    ? 'A'
+                                                    : 'A'
+                                            }}</span
                                         >
                                     </div>
                                     <p
                                         class="text-sm text-gray-600 font-medium">
-                                        AI Agent
+                                        {{
+                                            avatarImplementation === 'true_sync'
+                                                ? 'Avatar Agent'
+                                                : 'AI Agent'
+                                        }}
                                     </p>
                                     <p class="text-xs text-gray-500">
-                                        Ready to assist
+                                        {{ agentJoinStatus }}
                                     </p>
+                                    <!-- Loading indicator for joining -->
+                                    <div *ngIf="isAgentJoining" class="mt-2">
+                                        <div
+                                            class="flex justify-center space-x-1">
+                                            <div
+                                                class="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>
+                                            <div
+                                                class="w-2 h-2 bg-blue-600 rounded-full animate-bounce"
+                                                style="
+                                                    animation-delay: 0.1s;
+                                                "></div>
+                                            <div
+                                                class="w-2 h-2 bg-blue-600 rounded-full animate-bounce"
+                                                style="
+                                                    animation-delay: 0.2s;
+                                                "></div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

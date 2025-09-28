@@ -76,7 +76,13 @@ class Settings(BaseSettings):
     
     # Wav2Lip Plugin Configuration
     wav2lip_enabled: bool = Field(default=True, alias="WAV2LIP_ENABLED")
-    wav2lip_url: str = Field(default="http://35.207.229.235:8001", alias="WAV2LIP_URL")
+    wav2lip_url: Optional[str] = Field(default="ws://35.207.229.235:8001/ws", alias="WAV2LIP_URL")
+    avatar_implementation: str = Field(default="true_sync", alias="AVATAR_IMPLEMENTATION", description="Avatar implementation: 'wav2lip' or 'true_sync'")
+    
+    # TTS Configuration
+    tts_pace: float = Field(default=0.9, alias="TTS_PACE", description="TTS speech pace (0.5-2.0, 1.0 = normal speed)")
+    tts_pitch: float = Field(default=0.0, alias="TTS_PITCH", description="TTS pitch adjustment (-1.0 to 1.0)")
+    tts_loudness: float = Field(default=1.0, alias="TTS_LOUDNESS", description="TTS volume level (0.5-2.0)")
     
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -115,6 +121,14 @@ class Settings(BaseSettings):
         valid_environments = ["localhost", "development", "staging", "production"]
         if v.lower() not in valid_environments:
             raise ValueError(f"Environment must be one of: {valid_environments}")
+        return v.lower()
+    
+    @validator("avatar_implementation")
+    def validate_avatar_implementation(cls, v):
+        """Validate avatar implementation."""
+        valid_implementations = ["wav2lip", "true_sync"]
+        if v.lower() not in valid_implementations:
+            raise ValueError(f"Avatar implementation must be one of: {valid_implementations}")
         return v.lower()
     
     @property
@@ -169,7 +183,8 @@ class Settings(BaseSettings):
         """Get Wav2Lip plugin configuration."""
         return {
             "enabled": self.wav2lip_enabled,
-            "url": self.wav2lip_url
+            "url": self.wav2lip_url,
+            "implementation": self.avatar_implementation
         }
     
     def get_masked_config(self) -> Dict[str, Any]:

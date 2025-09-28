@@ -4,6 +4,7 @@ import json
 import base64
 import io
 import time
+import websockets
 from typing import Optional
 from PIL import Image
 import av
@@ -21,10 +22,13 @@ class Wav2LipCustomVideoTrack(CustomVideoTrack):
         super().__init__()
         self.frame_queue = asyncio.Queue()
         self.current_frame = None
-        self.frame_rate = 30  # 30 FPS
+        self.frame_rate = 30  # Increased to 30 FPS for better responsiveness
         self.frame_duration = 1.0 / self.frame_rate
         self.last_frame_time = 0
-        self.max_queue_size = 10  # Limit queue size to prevent memory issues
+        self.max_queue_size = 3  # Smaller queue size to reduce latency
+        self.frame_buffer = []  # Buffer for smoothing frame delivery
+        self.buffer_size = 2  # Smaller buffer to reduce latency
+        self.last_frame_delivery_time = 0
         print(f"📺 Wav2LipCustomVideoTrack: Initialized with frame rate {self.frame_rate} FPS")
         
     async def add_frame(self, frame_data: str):
@@ -62,7 +66,7 @@ class Wav2LipCustomVideoTrack(CustomVideoTrack):
                     print(f"❌ Cannot reshape frame, skipping")
                     return
             
-            # Limit queue size to prevent memory issues
+            # Limit queue size to prevent memory issues and frame bursts
             if self.frame_queue.qsize() >= self.max_queue_size:
                 try:
                     # Remove oldest frame
@@ -71,8 +75,13 @@ class Wav2LipCustomVideoTrack(CustomVideoTrack):
                 except asyncio.QueueEmpty:
                     pass
             
-            # Add to queue
+            # Add to queue with frame smoothing
             await self.frame_queue.put(frame_array)
+            
+            # Add to buffer for smooth delivery
+            self.frame_buffer.append(frame_array)
+            if len(self.frame_buffer) > self.buffer_size:
+                self.frame_buffer.pop(0)  # Remove oldest frame from buffer
             
         except Exception as e:
             print(f"❌ Failed to process frame: {e}")
@@ -81,42 +90,47 @@ class Wav2LipCustomVideoTrack(CustomVideoTrack):
     
     async def recv(self) -> av.VideoFrame:
         """
-        Receive the next video frame for streaming.
+        Receive the next video frame for streaming with optimized delivery.
         """
         current_time = time.time()
         
-        # Try to get a new frame from the queue first
+        # Try to get a new frame from the queue first (prioritize new frames)
         try:
             # Non-blocking get from queue
             new_frame = self.frame_queue.get_nowait()
             self.current_frame = new_frame
+            self.last_frame_delivery_time = current_time
+            return self._create_video_frame(new_frame, current_time)
         except asyncio.QueueEmpty:
-            # No new frame available, use current frame or create a blank one
-            if self.current_frame is None:
+            # No new frame available, check if we can return current frame
+            if self.current_frame is not None:
+                # Only enforce frame rate if we have a current frame
+                time_since_last_frame = current_time - self.last_frame_delivery_time
+                if time_since_last_frame >= self.frame_duration:
+                    return self._create_video_frame(self.current_frame, current_time)
+            else:
                 # Create a blank frame if no frame is available
                 self.current_frame = np.zeros((480, 640, 3), dtype=np.uint8)
         
-        # Check if enough time has passed since last frame
-        if current_time - self.last_frame_time < self.frame_duration:
-            # Not enough time has passed, return the current frame
-            pass
-        
+        # Create and return the video frame
+        return self._create_video_frame(self.current_frame, current_time)
+    
+    def _create_video_frame(self, frame_array: np.ndarray, current_time: float) -> av.VideoFrame:
+        """
+        Create an AV VideoFrame from numpy array with proper timing.
+        """
         try:
             # Ensure frame is in the correct format
-            if self.current_frame is None:
-                self.current_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-            
-            # Convert RGB to BGR for better compatibility
-            frame_bgr = np.flip(self.current_frame, axis=2)  # RGB to BGR
+            if frame_array is None:
+                frame_array = np.zeros((480, 640, 3), dtype=np.uint8)
             
             # Create AV VideoFrame with RGB format (VP8 prefers RGB)
-            frame = av.VideoFrame.from_ndarray(self.current_frame, format='rgb24')
+            frame = av.VideoFrame.from_ndarray(frame_array, format='rgb24')
             frame.pts = int(current_time * 90000)  # 90kHz timestamp
             # Use fractions.Fraction instead of av.Rational
             from fractions import Fraction
             frame.time_base = Fraction(1, 90000)
             
-            self.last_frame_time = current_time
             return frame
             
         except Exception as e:
@@ -138,29 +152,47 @@ class Wav2LipCustomVideoTrack(CustomVideoTrack):
                 return None
     
     def clear_queue(self):
-        """Clear the frame queue."""
+        """Clear the frame queue and buffer."""
         while not self.frame_queue.empty():
             try:
                 self.frame_queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
-        print("🧹 Frame queue cleared")
+        
+        # Clear the frame buffer
+        self.frame_buffer.clear()
+        
+        # Reset timing
+        self.last_frame_delivery_time = 0
+        self.last_frame_time = 0
+        
+        print("🧹 Frame queue and buffer cleared")
 
 
 class Wav2LipAvatar:
     """
     Custom Avatar plugin that connects VideoSDK's agent framework to your
-    Wav2Lip FastAPI server (`/lip-sync-stream` endpoint).
+    Wav2Lip WebSocket server for real-time lip-sync generation.
     """
 
     def __init__(self, wav2lip_url: str, **kwargs):
         """
-        :param wav2lip_url: Base URL of your FastAPI server (e.g. http://localhost:8001)
+        :param wav2lip_url: WebSocket URL of your Wav2Lip server (e.g. ws://localhost:8001/ws)
         """
-        self.wav2lip_url = wav2lip_url.rstrip("/")
-        self.session = None
-        self.stream_task = None
-        self.stream_response = None
+        # Convert HTTP URL to WebSocket URL if needed
+        if wav2lip_url.startswith("http://"):
+            self.wav2lip_url = wav2lip_url.replace("http://", "ws://") + "/ws"
+        elif wav2lip_url.startswith("https://"):
+            self.wav2lip_url = wav2lip_url.replace("https://", "wss://") + "/ws"
+        elif not wav2lip_url.startswith("ws://") and not wav2lip_url.startswith("wss://"):
+            self.wav2lip_url = f"ws://{wav2lip_url}/ws"
+        else:
+            self.wav2lip_url = wav2lip_url
+        
+        self.websocket = None
+        self.websocket_task = None
+        self.is_connected = False
+        self.is_streaming = False
         
         # Create custom video track for streaming
         self.video_track = Wav2LipCustomVideoTrack()
@@ -179,7 +211,7 @@ class Wav2LipAvatar:
 
     async def connect(self, room_id: str = None, participant_id: str = None, token: str = None):
         """
-        Connect the avatar to the VideoSDK room.
+        Connect the avatar to the VideoSDK room and Wav2Lip WebSocket server.
         This method is called by the VideoSDK pipeline.
         
         Args:
@@ -187,7 +219,7 @@ class Wav2LipAvatar:
             participant_id: Participant ID (optional, can be set later)
             token: Authentication token (optional, can be set later)
         """
-        print(f"Wav2Lip Avatar connecting...")
+        print(f"🎬 Wav2Lip Avatar connecting...")
         
         # Store connection info if provided
         if room_id:
@@ -197,11 +229,6 @@ class Wav2LipAvatar:
         if token:
             self.token = token
         
-        # Initialize HTTP session if not already done
-        if self.session is None:
-            self.session = aiohttp.ClientSession()
-        
-        # Always try to start the Wav2Lip stream connection
         # Use default values if connection info is not complete
         if not self.room_id:
             self.room_id = "default_room"
@@ -210,97 +237,106 @@ class Wav2LipAvatar:
         if not self.token:
             self.token = "default_token"
         
-        print(f"Wav2Lip Avatar connecting to room {self.room_id} with participant {self.participant_id}")
+        print(f"🎬 Wav2Lip Avatar connecting to room {self.room_id} with participant {self.participant_id}")
         
-        # Start the Wav2Lip stream connection
-        await self._start_wav2lip_stream()
+        # Start the Wav2Lip WebSocket connection
+        await self._start_wav2lip_websocket()
 
 
-    async def _start_wav2lip_stream(self):
+    async def _start_wav2lip_websocket(self):
         """
-        Start the Wav2Lip stream connection.
+        Start the Wav2Lip WebSocket connection.
         """
         try:
-            url = f"{self.wav2lip_url}/lip-sync-stream"
-            print(f"🎬 Connecting to Wav2Lip stream: {url}")
+            print(f"🎬 Connecting to Wav2Lip WebSocket: {self.wav2lip_url}")
             
-            form_data = aiohttp.FormData()
-            form_data.add_field("lang", "en")
-            # Provide default text input to initialize the stream
-            form_data.add_field("text", "Hello, I am your AI assistant. I'm ready to help you.")
+            # Connect to WebSocket
+            self.websocket = await websockets.connect(self.wav2lip_url)
+            self.is_connected = True
             
-            # Start the stream connection
-            self.stream_response = await self.session.post(url, data=form_data)
+            print(f"✅ Wav2Lip WebSocket connected for room {self.room_id}")
             
-            if self.stream_response.status != 200:
-                error = await self.stream_response.text()
-                raise RuntimeError(f"Wav2Lip server error: {self.stream_response.status} {error}")
-            
-            print(f"✅ Wav2Lip stream connected for room {self.room_id}")
-            print(f"🎬 Stream response status: {self.stream_response.status}")
-            print(f"🎬 Stream response headers: {dict(self.stream_response.headers)}")
-            
-            # Start the stream reader task
-            self.stream_task = asyncio.create_task(self._stream_reader())
+            # Start the WebSocket message handler task
+            self.websocket_task = asyncio.create_task(self._websocket_message_handler())
             
         except Exception as e:
-            print(f"❌ Failed to connect Wav2Lip stream: {e}")
+            print(f"❌ Failed to connect Wav2Lip WebSocket: {e}")
             print(f"⚠️ Wav2Lip server unavailable - continuing without avatar video")
             print(f"ℹ️ Agent will work normally, but without lip-sync video")
             
             # Set a flag to indicate Wav2Lip is not available
             self.wav2lip_available = False
+            self.is_connected = False
             
             # Don't raise the exception - let the agent continue without Wav2Lip
             return
 
     async def disconnect(self):
         """
-        Disconnect the avatar from the VideoSDK room.
+        Disconnect the avatar from the VideoSDK room and Wav2Lip WebSocket.
         This method is called by the VideoSDK pipeline.
         """
         print(f"🛑 Wav2Lip Avatar disconnecting from room {self.room_id}")
         
-        # Stop the stream reader task
-        if self.stream_task:
-            print("🛑 Cancelling stream reader task...")
-            self.stream_task.cancel()
+        # Stop the WebSocket message handler task
+        if self.websocket_task:
+            print("🛑 Cancelling WebSocket message handler task...")
+            self.websocket_task.cancel()
             try:
-                await self.stream_task
+                # Wait for the task to complete with a timeout
+                await asyncio.wait_for(self.websocket_task, timeout=2.0)
             except asyncio.CancelledError:
-                print("✅ Stream reader task cancelled")
-            self.stream_task = None
+                print("✅ WebSocket message handler task cancelled")
+            except asyncio.TimeoutError:
+                print("⚠️ WebSocket message handler task cancellation timed out")
+            finally:
+                self.websocket_task = None
         
-        # Close the stream response
-        if hasattr(self, 'stream_response') and self.stream_response:
-            print("🛑 Closing stream response...")
-            self.stream_response.close()
-            self.stream_response = None
+        # Close the WebSocket connection
+        if self.websocket and self.is_connected:
+            print("🛑 Closing WebSocket connection...")
+            try:
+                # Send a stop message to the server before closing
+                try:
+                    stop_message = {"stop": True}
+                    await self.websocket.send(json.dumps(stop_message))
+                    print("📤 Sent stop message to Wav2Lip server")
+                except Exception as e:
+                    print(f"⚠️ Failed to send stop message: {e}")
+                
+                # Close the WebSocket connection
+                await self.websocket.close()
+                print("✅ WebSocket connection closed")
+            except Exception as e:
+                print(f"⚠️ Error closing WebSocket: {e}")
+            finally:
+                self.websocket = None
+                self.is_connected = False
         
         # Clear the video track queue
         if hasattr(self, 'video_track') and self.video_track:
             print("🛑 Clearing video track queue...")
             self.video_track.clear_queue()
         
-        # Signal Wav2Lip server to stop streaming (only if available)
-        if self.session and self.wav2lip_available:
-            try:
-                print(f"🛑 Sending stop-stream request to {self.wav2lip_url}/stop-stream")
-                await self.session.post(f"{self.wav2lip_url}/stop-stream")
-                print("✅ Stop-stream request sent successfully")
-            except Exception as e:
-                print(f"⚠️ Failed to send stop-stream request: {e}")
-            finally:
-                print("🛑 Closing HTTP session...")
-                await self.session.close()
-                self.session = None
-        elif self.session:
-            # Just close the session if Wav2Lip was not available
-            print("🛑 Closing HTTP session...")
-            await self.session.close()
-            self.session = None
-        
         print("✅ Wav2Lip Avatar disconnected completely")
+
+    async def stop_stream(self):
+        """
+        Stop the current lip-sync stream and return to idle state.
+        This method can be called to stop the current processing.
+        """
+        if self.websocket and self.is_connected and self.is_streaming:
+            try:
+                print("🛑 Stopping Wav2Lip stream...")
+                # Send a stop message to the WebSocket server
+                stop_message = {"action": "stop"}
+                await self.websocket.send(json.dumps(stop_message))
+                print("✅ Stop message sent to Wav2Lip WebSocket")
+                self.is_streaming = False
+            except Exception as e:
+                print(f"⚠️ Failed to send stop message: {e}")
+        else:
+            print("ℹ️ No active stream to stop")
 
     async def send_audio(self, audio_data: bytes):
         """
@@ -316,103 +352,103 @@ class Wav2LipAvatar:
 
     async def send_text(self, text: str):
         """
-        Send text to the avatar for processing.
+        Send text to the avatar for processing via WebSocket.
         This method is called by the VideoSDK pipeline when text is generated.
         
         Args:
             text: Text to be processed
         """
-        print(f"Wav2Lip Avatar received text: {text}")
+        print(f"🎬 Wav2Lip Avatar received text: {text[:100]}{'...' if len(text) > 100 else ''}")
         
-        # Check if Wav2Lip is available
-        if not self.wav2lip_available:
-            print("⚠️ Wav2Lip server not available, skipping text processing")
+        # Check if Wav2Lip is available and connected
+        if not self.wav2lip_available or not self.is_connected:
+            print("⚠️ Wav2Lip server not available or not connected, skipping text processing")
             return
         
-        # Send text to Wav2Lip API for processing
-        if self.session:
+        # Skip empty or very short text
+        if not text or len(text.strip()) < 3:
+            print("⚠️ Text too short, skipping Wav2Lip processing")
+            return
+        
+        # Send text to Wav2Lip WebSocket for processing
+        if self.websocket and self.is_connected:
             try:
-                # Send text to the Wav2Lip API using the /lip-sync endpoint
-                url = f"{self.wav2lip_url}/lip-sync"
-                form_data = aiohttp.FormData()
-                form_data.add_field("text", text)
-                form_data.add_field("lang", "en")
+                # Send text data via WebSocket
+                message = {
+                    "text_data": text.strip()
+                }
                 
-                print(f"📝 Sending text to Wav2Lip for processing: {text[:50]}...")
+                print(f"📝 Sending text to Wav2Lip WebSocket: {text[:50]}...")
                 
-                async with self.session.post(url, data=form_data) as response:
-                    if response.status == 200:
-                        print(f"✅ Text sent to Wav2Lip successfully")
-                        # The Wav2Lip API will process the text and generate lip-sync video
-                        # The video frames will be available through the stream
-                    else:
-                        error = await response.text()
-                        print(f"❌ Wav2Lip API error: {response.status} {error}")
+                await self.websocket.send(json.dumps(message))
+                print(f"✅ Text sent to Wav2Lip WebSocket successfully")
+                
+                # Set streaming flag to indicate we're processing
+                self.is_streaming = True
                 
             except Exception as e:
-                print(f"❌ Failed to send text to Wav2Lip: {e}")
+                print(f"❌ Failed to send text to Wav2Lip WebSocket: {e}")
+                import traceback
+                print(f"❌ Traceback: {traceback.format_exc()}")
         else:
-            print("⚠️ Wav2Lip session not available, cannot send text")
+            print("⚠️ Wav2Lip WebSocket not available, cannot send text")
 
-    async def _stream_reader(self):
+    async def _websocket_message_handler(self):
         """
-        Read video frames from the Wav2Lip stream and send them to VideoSDK.
+        Handle incoming messages from the Wav2Lip WebSocket.
         This runs in the background and processes incoming video frames.
         """
         try:
-            print("🎬 Wav2Lip stream reader started")
-            buffer = ""
-            frame_count = 0
+            print("🎬 Starting Wav2Lip WebSocket message handler...")
             
-            # Read the stream in chunks to avoid "Chunk too big" errors
-            async for chunk in self.stream_response.content.iter_chunked(1024):  # 1KB chunks
+            # Listen for messages from the WebSocket
+            async for message in self.websocket:
                 try:
-                    # Decode the chunk and add to buffer
-                    chunk_str = chunk.decode('utf-8', errors='ignore')
-                    buffer += chunk_str
+                    # Parse the JSON message
+                    data = json.loads(message)
                     
-                    # Process complete lines
-                    while '\n' in buffer:
-                        line, buffer = buffer.split('\n', 1)
-                        line = line.strip()
+                    # Check if this is a video frame
+                    if 'frame' in data:
+                        frame_data = data['frame']
+                        frame_type = data.get('type', 'unknown')
                         
-                        if line.startswith("data:"):
-                            try:
-                                # Extract JSON data after "data:"
-                                json_data = line[5:].strip()
-                                if json_data:
-                                    payload = json.loads(json_data)
-                                    
-                                    if "error" in payload:
-                                        print(f"❌ Wav2Lip error: {payload['error']}")
-                                        continue
-
-                                    if "meta" in payload:
-                                        # Video meta info (fps, width, height)
-                                        print(f"📊 Wav2Lip meta: {payload['meta']}")
-                                        
-                                    elif "frame" in payload:
-                                        # Base64 encoded video frame
-                                        frame_data = payload["frame"]
-                                        frame_count += 1
-                                        print(f"🎬 Wav2Lip frame #{frame_count} received: {len(frame_data)} bytes")
-                                        
-                                        # Send frame to VideoSDK
-                                        await self._send_frame_to_videosdk(frame_data)
-                                        
-                            except json.JSONDecodeError as e:
-                                print(f"❌ Wav2Lip JSON parsing error: {e}")
-                                print(f"❌ Problematic data: {line[:100]}...")
-                            except Exception as e:
-                                print(f"❌ Wav2Lip frame processing error: {e}")
+                        if frame_type == 'lip_sync':
+                            print(f"🎬 Received lip-sync frame from Wav2Lip WebSocket")
+                            # Add the frame to the video track
+                            await self.video_track.add_frame(frame_data)
+                        elif frame_type == 'idle':
+                            # print(f"😴 Received idle frame from Wav2Lip WebSocket")  # Commented out to reduce log noise
+                            # Add the frame to the video track
+                            await self.video_track.add_frame(frame_data)
                         
-                except Exception as e:
-                    print(f"❌ Wav2Lip chunk processing error: {e}")
+                    elif 'error' in data:
+                        error_msg = data['error']
+                        print(f"❌ Wav2Lip WebSocket error: {error_msg}")
+                        
+                    elif 'status' in data:
+                        status = data['status']
+                        print(f"ℹ️ Wav2Lip WebSocket status: {status}")
+                        
+                except json.JSONDecodeError as e:
+                    print(f"⚠️ Failed to parse JSON from WebSocket: {e}")
+                    print(f"⚠️ Raw message: {message}")
                     continue
-                        
+                except Exception as e:
+                    print(f"⚠️ Error processing WebSocket message: {e}")
+                    continue
+                    
+        except asyncio.CancelledError:
+            print("🛑 Wav2Lip WebSocket message handler cancelled")
+            raise
+        except websockets.exceptions.ConnectionClosed:
+            print("🔌 Wav2Lip WebSocket connection closed")
         except Exception as e:
-            print(f"❌ Wav2Lip stream reader error: {e}")
-            print(f"❌ Stream reader stopping due to error")
+            print(f"❌ Wav2Lip WebSocket message handler error: {e}")
+            import traceback
+            print(f"❌ Traceback: {traceback.format_exc()}")
+        finally:
+            print("🏁 Wav2Lip WebSocket message handler finished")
+            self.is_streaming = False
 
     async def _send_frame_to_videosdk(self, frame_data: str):
         """

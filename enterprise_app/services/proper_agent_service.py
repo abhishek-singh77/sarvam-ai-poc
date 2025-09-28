@@ -9,6 +9,8 @@ import json
 import time
 import os
 import threading
+import traceback
+import re
 from typing import Dict, Any, List, Optional
 from utils.config.settings import get_settings
 from utils.logging.logger import get_logger
@@ -22,6 +24,8 @@ from videosdk.plugins.silero import SileroVAD
 from videosdk.plugins.turn_detector import TurnDetector, pre_download_model
 from videosdk.plugins.rnnoise import RNNoise
 from plugins.wav2lip import Wav2LipAvatar
+from plugins.wav2lip.true_sync_avatar import TrueSyncWav2LipAvatar
+from services.avatar_agent_service import avatar_agent_service
 
 logger = get_logger(__name__)
 
@@ -122,15 +126,20 @@ class ProperAgentService:
         # Thread lock to prevent race conditions
         self._agent_start_lock = threading.Lock()
         
-        # Initialize Wav2Lip avatar if enabled
+        # Initialize Wav2Lip avatar based on configuration
         self.wav2lip_avatar = None
         if self.settings.wav2lip_enabled:
-            try:
-                self.wav2lip_avatar = Wav2LipAvatar(wav2lip_url=self.settings.wav2lip_url)
-                logger.info("✅ Wav2Lip avatar initialized successfully")
-            except Exception as e:
-                logger.warning(f"Failed to initialize Wav2Lip avatar: {e}")
-                self.wav2lip_avatar = None
+            if self.settings.avatar_implementation.lower() == "true_sync":
+                # For true sync, we'll create a separate avatar participant
+                # But we still need a basic avatar for the main agent pipeline
+                logger.info("🎬 True Sync avatar will be created as separate participant")
+                # Use basic Wav2Lip avatar for the main agent pipeline
+                self.wav2lip_avatar = self._initialize_avatar_by_config()
+                if self.wav2lip_avatar:
+                    logger.info("🎬 Basic Wav2Lip avatar initialized for main agent pipeline")
+            else:
+                # For basic wav2lip, use the avatar parameter in pipeline
+                self.wav2lip_avatar = self._initialize_avatar_by_config()
         
         # Pre-download the Turn Detector model
         try:
@@ -241,7 +250,6 @@ class ProperAgentService:
                 
             except Exception as e:
                 logger.error(f"❌ Failed to start proper agent for room: {e}")
-                import traceback
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 
                 return {
@@ -264,6 +272,62 @@ class ProperAgentService:
         
         return JobContext(room_options=room_options)
     
+    def _initialize_avatar_by_config(self):
+        """
+        Initialize basic Wav2Lip avatar for the main agent pipeline.
+        Note: True Sync functionality is handled separately via avatar participant service.
+        
+        Returns:
+            Basic Wav2Lip avatar instance or None if initialization fails
+        """
+        try:
+            logger.info("🎬 Initializing basic Wav2Lip avatar for main agent pipeline...")
+            avatar = Wav2LipAvatar(wav2lip_url=self.settings.wav2lip_url)
+            logger.info("✅ Basic Wav2Lip avatar initialized successfully")
+            return avatar
+                
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize basic Wav2Lip avatar: {e}")
+            return None
+    
+    # Removed old TTS wrapper - now using proper avatar agent approach
+    
+    # Removed redundant methods - now using proper avatar_agent_service
+    
+    async def _create_avatar_agent_for_room(self, room_id: str, agent_token: str) -> bool:
+        """
+        Create avatar agent as separate participant for the room.
+        
+        Args:
+            room_id: VideoSDK room ID
+            agent_token: Authentication token
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            logger.info(f"🎬 Creating avatar agent for room {room_id}")
+            
+            # Create avatar agent as separate participant
+            success = await avatar_agent_service.create_avatar_agent(
+                room_id=room_id,
+                meeting_id=room_id,  # Using room_id as meeting_id
+                token=agent_token
+            )
+            
+            if success:
+                logger.info(f"✅ Avatar agent created for room {room_id}")
+                return True
+            else:
+                logger.error(f"❌ Failed to create avatar agent for room {room_id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Error creating avatar agent for room {room_id}: {e}")
+            return False
+    
+    # Removed old separate avatar participant method - now using proper avatar agent
+    
     def _setup_conversation_logging(self, session: AgentSession, room_id: str):
         """Set up conversation logging for the agent session"""
         try:
@@ -274,6 +338,15 @@ class ProperAgentService:
                 turn_id = conversation_logger.start_conversation_turn(room_id)
                 conversation_logger.log_tts_input(room_id, message, **kwargs)
                 logger.info(f"🔊 AGENT SAYING: '{message[:100]}{'...' if len(message) > 100 else ''}'")
+                
+                # For True Sync mode, send text to Avatar Agent (which will generate its own TTS)
+                if self.settings.avatar_implementation.lower() == "true_sync":
+                    try:
+                        # Send text to Avatar Agent - it will generate its own TTS audio
+                        await self._send_text_to_avatar(message, room_id)
+                    except Exception as e:
+                        logger.error(f"❌ Failed to send text to Avatar Agent: {e}")
+                
                 return await original_say(message, **kwargs)
             
             session.say = logged_say
@@ -340,6 +413,11 @@ class ProperAgentService:
                 # Only speak if there's meaningful content after filtering
                 if filtered_message.strip() and len(filtered_message.strip()) > 3:
                     logger.info(f"🔊 FILTERED AGENT SAYING: '{filtered_message[:100]}{'...' if len(filtered_message) > 100 else ''}'")
+                    
+                    # Send text to avatar for lip-sync generation
+                    if self.wav2lip_avatar or self.settings.avatar_implementation.lower() == "true_sync":
+                        await self._send_text_to_avatar(filtered_message, room_id)
+                    
                     try:
                         return await original_say(filtered_message, **kwargs)
                     except Exception as e:
@@ -363,9 +441,69 @@ class ProperAgentService:
         except Exception as e:
             logger.error(f"❌ RESPONSE FILTERING: Failed to set up for room {room_id}: {e}")
     
+    async def _send_text_to_avatar(self, text: str, room_id: str = None) -> None:
+        """
+        Send text to avatar based on implementation type.
+        
+        Args:
+            text: Text to send to avatar
+            room_id: Room ID for separate avatar participant
+        """
+        try:
+            logger.info(f"🎬🎬🎬 _send_text_to_avatar called with text: '{text[:50]}...'")
+            logger.info(f"🎬🎬🎬 Room ID: {room_id}")
+            logger.info(f"🎬🎬🎬 Avatar implementation: {self.settings.avatar_implementation}")
+            
+            # Check if using true sync (separate avatar agent)
+            if self.settings.avatar_implementation.lower() == "true_sync" and room_id:
+                logger.info(f"🎬🎬🎬 Using True Sync mode, sending to avatar agent")
+                # Send to avatar agent - separate participant with custom audio/video tracks
+                try:
+                    # Send text to avatar agent
+                    success = await avatar_agent_service.send_text_to_avatar_agent(
+                        room_id=room_id,
+                        text=text
+                    )
+                    if success:
+                        logger.info(f"🎬🎬🎬 ✅ Text sent to avatar agent: '{text[:50]}...'")
+                    else:
+                        logger.error(f"🎬🎬🎬 ❌ Failed to send text to avatar agent: '{text[:50]}...'")
+                except Exception as e:
+                    logger.error(f"🎬🎬🎬 ❌ Error sending text to avatar agent: {e}")
+                
+                return
+            
+            # Handle avatar parameter approach (basic wav2lip)
+            if not self.wav2lip_avatar:
+                return
+            
+            # Check avatar type and send accordingly
+            if hasattr(self.wav2lip_avatar, 'send_text_with_audio_sync'):
+                # True Sync avatar - use advanced method with audio sync
+                tts_timestamp = time.time()
+                await self.wav2lip_avatar.send_text_with_audio_sync(text, audio_timestamp=tts_timestamp)
+                logger.info(f"🎬 Text with audio sync sent to True Sync avatar: '{text[:50]}...'")
+                
+            elif hasattr(self.wav2lip_avatar, 'send_text_with_tts_sync'):
+                # TTS Sync avatar - use TTS sync method
+                tts_timestamp = time.time()
+                await self.wav2lip_avatar.send_text_with_tts_sync(text, tts_timestamp)
+                logger.info(f"🎬 Text with TTS sync sent to TTS Sync avatar: '{text[:50]}...'")
+                
+            elif hasattr(self.wav2lip_avatar, 'send_text'):
+                # Basic Wav2Lip avatar - use original method
+                await self.wav2lip_avatar.send_text(text)
+                logger.info(f"🎬 Text sent to basic Wav2Lip avatar: '{text[:50]}...'")
+                
+            else:
+                logger.warning("⚠️ Unknown avatar type, cannot send text")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to send text to avatar: {e}")
+    
+    
     def _filter_function_calls(self, message: str) -> str:
         """Filter out function calls and technical details from the message"""
-        import re
         
         # If message is too short or mostly punctuation, return original
         if len(message.strip()) < 10 or len(re.sub(r'[^\w\s]', '', message)) < 5:
@@ -472,11 +610,16 @@ class ProperAgentService:
                     model="bulbul:v2",
                     speaker="anushka",
                     target_language_code="en-IN",
-                    pitch=0.0,
-                    pace=1.2,  # Slightly faster pace for quicker responses
-                    loudness=1.2
+                    pitch=self.settings.tts_pitch,
+                    pace=self.settings.tts_pace,  # Configurable pace for speech speed
+                    loudness=self.settings.tts_loudness  # Configurable loudness
                 )
-                logger.info("✅ Sarvam AI TTS initialized successfully")
+                logger.info(f"✅ Sarvam AI TTS initialized successfully (pace: {self.settings.tts_pace}, pitch: {self.settings.tts_pitch}, loudness: {self.settings.tts_loudness})")
+                
+                # For True Sync, we need to disable the main agent's TTS audio
+                # because the avatar participant will handle TTS internally
+                if self.settings.avatar_implementation.lower() == "true_sync":
+                    logger.info("🎬 True Sync mode: Main agent TTS audio will be disabled, avatar participant will handle TTS")
             except Exception as e:
                 logger.error(f"❌ Failed to initialize TTS: {e}")
                 raise
@@ -506,16 +649,34 @@ class ProperAgentService:
                 avatar = self.wav2lip_avatar
                 logger.info("🎯 Wav2Lip avatar will be used in pipeline")
             
+            # For True Sync, create a separate avatar agent participant
+            if self.settings.avatar_implementation.lower() == "true_sync":
+                # Create avatar agent as separate participant
+                agent_token = context.room_options.auth_token
+                avatar_created = await self._create_avatar_agent_for_room(room_id, agent_token)
+                if avatar_created:
+                    logger.info("🎬 Avatar agent created as separate participant")
+                    # Disable main agent's TTS since Avatar Agent provides both audio and video
+                    pipeline_tts = None
+                else:
+                    logger.warning("⚠️ Failed to create avatar agent, falling back to regular TTS")
+                    pipeline_tts = tts
+            else:
+                pipeline_tts = tts
+            
             # Create the custom cascading pipeline with all components
             pipeline = CustomCascadingPipeline(
                 stt=stt,
-                tts=tts,
+                tts=pipeline_tts,  # Disabled for True Sync - avatar provides audio
                 llm=llm,
                 vad=vad,
                 turn_detector=turn_detector,
                 denoise=denoise,
                 avatar=avatar
             )
+            
+            if self.settings.avatar_implementation.lower() == "true_sync":
+                logger.info("🎬 True Sync mode: TTS audio will be routed through avatar for synchronization")
             
             # Create conversation flow for better conversation management
             conversation_flow = ConversationFlow(agent)
@@ -572,6 +733,8 @@ class ProperAgentService:
             
             logger.info("🎯 KYC Agent session started successfully")
             
+            # Avatar agent is now created during pipeline initialization for True Sync
+            
             # Wav2Lip video track is now handled through the pipeline avatar integration
             # No manual publishing needed - VideoSDK handles it automatically
             
@@ -580,6 +743,11 @@ class ProperAgentService:
                 greeting = "Hello! I am your KYC Virtual Assistant. I'm here to help you complete your identity verification process. Let's get started with a friendly conversation!"
                 await session.say(greeting)
                 logger.info("🎯 Initial greeting sent")
+                
+                # Also send greeting text to avatar for lip-sync
+                if self.wav2lip_avatar or self.settings.avatar_implementation.lower() == "true_sync":
+                    await self._send_text_to_avatar(greeting, room_id)
+                        
             except Exception as e:
                 logger.warning(f"Could not send initial greeting: {e}")
                 # Try a simpler greeting as fallback
@@ -587,6 +755,11 @@ class ProperAgentService:
                     simple_greeting = "Hello! I'm your KYC assistant. How can I help you today?"
                     await session.say(simple_greeting)
                     logger.info("🎯 Simple greeting sent as fallback")
+                    
+                    # Also send simple greeting to avatar
+                    if self.wav2lip_avatar or self.settings.avatar_implementation.lower() == "true_sync":
+                        await self._send_text_to_avatar(simple_greeting, room_id)
+                            
                 except Exception as e2:
                     logger.warning(f"Could not send simple greeting either: {e2}")
                     # Continue anyway - the agent is still functional
@@ -600,7 +773,6 @@ class ProperAgentService:
             
         except Exception as e:
             logger.error(f"❌ Agent session failed: {e}")
-            import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
         finally:
             # Clean up resources when done
@@ -629,6 +801,19 @@ class ProperAgentService:
             logger.info(f"🛑 Agent sessions: {list(self.agent_sessions.keys())}")
             logger.info(f"🛑 Agent jobs: {list(self.agent_jobs.keys())}")
             
+            # Find the actual VideoSDK room ID from the session ID
+            # The room_id parameter might be a session_id (customRoomId), we need to find the actual room_id
+            actual_room_id = room_id
+            for session_id, session_data in self.agent_sessions.items():
+                # session_data is an AgentSession object, not a dict
+                if session_id == room_id:
+                    # For AgentSession objects, we need to get the room_id differently
+                    # The room_id should be the same as session_id for our use case
+                    actual_room_id = session_id
+                    break
+            
+            logger.info(f"🛑 Using actual room ID: {actual_room_id} for session: {room_id}")
+            
             # Always try to stop Wav2Lip avatar if enabled, regardless of agent tracking
             if self.wav2lip_avatar:
                 try:
@@ -636,6 +821,22 @@ class ProperAgentService:
                     logger.info(f"✅ Wav2Lip avatar disconnected for room {room_id}")
                 except Exception as e:
                     logger.warning(f"⚠️ Failed to disconnect Wav2Lip avatar for room {room_id}: {e}")
+            
+                # Remove avatar agent if using true sync
+                if self.settings.avatar_implementation.lower() == "true_sync":
+                    logger.info(f"🛑 True Sync detected, removing avatar agent for room {actual_room_id}")
+                    try:
+                        success = await avatar_agent_service.remove_avatar_agent(actual_room_id)
+                        if success:
+                            logger.info(f"✅ Avatar agent removed for room {actual_room_id}")
+                        else:
+                            logger.warning(f"⚠️ Failed to remove avatar agent for room {actual_room_id}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to remove avatar agent for room {actual_room_id}: {e}")
+                        import traceback
+                        logger.warning(f"⚠️ Traceback: {traceback.format_exc()}")
+                else:
+                    logger.info(f"ℹ️ Not using True Sync (using {self.settings.avatar_implementation}), skipping avatar agent removal")
             
             # Stop the agent session if it exists
             if room_id in self.agent_sessions:
