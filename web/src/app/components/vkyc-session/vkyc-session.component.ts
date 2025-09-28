@@ -61,6 +61,7 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     hasMedia: boolean = false
     mediaError: string | null = null
     isLoading: boolean = false
+    isAgentConnecting: boolean = false
 
     // Video streams
     hasAgentVideo: boolean = false
@@ -144,6 +145,28 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                 console.log('🎯 VKYC-SESSION: Status updated:', status)
                 this.status = status
                 this.isLoading = this.isStatusLoading(status)
+
+                // Handle agent connecting state
+                if (
+                    status === 'Joining agent...' ||
+                    status === 'joining agent'
+                ) {
+                    this.isAgentConnecting = true
+                } else if (
+                    status === 'Agent joined' ||
+                    status === 'agent joined'
+                ) {
+                    // Minimal delay to allow agent to connect
+                    setTimeout(() => {
+                        this.isAgentConnecting = false
+                        this.cdRef.detectChanges()
+                    }, 1000)
+                } else if (
+                    status.includes('Error') ||
+                    status.includes('error')
+                ) {
+                    this.isAgentConnecting = false
+                }
             })
         )
 

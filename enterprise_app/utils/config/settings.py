@@ -77,6 +77,12 @@ class Settings(BaseSettings):
     # Wav2Lip Plugin Configuration
     wav2lip_enabled: bool = Field(default=True, alias="WAV2LIP_ENABLED")
     wav2lip_url: str = Field(default="http://35.207.229.235:8001", alias="WAV2LIP_URL")
+    wav2lip_websocket_url: str = Field(default="ws://35.207.229.235:8001/ws", alias="WAV2LIP_WEBSOCKET_URL")
+    
+    # TTS Configuration for Avatar
+    tts_pace: float = Field(default=0.9, alias="TTS_PACE")
+    tts_pitch: float = Field(default=0.0, alias="TTS_PITCH")
+    tts_loudness: float = Field(default=1.2, alias="TTS_LOUDNESS")
     
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -169,7 +175,17 @@ class Settings(BaseSettings):
         """Get Wav2Lip plugin configuration."""
         return {
             "enabled": self.wav2lip_enabled,
-            "url": self.wav2lip_url
+            "url": self.wav2lip_url,
+            "websocket_url": self.wav2lip_websocket_url
+        }
+    
+    @property
+    def tts_config(self) -> Dict[str, Any]:
+        """Get TTS configuration for avatar."""
+        return {
+            "pace": self.tts_pace,
+            "pitch": self.tts_pitch,
+            "loudness": self.tts_loudness
         }
     
     def get_masked_config(self) -> Dict[str, Any]:

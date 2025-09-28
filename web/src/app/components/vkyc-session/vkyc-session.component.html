@@ -23,6 +23,28 @@
         </div>
     </div>
 
+    <!-- Agent Connecting Popup -->
+    <div
+        *ngIf="isAgentConnecting"
+        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-8 max-w-md w-full mx-4 text-center">
+            <div
+                class="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <h3 class="text-xl font-semibold text-gray-800 mb-2">
+                Connecting Agent
+            </h3>
+            <p class="text-gray-600 mb-4">
+                Please wait while we connect the AI agent to your session...
+            </p>
+            <div
+                class="flex items-center justify-center space-x-2 text-sm text-gray-500">
+                <div class="animate-pulse">●</div>
+                <div class="animate-pulse" style="animation-delay: 0.2s">●</div>
+                <div class="animate-pulse" style="animation-delay: 0.4s">●</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Content Area -->
     <div
         class="flex-1 flex flex-col lg:flex-row overflow-hidden mobile-stack desktop-layout">

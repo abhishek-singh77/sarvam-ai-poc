@@ -22,6 +22,8 @@ from videosdk.plugins.silero import SileroVAD
 from videosdk.plugins.turn_detector import TurnDetector, pre_download_model
 from videosdk.plugins.rnnoise import RNNoise
 from plugins.wav2lip import Wav2LipAvatar
+from plugins.wav2lip.websocket_avatar import WebSocketWav2LipAvatar
+from plugins.wav2lip.low_latency_avatar import LowLatencyWav2LipAvatar
 
 logger = get_logger(__name__)
 
@@ -126,11 +128,28 @@ class ProperAgentService:
         self.wav2lip_avatar = None
         if self.settings.wav2lip_enabled:
             try:
-                self.wav2lip_avatar = Wav2LipAvatar(wav2lip_url=self.settings.wav2lip_url)
-                logger.info("✅ Wav2Lip avatar initialized successfully")
+                # Use low-latency WebSocket-based avatar for minimal delay
+                self.wav2lip_avatar = LowLatencyWav2LipAvatar(
+                    wav2lip_websocket_url=self.settings.wav2lip_websocket_url
+                )
+                logger.info("✅ Low-Latency WebSocket Wav2Lip avatar initialized successfully")
             except Exception as e:
-                logger.warning(f"Failed to initialize Wav2Lip avatar: {e}")
-                self.wav2lip_avatar = None
+                logger.warning(f"Failed to initialize Low-Latency WebSocket Wav2Lip avatar: {e}")
+                # Fallback to regular WebSocket avatar
+                try:
+                    self.wav2lip_avatar = WebSocketWav2LipAvatar(
+                        wav2lip_websocket_url=self.settings.wav2lip_websocket_url
+                    )
+                    logger.info("✅ Fallback WebSocket Wav2Lip avatar initialized successfully")
+                except Exception as e2:
+                    logger.warning(f"Failed to initialize fallback WebSocket Wav2Lip avatar: {e2}")
+                    # Final fallback to HTTP-based avatar
+                    try:
+                        self.wav2lip_avatar = Wav2LipAvatar(wav2lip_url=self.settings.wav2lip_url)
+                        logger.info("✅ Final fallback HTTP Wav2Lip avatar initialized successfully")
+                    except Exception as e3:
+                        logger.warning(f"Failed to initialize final fallback Wav2Lip avatar: {e3}")
+                        self.wav2lip_avatar = None
         
         # Pre-download the Turn Detector model
         try:
@@ -264,28 +283,6 @@ class ProperAgentService:
         
         return JobContext(room_options=room_options)
     
-    def _setup_conversation_logging(self, session: AgentSession, room_id: str):
-        """Set up conversation logging for the agent session"""
-        try:
-            # Override the session's say method to log TTS input
-            original_say = session.say
-            
-            async def logged_say(message: str, **kwargs):
-                turn_id = conversation_logger.start_conversation_turn(room_id)
-                conversation_logger.log_tts_input(room_id, message, **kwargs)
-                logger.info(f"🔊 AGENT SAYING: '{message[:100]}{'...' if len(message) > 100 else ''}'")
-                return await original_say(message, **kwargs)
-            
-            session.say = logged_say
-            
-            # Set up pipeline logging if possible
-            if hasattr(session, 'pipeline') and session.pipeline:
-                self._setup_pipeline_logging(session.pipeline, room_id)
-            
-            logger.info(f"✅ CONVERSATION LOGGING: Set up for room {room_id}")
-            
-        except Exception as e:
-            logger.error(f"❌ CONVERSATION LOGGING: Failed to set up for room {room_id}: {e}")
     
     def _setup_pipeline_logging(self, pipeline, room_id: str):
         """Set up logging for pipeline components"""
@@ -327,19 +324,47 @@ class ProperAgentService:
         except Exception as e:
             logger.error(f"❌ PIPELINE LOGGING: Failed to set up for room {room_id}: {e}")
     
-    def _setup_response_filtering(self, session: AgentSession, room_id: str):
-        """Set up response filtering to prevent function calls from being spoken"""
+    def _setup_comprehensive_say_handler(self, session: AgentSession, room_id: str):
+        """Set up comprehensive say handler with logging, filtering, and Wav2Lip forwarding"""
         try:
-            # Override the session's say method to filter out function calls
+            # Get the original say method
             original_say = session.say
             
-            async def filtered_say(message: str, **kwargs):
-                # Filter out function calls and technical details
-                filtered_message = self._filter_function_calls(message)
+            async def comprehensive_say(message: str, **kwargs):
+                logger.info(f"🎤 AGENT SAY METHOD CALLED: '{message[:100]}{'...' if len(message) > 100 else ''}'")
                 
-                # Only speak if there's meaningful content after filtering
+                # 1. Log the conversation
+                turn_id = conversation_logger.start_conversation_turn(room_id)
+                conversation_logger.log_tts_input(room_id, message, **kwargs)
+                
+                # 2. Filter out function calls and technical details
+                filtered_message = self._filter_function_calls(message)
+                logger.info(f"🔍 FILTERED MESSAGE: '{filtered_message[:100]}{'...' if len(filtered_message) > 100 else ''}'")
+                
+                # 3. Forward text to Wav2Lip avatar for lip-sync generation (ALWAYS try to forward)
+                if self.wav2lip_avatar:
+                    try:
+                        # Try to forward filtered message first
+                        if filtered_message.strip() and len(filtered_message.strip()) > 3:
+                            logger.info(f"🎬 Forwarding filtered text to Wav2Lip avatar: {filtered_message[:50]}...")
+                            await self.wav2lip_avatar.send_text(filtered_message)
+                            logger.info(f"✅ Filtered text successfully forwarded to Wav2Lip avatar")
+                        else:
+                            # If filtered message is too short, try original message
+                            logger.info(f"🎬 Filtered message too short, forwarding original to Wav2Lip avatar: {message[:50]}...")
+                            await self.wav2lip_avatar.send_text(message)
+                            logger.info(f"✅ Original text successfully forwarded to Wav2Lip avatar")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to forward text to Wav2Lip avatar: {e}")
+                        import traceback
+                        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+                else:
+                    logger.warning("⚠️ Wav2Lip avatar is None, cannot forward text")
+                
+                # 4. Only speak if there's meaningful content after filtering
                 if filtered_message.strip() and len(filtered_message.strip()) > 3:
                     logger.info(f"🔊 FILTERED AGENT SAYING: '{filtered_message[:100]}{'...' if len(filtered_message) > 100 else ''}'")
+                    
                     try:
                         return await original_say(filtered_message, **kwargs)
                     except Exception as e:
@@ -355,13 +380,17 @@ class ProperAgentService:
                         return None
                 else:
                     logger.info("🔇 FILTERED OUT: No meaningful content to speak after filtering")
+                    logger.info(f"   Original message length: {len(message.strip())}")
+                    logger.info(f"   Filtered message length: {len(filtered_message.strip())}")
                     return None
             
-            session.say = filtered_say
-            logger.info(f"✅ RESPONSE FILTERING: Set up for room {room_id}")
+            # Override the session's say method with our comprehensive handler
+            session.say = comprehensive_say
+            logger.info(f"✅ COMPREHENSIVE SAY HANDLER: Set up for room {room_id}")
             
         except Exception as e:
-            logger.error(f"❌ RESPONSE FILTERING: Failed to set up for room {room_id}: {e}")
+            logger.error(f"❌ COMPREHENSIVE SAY HANDLER: Failed to set up for room {room_id}: {e}")
+
     
     def _filter_function_calls(self, message: str) -> str:
         """Filter out function calls and technical details from the message"""
@@ -472,9 +501,9 @@ class ProperAgentService:
                     model="bulbul:v2",
                     speaker="anushka",
                     target_language_code="en-IN",
-                    pitch=0.0,
-                    pace=1.2,  # Slightly faster pace for quicker responses
-                    loudness=1.2
+                    pitch=self.settings.tts_pitch,
+                    pace=1.5,  # Much faster pace for lower latency
+                    loudness=self.settings.tts_loudness
                 )
                 logger.info("✅ Sarvam AI TTS initialized successfully")
             except Exception as e:
@@ -485,19 +514,19 @@ class ProperAgentService:
                 llm = GoogleLLM(
                     api_key=self.settings.google_api_key,
                     model="gemini-2.0-flash-001",
-                    temperature=0.3,  # Lower temperature for more consistent responses
+                    temperature=0.1,  # Very low temperature for fastest responses
                     tool_choice="auto",
-                    max_output_tokens=500  # Reduced for faster responses
+                    max_output_tokens=200  # Much reduced for faster responses
                 )
                 logger.info("✅ LLM initialized successfully")
             except Exception as e:
                 logger.error(f"❌ Failed to initialize LLM: {e}")
                 raise
             
-            # Initialize VAD, Turn Detector, and Denoise with optimized settings for interruption handling
-            # Lower thresholds for more sensitive voice detection and faster interruption handling
-            vad = SileroVAD(threshold=0.1)  # Very low threshold for immediate voice detection
-            turn_detector = TurnDetector(threshold=0.3)  # Lower threshold for faster turn detection
+            # Initialize VAD, Turn Detector, and Denoise with ultra-low latency settings
+            # Very aggressive thresholds for immediate voice detection and fastest response
+            vad = SileroVAD(threshold=0.05)  # Ultra-low threshold for immediate voice detection
+            turn_detector = TurnDetector(threshold=0.2)  # Very low threshold for fastest turn detection
             denoise = RNNoise()
             
             # Initialize Wav2Lip avatar if enabled
@@ -527,11 +556,8 @@ class ProperAgentService:
                 conversation_flow=conversation_flow
             )
             
-            # Set up conversation logging
-            self._setup_conversation_logging(session, room_id)
-            
-            # Set up response filtering to prevent function calls from being spoken
-            self._setup_response_filtering(session, room_id)
+            # Set up comprehensive logging, filtering, and Wav2Lip forwarding
+            self._setup_comprehensive_say_handler(session, room_id)
             
             # Store the session for cleanup
             self.agent_sessions[room_id] = session
@@ -580,6 +606,21 @@ class ProperAgentService:
                 greeting = "Hello! I am your KYC Virtual Assistant. I'm here to help you complete your identity verification process. Let's get started with a friendly conversation!"
                 await session.say(greeting)
                 logger.info("🎯 Initial greeting sent")
+                
+                # Also forward greeting to Wav2Lip avatar for lip-sync (no delays for lowest latency)
+                if self.wav2lip_avatar:
+                    try:
+                        # No delays - send immediately for lowest latency
+                        await self.wav2lip_avatar.send_text(greeting)
+                        logger.info("🎬 Initial greeting forwarded to Wav2Lip avatar")
+                        
+                        # Send a second message immediately to ensure lip-sync generation
+                        await self.wav2lip_avatar.send_text("Let's begin the verification process.")
+                        logger.info("🎬 Second greeting forwarded to Wav2Lip avatar")
+                        
+                    except Exception as e:
+                        logger.error(f"❌ Failed to forward initial greeting to Wav2Lip avatar: {e}")
+                        
             except Exception as e:
                 logger.warning(f"Could not send initial greeting: {e}")
                 # Try a simpler greeting as fallback
@@ -587,6 +628,21 @@ class ProperAgentService:
                     simple_greeting = "Hello! I'm your KYC assistant. How can I help you today?"
                     await session.say(simple_greeting)
                     logger.info("🎯 Simple greeting sent as fallback")
+                    
+                    # Also forward simple greeting to Wav2Lip avatar (no delays for lowest latency)
+                    if self.wav2lip_avatar:
+                        try:
+                            # No delays - send immediately for lowest latency
+                            await self.wav2lip_avatar.send_text(simple_greeting)
+                            logger.info("🎬 Simple greeting forwarded to Wav2Lip avatar")
+                            
+                            # Send a second message immediately to ensure lip-sync generation
+                            await self.wav2lip_avatar.send_text("How can I assist you today?")
+                            logger.info("🎬 Second simple greeting forwarded to Wav2Lip avatar")
+                            
+                        except Exception as e:
+                            logger.error(f"❌ Failed to forward simple greeting to Wav2Lip avatar: {e}")
+                            
                 except Exception as e2:
                     logger.warning(f"Could not send simple greeting either: {e2}")
                     # Continue anyway - the agent is still functional

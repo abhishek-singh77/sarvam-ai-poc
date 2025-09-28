@@ -198,6 +198,10 @@ export class EnterpriseRoomService {
 
                 // Load workflow after agent joins
                 await this.loadWorkflow(session.session_id)
+
+                // Minimal delay to allow the agent to connect and start streaming
+                await new Promise((resolve) => setTimeout(resolve, 500))
+
                 return { success: true }
             } else {
                 throw new Error(agentResponse?.error || 'Agent join failed')
