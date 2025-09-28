@@ -131,7 +131,7 @@ class WebSocketWav2LipVideoTrack(CustomVideoTrack):
             
             frame_array = self.current_frame['frame']
             
-            # Create AV VideoFrame with RGB format
+            # Create AV VideoFrame with RGB format (VP8 can handle RGB24)
             frame = av.VideoFrame.from_ndarray(frame_array, format='rgb24')
             frame.pts = int(current_time * 90000)  # 90kHz timestamp
             from fractions import Fraction
@@ -300,7 +300,11 @@ class WebSocketWav2LipAvatar:
             
             if frame_data:
                 if frame_type == 'lip_sync':
-                    logger.info(f"🎬 Received lip-sync frame: {len(frame_data)} bytes")
+                    # Only log first lip-sync frame to confirm it's working
+                    if not hasattr(self, '_lip_sync_frame_count'):
+                        self._lip_sync_frame_count = 0
+                        logger.info(f"🎬 LIP-SYNC STARTED")
+                    self._lip_sync_frame_count += 1
                     self.is_streaming = True
                     
                     # Add frame rate control to prevent burst frames
@@ -330,19 +334,19 @@ class WebSocketWav2LipAvatar:
     
     async def _add_frame_with_rate_control(self, frame_data: str, frame_type: str):
         """
-        Add frame with minimal rate control for low latency.
+        Add frame with minimal latency for real-time sync.
         """
         try:
-            # Minimal delay only for idle frames to reduce processing load
+            # Process frames immediately for real-time sync with audio
+            # Only add minimal delay for idle frames to reduce CPU usage
             if frame_type == 'idle':
-                # Only add delay for idle frames to reduce CPU usage
-                await asyncio.sleep(0.05)  # 20 FPS for idle frames only
+                await asyncio.sleep(0.1)  # 10 FPS for idle frames only
             
-            # Process lip-sync frames immediately for lowest latency
+            # Process lip-sync frames immediately for real-time sync
             await self.video_track.add_frame(frame_data, frame_type)
             
         except Exception as e:
-            logger.error(f"❌ Failed to add frame with rate control: {e}")
+            logger.error(f"❌ Failed to add frame: {e}")
 
     async def disconnect(self):
         """
@@ -352,15 +356,12 @@ class WebSocketWav2LipAvatar:
         logger.info(f"🛑 WebSocket Wav2Lip Avatar disconnecting from room {self.room_id}")
         
         # Stop the WebSocket message handler task
-        if self.websocket_task:
-            logger.info("🛑 Cancelling WebSocket message handler task...")
+        if self.websocket_task and not self.websocket_task.done():
             self.websocket_task.cancel()
             try:
-                await asyncio.wait_for(self.websocket_task, timeout=2.0)
-            except asyncio.TimeoutError:
-                logger.warning("⚠️ WebSocket task cancellation timed out")
-            except asyncio.CancelledError:
-                logger.info("✅ WebSocket message handler task cancelled")
+                await asyncio.wait_for(self.websocket_task, timeout=0.5)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                pass
             self.websocket_task = None
         
         # Close the WebSocket connection
@@ -415,8 +416,6 @@ class WebSocketWav2LipAvatar:
             logger.warning(f"⚠️ Text too short for Wav2Lip processing: '{text}'")
             return
         
-        logger.info(f"🎬 WebSocket Wav2Lip Avatar received text: {text[:100]}{'...' if len(text) > 100 else ''}")
-        
         # Check if Wav2Lip is available
         if not self.wav2lip_available:
             logger.warning("⚠️ Wav2Lip server not available, skipping text processing")
@@ -430,23 +429,15 @@ class WebSocketWav2LipAvatar:
                     "text_data": text.strip()
                 }
                 
-                logger.info(f"📝 Sending text to Wav2Lip WebSocket: {text[:50]}...")
                 await self.websocket.send(json.dumps(message))
-                logger.info(f"✅ Text sent to Wav2Lip WebSocket successfully")
                 
                 # Set streaming flag to indicate we're expecting lip-sync frames
                 self.is_streaming = True
                 
-                # No artificial delay - let it process immediately for lower latency
-                
             except Exception as e:
-                logger.error(f"❌ Failed to send text to Wav2Lip WebSocket: {e}")
-                import traceback
-                logger.error(f"❌ Traceback: {traceback.format_exc()}")
+                logger.error(f"❌ WEBSOCKET ERROR: {e}")
         else:
-            logger.warning("⚠️ Wav2Lip WebSocket not available, cannot send text")
-            logger.warning(f"   WebSocket connected: {self.is_connected}")
-            logger.warning(f"   WebSocket object: {self.websocket is not None}")
+            logger.warning("⚠️ WebSocket unavailable")
 
     def get_video_track(self):
         """

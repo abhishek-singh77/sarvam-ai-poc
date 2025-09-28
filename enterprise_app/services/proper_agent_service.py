@@ -28,6 +28,84 @@ from plugins.wav2lip.low_latency_avatar import LowLatencyWav2LipAvatar
 logger = get_logger(__name__)
 
 
+class Wav2LipTTSWrapper:
+    """
+    TTS wrapper that forwards text to Wav2Lip before synthesis.
+    """
+    
+    def __init__(self, tts, wav2lip_avatar):
+        self.tts = tts
+        self.wav2lip_avatar = wav2lip_avatar
+    
+    async def synthesize(self, text, **kwargs):
+        """
+        Synthesize speech and forward text to Wav2Lip.
+        """
+        # Debug: Log what we're receiving
+        logger.info(f"🔍 TTS WRAPPER: Received input type: {type(text)}")
+        
+        # Handle different input types (string or async generator)
+        text_to_process = text
+        if hasattr(text, '__aiter__'):  # It's an async generator
+            logger.info("🔍 TTS WRAPPER: Input is async generator, extracting text...")
+            # Extract text from async generator
+            try:
+                text_to_process = ""
+                async for chunk in text:
+                    if isinstance(chunk, str):
+                        text_to_process += chunk
+                    else:
+                        # If it's not a string, convert to string
+                        text_to_process += str(chunk)
+                logger.info(f"🔍 TTS WRAPPER: Extracted text: '{text_to_process[:100]}...'")
+            except Exception as e:
+                logger.error(f"❌ Failed to extract text from async generator: {e}")
+                text_to_process = str(text)
+        elif not isinstance(text, str):
+            text_to_process = str(text)
+            logger.info(f"🔍 TTS WRAPPER: Converted to string: '{text_to_process[:100]}...'")
+        else:
+            logger.info(f"🔍 TTS WRAPPER: Input is string: '{text_to_process[:100]}...'")
+        
+        # Forward text to Wav2Lip for lip-sync generation
+        if self.wav2lip_avatar and text_to_process:
+            try:
+                # Filter out function calls and technical details
+                filtered_text = self._filter_function_calls(text_to_process)
+                
+                if filtered_text.strip() and len(filtered_text.strip()) > 3:
+                    logger.info(f"🎬 WAV2LIP: '{filtered_text[:60]}...'")
+                    await self.wav2lip_avatar.send_text(filtered_text)
+                else:
+                    logger.info(f"🎬 WAV2LIP (ORIGINAL): '{text_to_process[:60]}...'")
+                    await self.wav2lip_avatar.send_text(text_to_process)
+            except Exception as e:
+                logger.error(f"❌ WAV2LIP ERROR: {e}")
+        
+        # Call the original TTS synthesis with the original input
+        return await self.tts.synthesize(text, **kwargs)
+    
+    def _filter_function_calls(self, text: str) -> str:
+        """Filter out function calls and technical details from text."""
+        if not text:
+            return text
+        
+        # Remove function call patterns
+        import re
+        # Remove patterns like "complete_workflow_step(" or "get_current_workflow_step("
+        text = re.sub(r'\b\w+_workflow_\w+\([^)]*\)', '', text)
+        # Remove URLs
+        text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
+        # Remove technical error messages
+        text = re.sub(r'Error|Exception|Traceback|Failed|Failed to', '', text, flags=re.IGNORECASE)
+        
+        return text.strip()
+    
+    def __getattr__(self, name):
+        """Delegate all other attributes to the wrapped TTS object."""
+        return getattr(self.tts, name)
+
+
 class CustomCascadingPipeline(CascadingPipeline):
     """
     Custom CascadingPipeline that adds video handling capabilities.
@@ -331,7 +409,8 @@ class ProperAgentService:
             original_say = session.say
             
             async def comprehensive_say(message: str, **kwargs):
-                logger.info(f"🎤 AGENT SAY METHOD CALLED: '{message[:100]}{'...' if len(message) > 100 else ''}'")
+                # Debug: Log that we received a say call
+                logger.info(f"🎯 COMPREHENSIVE SAY: Received message: '{message[:60]}...'")
                 
                 # 1. Log the conversation
                 turn_id = conversation_logger.start_conversation_turn(room_id)
@@ -339,31 +418,26 @@ class ProperAgentService:
                 
                 # 2. Filter out function calls and technical details
                 filtered_message = self._filter_function_calls(message)
-                logger.info(f"🔍 FILTERED MESSAGE: '{filtered_message[:100]}{'...' if len(filtered_message) > 100 else ''}'")
                 
-                # 3. Forward text to Wav2Lip avatar for lip-sync generation (ALWAYS try to forward)
+                # 3. Forward text to Wav2Lip avatar for lip-sync generation
                 if self.wav2lip_avatar:
                     try:
                         # Try to forward filtered message first
                         if filtered_message.strip() and len(filtered_message.strip()) > 3:
-                            logger.info(f"🎬 Forwarding filtered text to Wav2Lip avatar: {filtered_message[:50]}...")
+                            logger.info(f"🎬 WAV2LIP: '{filtered_message[:60]}...'")
                             await self.wav2lip_avatar.send_text(filtered_message)
-                            logger.info(f"✅ Filtered text successfully forwarded to Wav2Lip avatar")
                         else:
                             # If filtered message is too short, try original message
-                            logger.info(f"🎬 Filtered message too short, forwarding original to Wav2Lip avatar: {message[:50]}...")
+                            logger.info(f"🎬 WAV2LIP (ORIGINAL): '{message[:60]}...'")
                             await self.wav2lip_avatar.send_text(message)
-                            logger.info(f"✅ Original text successfully forwarded to Wav2Lip avatar")
                     except Exception as e:
-                        logger.error(f"❌ Failed to forward text to Wav2Lip avatar: {e}")
-                        import traceback
-                        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+                        logger.error(f"❌ WAV2LIP ERROR: {e}")
                 else:
-                    logger.warning("⚠️ Wav2Lip avatar is None, cannot forward text")
+                    logger.warning("⚠️ Wav2Lip avatar unavailable")
                 
                 # 4. Only speak if there's meaningful content after filtering
                 if filtered_message.strip() and len(filtered_message.strip()) > 3:
-                    logger.info(f"🔊 FILTERED AGENT SAYING: '{filtered_message[:100]}{'...' if len(filtered_message) > 100 else ''}'")
+                    logger.info(f"🔊 AGENT: '{filtered_message[:60]}...'")
                     
                     try:
                         return await original_say(filtered_message, **kwargs)
@@ -390,6 +464,122 @@ class ProperAgentService:
             
         except Exception as e:
             logger.error(f"❌ COMPREHENSIVE SAY HANDLER: Failed to set up for room {room_id}: {e}")
+    
+    def _setup_conversation_logging(self, session: AgentSession, room_id: str):
+        """Set up conversation logging for the agent session"""
+        try:
+            # Get the original say method
+            original_say = session.say
+            
+            async def logged_say(message: str, **kwargs):
+                # Log the conversation
+                turn_id = conversation_logger.start_conversation_turn(room_id)
+                conversation_logger.log_tts_input(room_id, message, **kwargs)
+                
+                # Filter out function calls and technical details
+                filtered_message = self._filter_function_calls(message)
+                
+                # Only speak if there's meaningful content after filtering
+                if filtered_message.strip() and len(filtered_message.strip()) > 3:
+                    logger.info(f"🔊 AGENT: '{filtered_message[:60]}...'")
+                    
+                    try:
+                        return await original_say(filtered_message, **kwargs)
+                    except Exception as e:
+                        logger.error(f"❌ TTS failed for filtered message: {e}")
+                        # Fallback: try with original message if filtered version fails
+                        if filtered_message != message:
+                            logger.info("🔄 FALLBACK: Trying with original message")
+                            try:
+                                return await original_say(message, **kwargs)
+                            except Exception as e2:
+                                logger.error(f"❌ TTS failed for original message too: {e2}")
+                                return None
+                        return None
+                else:
+                    logger.info("🔇 FILTERED OUT: No meaningful content to speak after filtering")
+                    return None
+            
+            session.say = logged_say
+            logger.info(f"✅ CONVERSATION LOGGING: Set up for room {room_id}")
+            
+        except Exception as e:
+            logger.error(f"❌ CONVERSATION LOGGING: Failed to set up for room {room_id}: {e}")
+    
+    def _setup_conversation_flow_forwarding(self, conversation_flow: ConversationFlow, room_id: str):
+        """Set up LLM response interception and synchronized TTS/Wav2Lip processing"""
+        try:
+            # Get the original on_agent_response method
+            original_on_agent_response = conversation_flow.on_agent_response
+            
+            async def synchronized_agent_response(response: str, **kwargs):
+                # Debug: Log that we received a response
+                logger.info(f"🎯 CONVERSATION FLOW: Received response: '{response[:60]}...'")
+                
+                # 1. Forward text to Wav2Lip IMMEDIATELY when LLM generates response
+                if self.wav2lip_avatar and response:
+                    try:
+                        # Filter out function calls and technical details
+                        filtered_text = self._filter_function_calls(response)
+                        
+                        if filtered_text.strip() and len(filtered_text.strip()) > 3:
+                            logger.info(f"🎬 WAV2LIP (LLM): '{filtered_text[:60]}...'")
+                            await self.wav2lip_avatar.send_text(filtered_text)
+                            
+                            # 2. Wait for non-idle frames from Wav2Lip before proceeding
+                            await self._wait_for_lip_sync_frames()
+                            
+                        else:
+                            logger.info(f"🎬 WAV2LIP (LLM ORIGINAL): '{response[:60]}...'")
+                            await self.wav2lip_avatar.send_text(response)
+                            await self._wait_for_lip_sync_frames()
+                            
+                    except Exception as e:
+                        logger.error(f"❌ WAV2LIP LLM ERROR: {e}")
+                else:
+                    logger.warning(f"⚠️ CONVERSATION FLOW: No Wav2Lip avatar or empty response")
+                
+                # 3. Now call the original method to proceed with TTS
+                return await original_on_agent_response(response, **kwargs)
+            
+            # Override the conversation flow's on_agent_response method
+            conversation_flow.on_agent_response = synchronized_agent_response
+            logger.info(f"✅ SYNCHRONIZED LLM/WAV2LIP: Set up for room {room_id}")
+            
+            # Test: Add a simple test to verify the conversation flow is working
+            logger.info(f"🔍 DEBUG: Conversation flow on_agent_response method: {conversation_flow.on_agent_response}")
+            logger.info(f"🔍 DEBUG: Conversation flow type: {type(conversation_flow)}")
+            
+        except Exception as e:
+            logger.error(f"❌ SYNCHRONIZED LLM/WAV2LIP: Failed to set up for room {room_id}: {e}")
+    
+    async def _wait_for_lip_sync_frames(self):
+        """Wait for non-idle frames from Wav2Lip to ensure video is ready before TTS"""
+        if not self.wav2lip_avatar:
+            return
+        
+        try:
+            # Reset the frame tracking flag
+            self.wav2lip_avatar.has_lip_sync_frames = False
+            
+            # Wait for lip-sync frames to be generated (non-idle frames)
+            max_wait_time = 2.0  # Maximum wait time in seconds
+            check_interval = 0.05  # Check every 50ms for faster response
+            waited_time = 0
+            
+            while waited_time < max_wait_time:
+                # Check if we have lip-sync frames (not idle)
+                if hasattr(self.wav2lip_avatar, 'has_lip_sync_frames') and self.wav2lip_avatar.has_lip_sync_frames:
+                    logger.info(f"🎬 LIP-SYNC FRAMES READY: Video frames prepared in {waited_time:.2f}s")
+                    return
+                
+                await asyncio.sleep(check_interval)
+                waited_time += check_interval
+            
+            logger.warning(f"⚠️ LIP-SYNC TIMEOUT: No frames received after {max_wait_time}s, proceeding anyway")
+            
+        except Exception as e:
+            logger.error(f"❌ LIP-SYNC WAIT ERROR: {e}")
 
     
     def _filter_function_calls(self, message: str) -> str:
@@ -499,10 +689,10 @@ class ProperAgentService:
                 tts = SarvamAITTS(
                     api_key=self.settings.sarvamai_api_key,
                     model="bulbul:v2",
-                    speaker="anushka",
-                    target_language_code="en-IN",
+                    speaker="hitesh",
+                    target_language_code="en-IN",  # Use en-IN as required by Sarvam API
                     pitch=self.settings.tts_pitch,
-                    pace=1.5,  # Much faster pace for lower latency
+                    pace=1.0,  # Natural pace for better sync
                     loudness=self.settings.tts_loudness
                 )
                 logger.info("✅ Sarvam AI TTS initialized successfully")
@@ -535,11 +725,90 @@ class ProperAgentService:
                 avatar = self.wav2lip_avatar
                 logger.info("🎯 Wav2Lip avatar will be used in pipeline")
             
+            # Create a custom LLM wrapper that forwards responses to Wav2Lip
+            class Wav2LipLLMWrapper:
+                def __init__(self, llm, wav2lip_avatar):
+                    self.llm = llm
+                    self.wav2lip_avatar = wav2lip_avatar
+                    logger.info(f"🔍 LLM WRAPPER: Created wrapper for LLM type: {type(llm)}")
+                
+                async def generate(self, *args, **kwargs):
+                    logger.info(f"🔍 LLM WRAPPER: generate() called with args: {len(args)}, kwargs: {list(kwargs.keys())}")
+                    # Call the original LLM
+                    response = await self.llm.generate(*args, **kwargs)
+                    logger.info(f"🔍 LLM WRAPPER: generate() returned response: '{response[:100] if response else 'None'}...'")
+                    
+                    # Forward response to Wav2Lip
+                    await self._forward_response_to_wav2lip(response)
+                    
+                    return response
+                
+                async def chat(self, *args, **kwargs):
+                    logger.info(f"🔍 LLM WRAPPER: chat() called with args: {len(args)}, kwargs: {list(kwargs.keys())}")
+                    # Call the original LLM chat method (which returns an async generator)
+                    async_generator = self.llm.chat(*args, **kwargs)
+                    
+                    # Collect all chunks and forward to Wav2Lip
+                    full_response = ""
+                    async for chunk in async_generator:
+                        if chunk:
+                            full_response += str(chunk)
+                        yield chunk
+                    
+                    # Forward complete response to Wav2Lip
+                    if full_response:
+                        logger.info(f"🔍 LLM WRAPPER: chat() collected full response: '{full_response[:100]}...'")
+                        await self._forward_response_to_wav2lip(full_response)
+                
+                async def _forward_response_to_wav2lip(self, response):
+                    """Forward LLM response to Wav2Lip for lip-sync generation"""
+                    if self.wav2lip_avatar and response:
+                        try:
+                            # Filter out function calls and technical details
+                            filtered_text = self._filter_function_calls(response)
+                            
+                            if filtered_text.strip() and len(filtered_text.strip()) > 3:
+                                logger.info(f"🎬 WAV2LIP (LLM WRAPPER): '{filtered_text[:60]}...'")
+                                await self.wav2lip_avatar.send_text(filtered_text)
+                            else:
+                                logger.info(f"🎬 WAV2LIP (LLM WRAPPER ORIGINAL): '{response[:60]}...'")
+                                await self.wav2lip_avatar.send_text(response)
+                        except Exception as e:
+                            logger.error(f"❌ WAV2LIP LLM WRAPPER ERROR: {e}")
+                    else:
+                        logger.warning(f"⚠️ LLM WRAPPER: No Wav2Lip avatar or empty response")
+                
+                def _filter_function_calls(self, message: str) -> str:
+                    """Filter out function calls and technical details from the message"""
+                    import re
+                    # Remove function call patterns
+                    message = re.sub(r'<function_calls>.*?</function_calls>', '', message, flags=re.DOTALL)
+                    message = re.sub(r'<invoke name="[^"]*">.*?</invoke>', '', message, flags=re.DOTALL)
+                    message = re.sub(r'<result>.*?</result>', '', message, flags=re.DOTALL)
+                    # Remove technical details
+                    message = re.sub(r'\[.*?\]', '', message)
+                    message = re.sub(r'<.*?>', '', message)
+                    # Clean up whitespace
+                    message = ' '.join(message.split())
+                    return message.strip()
+                
+                def __getattr__(self, name):
+                    logger.info(f"🔍 LLM WRAPPER: __getattr__ called for: {name}")
+                    return getattr(self.llm, name)
+            
+            # Wrap the LLM with Wav2Lip forwarding
+            if self.wav2lip_avatar:
+                wrapped_llm = Wav2LipLLMWrapper(llm, self.wav2lip_avatar)
+                logger.info(f"🔍 LLM WRAPPER: Created wrapped LLM: {type(wrapped_llm)}")
+            else:
+                wrapped_llm = llm
+                logger.info(f"🔍 LLM WRAPPER: Using original LLM (no Wav2Lip avatar)")
+            
             # Create the custom cascading pipeline with all components
             pipeline = CustomCascadingPipeline(
                 stt=stt,
                 tts=tts,
-                llm=llm,
+                llm=wrapped_llm,
                 vad=vad,
                 turn_detector=turn_detector,
                 denoise=denoise,
@@ -549,6 +818,10 @@ class ProperAgentService:
             # Create conversation flow for better conversation management
             conversation_flow = ConversationFlow(agent)
             
+            # Set up text forwarding for Wav2Lip at the conversation flow level
+            if self.wav2lip_avatar:
+                self._setup_conversation_flow_forwarding(conversation_flow, room_id)
+            
             # Create agent session with pipeline and conversation flow
             session = AgentSession(
                 agent=agent, 
@@ -556,7 +829,7 @@ class ProperAgentService:
                 conversation_flow=conversation_flow
             )
             
-            # Set up comprehensive logging, filtering, and Wav2Lip forwarding
+            # Set up comprehensive say handler with logging, filtering, and Wav2Lip forwarding
             self._setup_comprehensive_say_handler(session, room_id)
             
             # Store the session for cleanup
