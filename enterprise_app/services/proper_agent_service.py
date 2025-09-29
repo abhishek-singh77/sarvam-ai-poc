@@ -454,8 +454,8 @@ class ProperAgentService:
                     speaker="anushka",
                     target_language_code="en-IN",
                     pitch=0.0,
-                    pace=1.2,
-                    loudness=1.2
+                    pace=1.0,  # Reduced from 1.2 to 1.0 for more natural speech timing
+                    loudness=1.0  # Reduced from 1.2 to 1.0 for better audio quality
                 )
                 logger.info("✅ Sarvam AI TTS initialized successfully")
             except Exception as e:

@@ -65,6 +65,11 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     hasAgentVideo: boolean = false
     isAgentSpeaking: boolean = false
 
+    // Agent loading modal
+    isAgentLoading: boolean = true
+    agentLoadingStep: number = 0
+    agentLoadingTimeout: any = null
+
     // Workflow
     workflowSteps: WorkflowStep[] = []
     currentStep: WorkflowStep | null = null
@@ -101,6 +106,9 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     ngOnInit(): void {
         console.log('🎯 VKYC-SESSION: Component ngOnInit started')
+
+        // Start agent loading sequence
+        this.startAgentLoadingSequence()
 
         // Subscribe to room data changes
         this.subscriptions.add(
@@ -209,7 +217,62 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         this.subscriptions.unsubscribe()
         this.stopAgentSpeakingSimulation()
         this.cleanup()
+        this.clearAgentLoadingTimeout()
         console.log('🎯 VKYC-SESSION: Component destroyed')
+    }
+
+    // Agent Loading Modal Methods
+    private startAgentLoadingSequence(): void {
+        console.log('🎯 VKYC-SESSION: Starting agent loading sequence...')
+        this.isAgentLoading = true
+        this.agentLoadingStep = 0
+
+        // Simulate loading steps with realistic timing
+        this.agentLoadingTimeout = setTimeout(() => {
+            this.agentLoadingStep = 1
+            this.cdRef.detectChanges()
+
+            setTimeout(() => {
+                this.agentLoadingStep = 2
+                this.cdRef.detectChanges()
+
+                setTimeout(() => {
+                    this.agentLoadingStep = 3
+                    this.cdRef.detectChanges()
+
+                    setTimeout(() => {
+                        this.agentLoadingStep = 4
+                        this.cdRef.detectChanges()
+
+                        // Hide modal after a short delay
+                        setTimeout(() => {
+                            this.hideAgentLoadingModal()
+                        }, 1000)
+                    }, 2000) // Avatar setup takes longer
+                }, 1500) // AI components initialization
+            }, 1000) // VideoSDK connection
+        }, 500) // Initial delay
+    }
+
+    private hideAgentLoadingModal(): void {
+        console.log('🎯 VKYC-SESSION: Hiding agent loading modal...')
+        this.isAgentLoading = false
+        this.cdRef.detectChanges()
+    }
+
+    private clearAgentLoadingTimeout(): void {
+        if (this.agentLoadingTimeout) {
+            clearTimeout(this.agentLoadingTimeout)
+            this.agentLoadingTimeout = null
+        }
+    }
+
+    public cancelAgentLoading(): void {
+        console.log('🎯 VKYC-SESSION: Agent loading cancelled by user')
+        this.clearAgentLoadingTimeout()
+        this.hideAgentLoadingModal()
+        // Optionally emit an event or navigate away
+        this.sessionEnded.emit()
     }
 
     // Media Controls
@@ -426,6 +489,10 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             .then(() => {
                 console.log('🎯 VKYC-SESSION: Agent video started playing')
                 this.hasAgentVideo = true
+                // Hide loading modal when agent video is ready
+                if (this.isAgentLoading) {
+                    this.hideAgentLoadingModal()
+                }
             })
             .catch((error: any) => {
                 console.error(
