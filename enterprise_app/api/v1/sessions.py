@@ -241,7 +241,7 @@ async def list_sessions(
 @router.delete("/{session_id}")
 async def delete_session(session_id: str) -> Dict[str, Any]:
     """
-    Delete a session.
+    Delete a session and stop the associated agent.
     
     Args:
         session_id: Session identifier
@@ -255,11 +255,29 @@ async def delete_session(session_id: str) -> Dict[str, Any]:
     logger.info("Deleting session", extra={"session_id": session_id})
     
     try:
-        # This would delete from the session service
+        # Import the agent service to stop the agent
+        from services.proper_agent_service import proper_agent_service
+        
+        # Stop the agent for this session (session_id is used as room_id)
+        agent_stop_result = await proper_agent_service.stop_agent(session_id)
+        
+        if agent_stop_result["status"] == "success":
+            logger.info("Agent stopped successfully", extra={"session_id": session_id})
+        else:
+            logger.warning("Agent stop failed or no agent found", extra={
+                "session_id": session_id, 
+                "agent_error": agent_stop_result.get("error", "Unknown error")
+            })
+        
+        # Clean up workflow data if needed
+        from services.workflow_service import workflow_service
+        workflow_service.clear_session_data(session_id)
+        
         result = {
             "status": "success",
             "session_id": session_id,
-            "message": "Session deleted successfully"
+            "message": "Session deleted successfully",
+            "agent_stopped": agent_stop_result["status"] == "success"
         }
         
         logger.info("Session deleted successfully", extra={"session_id": session_id})

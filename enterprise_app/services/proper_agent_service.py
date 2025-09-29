@@ -15,9 +15,9 @@ from utils.logging.logger import get_logger
 from .conversation_logger import conversation_logger
 from .workflow_service import workflow_service
 from videosdk.agents import Agent, AgentSession, JobContext, RoomOptions, function_tool, ConversationFlow, WorkerJob, Options
-from videosdk.agents import CascadingPipeline, STT, TTS, LLM
+from videosdk.agents import CascadingPipeline, RealTimePipeline, STT, TTS, LLM
 from videosdk.plugins.sarvamai import SarvamAISTT, SarvamAITTS, SarvamAILLM
-from videosdk.plugins.google import GoogleLLM, GoogleTTS
+from videosdk.plugins.google import GoogleLLM, GoogleTTS, GeminiRealtime, GeminiLiveConfig
 from videosdk.plugins.silero import SileroVAD
 from videosdk.plugins.turn_detector import TurnDetector, pre_download_model
 from videosdk.plugins.rnnoise import RNNoise
@@ -62,7 +62,7 @@ class KYCVoiceAgent(Agent):
         - Be responsive to user questions and concerns at any time
         
         CRITICAL SPEECH RULES:
-        - NEVER include tool code, function calls, or technical details in your speech
+        - NEVER include tool_code, function calls, or technical details in your speech
         - NEVER say things like "complete_workflow_step" or show function names
         - NEVER include URLs, error codes, or technical jargon in speech
         - NEVER mention that you are calling functions or using tools
@@ -113,6 +113,115 @@ class ProperAgentService:
             logger.info("✅ Turn Detector model pre-downloaded successfully")
         except Exception as e:
             logger.warning("Failed to pre-download Turn Detector model", extra={"error": str(e)})
+    
+    def _create_pipeline(self, pipeline_kwargs: Dict[str, Any], simli_avatar: Any = None):
+        """
+        Create the appropriate pipeline based on configuration.
+        
+        Args:
+            pipeline_kwargs: Dictionary of pipeline components
+            simli_avatar: Simli avatar instance (if available)
+            
+        Returns:
+            Pipeline instance (CascadingPipeline or RealTimePipeline)
+        """
+        pipeline_type = self.settings.pipeline_type.lower()
+        
+        logger.info(f"🔧 Pipeline configuration: {pipeline_type}")
+        
+        if pipeline_type == "realtime":
+            logger.info("🚀 Creating RealTimePipeline with Google Gemini LiveAPI for ultra-low latency")
+            logger.info("📋 RealTimePipeline benefits: Direct audio processing, no intermediate steps, sub-second response times")
+            return self._create_realtime_pipeline(simli_avatar)
+        else:
+            logger.info("🔄 Creating CascadingPipeline with traditional components")
+            logger.info("📋 CascadingPipeline: STT → LLM → TTS → Avatar pipeline")
+            return self._create_cascading_pipeline(pipeline_kwargs)
+    
+    def _create_realtime_pipeline(self, simli_avatar: Any = None):
+        """
+        Create a RealTimePipeline using Google Gemini LiveAPI for ultra-low latency.
+        
+        Args:
+            simli_avatar: Simli avatar instance (if available)
+        
+        Returns:
+            RealTimePipeline instance
+        """
+        try:
+            # Validate Google API key
+            if not self.settings.google_api_key:
+                raise ValueError("Google API key is required for RealTimePipeline")
+            
+            logger.info("🔑 Using Google API key for RealTimePipeline")
+            
+            # Use provided Simli Avatar or initialize if not provided
+            if simli_avatar is None and self.settings.simli_api_key and self.settings.simli_avatar_id:
+                try:
+                    simli_config = SimliConfig(
+                        apiKey=self.settings.simli_api_key,
+                        faceId=self.settings.simli_avatar_id,
+                    )
+                    simli_avatar = SimliAvatar(config=simli_config)
+                    logger.info("🎭 Simli Avatar initialized for RealTimePipeline")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to initialize Simli Avatar for RealTimePipeline: {e}")
+                    logger.info("🎭 Continuing with voice-only RealTimePipeline")
+                    simli_avatar = None
+            
+            # Initialize Google Gemini Realtime model with Indian English
+            model = GeminiRealtime(
+                model="gemini-2.0-flash-live-001",
+                api_key=self.settings.google_api_key,
+                config=GeminiLiveConfig(
+                    voice="Leda",  # Natural-sounding voice
+                    response_modalities=["AUDIO"],  # Audio-only for faster processing
+                    temperature=0.1,  # Low temperature for consistent responses
+                    max_output_tokens=200,  # Shorter responses for faster generation
+                    language_code="en-IN"  # Indian English for better accent
+                )
+            )
+            
+            # Create RealTimePipeline with avatar if available
+            if simli_avatar:
+                pipeline = RealTimePipeline(model=model, avatar=simli_avatar)
+                logger.info("✅ RealTimePipeline created successfully with Google Gemini LiveAPI and Simli Avatar")
+                logger.info("🎭 Avatar will provide visual feedback during conversation")
+            else:
+                pipeline = RealTimePipeline(model=model)
+                logger.info("✅ RealTimePipeline created successfully with Google Gemini LiveAPI (voice-only)")
+            
+            logger.info("⚡ Expected latency: Sub-second response times")
+            logger.info("🇮🇳 Using Indian English (en-IN) for better accent")
+            return pipeline
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to create RealTimePipeline: {e}")
+            logger.error("💡 Make sure you have:")
+            logger.error("   - Valid GOOGLE_API_KEY in your .env file")
+            logger.error("   - videosdk-plugins-google package installed")
+            logger.error("   - Internet connection for Google API access")
+            logger.info("🔄 Falling back to CascadingPipeline...")
+            # Fallback to cascading pipeline if realtime fails
+            return None
+    
+    def _create_cascading_pipeline(self, pipeline_kwargs: Dict[str, Any]):
+        """
+        Create a CascadingPipeline with traditional components.
+        
+        Args:
+            pipeline_kwargs: Dictionary of pipeline components
+            
+        Returns:
+            CascadingPipeline instance
+        """
+        try:
+            pipeline = CascadingPipeline(**pipeline_kwargs)
+            logger.info("✅ CascadingPipeline created successfully")
+            return pipeline
+        except Exception as e:
+            logger.error(f"❌ Failed to create CascadingPipeline: {e}")
+            raise
     
     async def join_agent_to_room(
         self, 
@@ -522,7 +631,13 @@ class ProperAgentService:
             else:
                 logger.info("🎭 No avatar - voice-only pipeline")
             
-            pipeline = CascadingPipeline(**pipeline_kwargs)
+            # Create pipeline based on configuration
+            pipeline = self._create_pipeline(pipeline_kwargs, simli_avatar)
+            
+            # Handle fallback if RealTimePipeline fails
+            if pipeline is None:
+                logger.warning("⚠️ RealTimePipeline failed, falling back to CascadingPipeline")
+                pipeline = self._create_cascading_pipeline(pipeline_kwargs)
             
             # Create conversation flow for better conversation management
             conversation_flow = ConversationFlow(agent)
@@ -641,29 +756,44 @@ class ProperAgentService:
                 logger.error(f"Error shutting down job context: {e}")
     
     async def stop_agent(self, room_id: str) -> Dict[str, Any]:
-        """Stop the agent for a specific room"""
+        """Stop the agent for a specific room and clean up Simli avatar session"""
         try:
             if room_id in self.active_agents:
-                # Stop the agent session
+                logger.info(f"🛑 Stopping agent for room {room_id}...")
+                
+                # Stop the agent session (this will close the Simli avatar session)
                 if room_id in self.agent_sessions:
-                    await self.agent_sessions[room_id].stop()
-                    del self.agent_sessions[room_id]
+                    logger.info(f"🎭 Closing Simli avatar session for room {room_id}...")
+                    try:
+                        await self.agent_sessions[room_id].stop()
+                        logger.info(f"✅ Simli avatar session closed for room {room_id}")
+                    except Exception as e:
+                        logger.error(f"❌ Error closing Simli avatar session for room {room_id}: {e}")
+                    finally:
+                        del self.agent_sessions[room_id]
                 
                 # Stop the job
                 if room_id in self.agent_jobs:
-                    self.agent_jobs[room_id].stop()
-                    del self.agent_jobs[room_id]
+                    logger.info(f"🔄 Stopping agent job for room {room_id}...")
+                    try:
+                        self.agent_jobs[room_id].stop()
+                        logger.info(f"✅ Agent job stopped for room {room_id}")
+                    except Exception as e:
+                        logger.error(f"❌ Error stopping agent job for room {room_id}: {e}")
+                    finally:
+                        del self.agent_jobs[room_id]
                 
                 # Clean up tracking
                 del self.active_agents[room_id]
                 
-                logger.info(f"✅ Agent stopped for room {room_id}")
+                logger.info(f"✅ Agent completely stopped for room {room_id}")
                 return {
                     "status": "success",
                     "room_id": room_id,
-                    "message": "Agent stopped successfully"
+                    "message": "Agent stopped successfully and Simli avatar session closed"
                 }
             else:
+                logger.warning(f"⚠️ No active agent found for room {room_id}")
                 return {
                     "status": "error",
                     "room_id": room_id,
@@ -716,6 +846,41 @@ class ProperAgentService:
             return {
                 "status": "error",
                 "room_id": room_id,
+                "error": str(e)
+            }
+    
+    async def stop_all_agents(self) -> Dict[str, Any]:
+        """Stop all active agents (useful for cleanup)"""
+        try:
+            stopped_agents = []
+            failed_agents = []
+            
+            # Get a copy of active agents to avoid modification during iteration
+            active_rooms = list(self.active_agents.keys())
+            
+            for room_id in active_rooms:
+                try:
+                    result = await self.stop_agent(room_id)
+                    if result["status"] == "success":
+                        stopped_agents.append(room_id)
+                    else:
+                        failed_agents.append({"room_id": room_id, "error": result.get("error", "Unknown error")})
+                except Exception as e:
+                    failed_agents.append({"room_id": room_id, "error": str(e)})
+            
+            logger.info(f"🛑 Stopped {len(stopped_agents)} agents, {len(failed_agents)} failed")
+            
+            return {
+                "status": "success",
+                "stopped_agents": stopped_agents,
+                "failed_agents": failed_agents,
+                "message": f"Stopped {len(stopped_agents)} agents, {len(failed_agents)} failed"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to stop all agents: {e}")
+            return {
+                "status": "error",
                 "error": str(e)
             }
 

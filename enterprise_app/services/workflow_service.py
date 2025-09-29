@@ -367,6 +367,33 @@ class WorkflowService:
                 "room_id": room_id,
                 "error": str(e)
             }
+    
+    def clear_session_data(self, room_id: str) -> Dict[str, Any]:
+        """Clear all session data for a room (used when session is deleted)"""
+        try:
+            # Remove workflow data
+            if room_id in self.workflows:
+                del self.workflows[room_id]
+                logger.info(f"📋 Cleared workflow data for room {room_id}")
+            
+            # Remove current step tracking
+            if room_id in self.current_steps:
+                del self.current_steps[room_id]
+                logger.info(f"📋 Cleared current step tracking for room {room_id}")
+            
+            return {
+                "status": "success",
+                "room_id": room_id,
+                "message": "Session data cleared successfully"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to clear session data for room {room_id}: {e}")
+            return {
+                "status": "error",
+                "room_id": room_id,
+                "error": str(e)
+            }
 
 # Global instance
 workflow_service = WorkflowService()
