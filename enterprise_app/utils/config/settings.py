@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     google_api_key: Optional[str] = Field(default=None, alias="GOOGLE_API_KEY")
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
     
+    # Simli Avatar Configuration
+    simli_api_key: Optional[str] = Field(default=None, alias="SIMLI_API_KEY")
+    simli_avatar_id: Optional[str] = Field(default=None, alias="SIMLI_AVATAR_ID")
+    simli_max_session_length: int = Field(default=1800, alias="SIMLI_MAX_SESSION_LENGTH")
+    simli_max_idle_time: int = Field(default=300, alias="SIMLI_MAX_IDLE_TIME")
+    
     # Logging Configuration
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_format: str = Field(default="json", alias="LOG_FORMAT")
@@ -152,6 +158,16 @@ class Settings(BaseSettings):
         }
     
     @property
+    def simli_config(self) -> Dict[str, Any]:
+        """Get Simli avatar configuration."""
+        return {
+            "api_key": self.simli_api_key,
+            "face_id": self.simli_face_id,
+            "max_session_length": self.simli_max_session_length,
+            "max_idle_time": self.simli_max_idle_time
+        }
+    
+    @property
     def security_config(self) -> Dict[str, Any]:
         """Get security configuration."""
         return {
@@ -183,6 +199,7 @@ class Settings(BaseSettings):
             "sarvamai_api_key": mask_sensitive(self.sarvamai_api_key),
             "google_api_key": mask_sensitive(self.google_api_key),
             "openai_api_key": mask_sensitive(self.openai_api_key),
+            "simli_api_key": mask_sensitive(self.simli_api_key),
             "secret_key": mask_sensitive(self.secret_key),
             "log_level": self.log_level,
             "log_format": self.log_format,

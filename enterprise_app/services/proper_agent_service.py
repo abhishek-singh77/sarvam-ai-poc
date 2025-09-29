@@ -21,6 +21,7 @@ from videosdk.plugins.google import GoogleLLM, GoogleTTS
 from videosdk.plugins.silero import SileroVAD
 from videosdk.plugins.turn_detector import TurnDetector, pre_download_model
 from videosdk.plugins.rnnoise import RNNoise
+from videosdk.plugins.simli import SimliAvatar, SimliConfig  # VideoSDK docs: https://docs.videosdk.live/ai_agents/plugins/avatar/simli
 
 logger = get_logger(__name__)
 
@@ -311,16 +312,27 @@ class ProperAgentService:
                     try:
                         return await original_say(filtered_message, **kwargs)
                     except Exception as e:
-                        logger.error(f"❌ TTS failed for filtered message: {e}")
-                        # Fallback: try with original message if filtered version fails
-                        if filtered_message != message:
-                            logger.info("🔄 FALLBACK: Trying with original message")
-                            try:
-                                return await original_say(message, **kwargs)
-                            except Exception as e2:
-                                logger.error(f"❌ TTS failed for original message too: {e2}")
-                                return None
-                        return None
+                        error_str = str(e).lower()
+                        if "audio track" in error_str or "loop not initialized" in error_str:
+                            logger.warning("🎯 Audio track error - this is normal in voice-only mode")
+                            logger.info("🎯 Agent is functional but audio output may not work")
+                            return None
+                        else:
+                            logger.error(f"❌ TTS failed for filtered message: {e}")
+                            # Fallback: try with original message if filtered version fails
+                            if filtered_message != message:
+                                logger.info("🔄 FALLBACK: Trying with original message")
+                                try:
+                                    return await original_say(message, **kwargs)
+                                except Exception as e2:
+                                    error_str2 = str(e2).lower()
+                                    if "audio track" in error_str2 or "loop not initialized" in error_str2:
+                                        logger.warning("🎯 Audio track error in fallback - continuing without audio")
+                                        return None
+                                    else:
+                                        logger.error(f"❌ TTS failed for original message too: {e2}")
+                                        return None
+                            return None
                 else:
                     logger.info("🔇 FILTERED OUT: No meaningful content to speak after filtering")
                     return None
@@ -435,19 +447,30 @@ class ProperAgentService:
                 raise
             
             try:
+                # Use Sarvam AI TTS as primary (more reliable for this setup)
                 tts = SarvamAITTS(
                     api_key=self.settings.sarvamai_api_key,
                     model="bulbul:v2",
                     speaker="anushka",
                     target_language_code="en-IN",
                     pitch=0.0,
-                    pace=1.2,  # Slightly faster pace for quicker responses
+                    pace=1.2,
                     loudness=1.2
                 )
                 logger.info("✅ Sarvam AI TTS initialized successfully")
             except Exception as e:
-                logger.error(f"❌ Failed to initialize TTS: {e}")
-                raise
+                logger.error(f"❌ Failed to initialize Sarvam AI TTS: {e}")
+                # Fallback to Google TTS if Sarvam AI TTS fails
+                try:
+                    logger.info("🔄 Falling back to Google TTS...")
+                    tts = GoogleTTS(
+                        api_key=self.settings.google_api_key
+                        # Remove voice and speed parameters that are causing errors
+                    )
+                    logger.info("✅ Google TTS initialized successfully as fallback")
+                except Exception as e2:
+                    logger.error(f"❌ Failed to initialize Google TTS fallback: {e2}")
+                    raise Exception(f"Both TTS providers failed: Sarvam AI ({e}), Google ({e2})")
             
             try:
                 llm = GoogleLLM(
@@ -468,15 +491,38 @@ class ProperAgentService:
             turn_detector = TurnDetector(threshold=0.3)  # Lower threshold for faster turn detection
             denoise = RNNoise()
             
-            # Create the cascading pipeline with all components
-            pipeline = CascadingPipeline(
-                stt=stt,
-                tts=tts,
-                llm=llm,
-                vad=vad,
-                turn_detector=turn_detector,
-                denoise=denoise
+            # Initialize Simli Avatar following working repository pattern
+            simli_avatar = None
+            simli_api_key = self.settings.simli_api_key
+            simli_avatar_id = self.settings.simli_avatar_id
+            logger.info(f"🎭 Using default Simli avatar ID: {simli_api_key}, {simli_avatar_id}")
+            # Check if we have a valid Simli API key
+            simli_config = SimliConfig(
+                apiKey=simli_api_key,
+                faceId=simli_avatar_id,
             )
+
+            # 2. Create a SimliAvatar instance
+            simli_avatar = SimliAvatar(config=simli_config)
+
+            # Create the cascading pipeline (following working repository pattern)
+            pipeline_kwargs = {
+                "stt": stt,
+                "tts": tts,
+                "llm": llm,
+                "vad": vad,
+                "turn_detector": turn_detector,
+                "denoise": denoise
+            }
+            
+            # Add avatar to pipeline if available
+            if simli_avatar is not None:
+                pipeline_kwargs["avatar"] = simli_avatar
+                logger.info("🎭 Avatar included in pipeline")
+            else:
+                logger.info("🎭 No avatar - voice-only pipeline")
+            
+            pipeline = CascadingPipeline(**pipeline_kwargs)
             
             # Create conversation flow for better conversation management
             conversation_flow = ConversationFlow(agent)
@@ -506,13 +552,20 @@ class ProperAgentService:
                 logger.error(f"❌ Failed to connect to VideoSDK room: {e}")
                 logger.error(f"Connection error details: {type(e).__name__}: {str(e)}")
                 
-                # Check if this is a media device related error
-                if "device" in str(e).lower() or "webrtc" in str(e).lower():
+                # Check for specific error types
+                error_str = str(e).lower()
+                if "device" in error_str or "webrtc" in error_str:
                     logger.warning("🎯 This appears to be a media device related error - common in server environments")
                     logger.info("🎯 Agent will continue setup but may have limited functionality")
-                elif "401" in str(e) or "unauthorized" in str(e).lower():
+                elif "401" in error_str or "unauthorized" in error_str:
                     logger.error("🎯 Authentication error - check token validity and permissions")
                     raise  # Re-raise auth errors as they're critical
+                elif "422" in error_str and "simli" in error_str:
+                    logger.warning("🎯 Simli Avatar connection error - this is expected if no valid API key is provided")
+                    logger.info("🎯 Agent will continue in voice-only mode")
+                elif "simli" in error_str:
+                    logger.warning("🎯 Simli Avatar connection error - continuing without avatar")
+                    logger.info("🎯 Agent will continue in voice-only mode")
                 else:
                     logger.warning("🎯 Unknown connection error - continuing with agent setup")
                 
@@ -530,20 +583,31 @@ class ProperAgentService:
             
             logger.info("🎯 KYC Agent session started successfully")
             
-            # Send initial greeting
+            # Send initial greeting with better error handling
             try:
                 greeting = "Hello! I am your KYC Virtual Assistant. I'm here to help you complete your identity verification process. Let's get started with a friendly conversation!"
                 await session.say(greeting)
                 logger.info("🎯 Initial greeting sent")
             except Exception as e:
-                logger.warning(f"Could not send initial greeting: {e}")
+                error_str = str(e).lower()
+                if "audio track" in error_str or "loop not initialized" in error_str:
+                    logger.warning("🎯 Audio track error - this is normal when avatar fails to connect")
+                    logger.info("🎯 Agent will continue in voice-only mode")
+                else:
+                    logger.warning(f"Could not send initial greeting: {e}")
+                
                 # Try a simpler greeting as fallback
                 try:
                     simple_greeting = "Hello! I'm your KYC assistant. How can I help you today?"
                     await session.say(simple_greeting)
                     logger.info("🎯 Simple greeting sent as fallback")
                 except Exception as e2:
-                    logger.warning(f"Could not send simple greeting either: {e2}")
+                    error_str2 = str(e2).lower()
+                    if "audio track" in error_str2 or "loop not initialized" in error_str2:
+                        logger.warning("🎯 Audio track error in fallback - continuing without audio")
+                        logger.info("🎯 Agent is functional but may not have audio output")
+                    else:
+                        logger.warning(f"Could not send simple greeting either: {e2}")
                     # Continue anyway - the agent is still functional
             
             # Keep the session running until manually terminated

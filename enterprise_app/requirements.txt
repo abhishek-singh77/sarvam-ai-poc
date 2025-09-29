@@ -15,6 +15,7 @@ videosdk-plugins-google
 videosdk-plugins-silero
 videosdk-plugins-turn-detector
 videosdk-plugins-rnnoise
+videosdk-plugins-simli
 PyJWT
 
 
