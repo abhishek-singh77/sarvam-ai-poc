@@ -110,29 +110,29 @@ export class MeetingService {
             )
             console.log('🎯 MEETING-SERVICE: Stream kind:', stream.kind)
 
-            this.localStreamSubject.next(stream)
-
             if (stream.kind === 'audio') {
-                const mediaStreamTrack = new MediaStream()
-                mediaStreamTrack.addTrack(stream.track)
                 console.log('🎯 MEETING-SERVICE: Setting local audio stream')
+                // Create MediaStream from VideoSDK stream track (as per VideoSDK docs)
+                const mediaStream = new MediaStream()
+                mediaStream.addTrack(stream.track)
+                this.localStreamSubject.next(mediaStream)
 
                 // Add track ended listener
-                mediaStreamTrack
-                    .getAudioTracks()
-                    .forEach((track: MediaStreamTrack) => {
-                        track.addEventListener('ended', () => {
-                            console.log(
-                                '🎯 MEETING-SERVICE: LOCAL AUDIO TRACK ENDED'
-                            )
-                            // Handle mic failure
-                        })
+                if (stream.track) {
+                    stream.track.addEventListener('ended', () => {
+                        console.log(
+                            '🎯 MEETING-SERVICE: LOCAL AUDIO TRACK ENDED'
+                        )
+                        // Handle mic failure
                     })
+                }
             } else if (stream.kind === 'video') {
                 console.log('🎯 MEETING-SERVICE: Local video stream enabled')
-                const mediaStreamTrack = new MediaStream()
-                mediaStreamTrack.addTrack(stream.track)
                 console.log('🎯 MEETING-SERVICE: Setting local video stream')
+                // Create MediaStream from VideoSDK stream track (as per VideoSDK docs)
+                const mediaStream = new MediaStream()
+                mediaStream.addTrack(stream.track)
+                this.localStreamSubject.next(mediaStream)
             }
         })
 
@@ -208,10 +208,18 @@ export class MeetingService {
                 participant.isLocal
             )
 
+            // More flexible agent detection - check if it's not the local participant
+            // and has a different display name pattern
             const isAgent =
-                participant.displayName === 'KYC AI Agent' ||
-                participant.displayName === 'AI Agent' ||
-                participant.displayName?.includes('Agent')
+                !participant.isLocal &&
+                (participant.displayName === 'KYC AI Agent' ||
+                    participant.displayName === 'AI Agent' ||
+                    participant.displayName?.includes('Agent') ||
+                    participant.displayName?.includes('AI') ||
+                    // If it's a remote participant and not the local user, assume it's the agent
+                    (participant.displayName &&
+                        participant.displayName !== 'You' &&
+                        participant.displayName !== 'Client'))
 
             const participantData = {
                 id: participant.id,
@@ -224,6 +232,13 @@ export class MeetingService {
                 audioLevel: 0,
                 lastSpeechTime: 0,
             }
+
+            console.log('🎯 MEETING-SERVICE: Agent detection result:', {
+                displayName: participant.displayName,
+                isLocal: participant.isLocal,
+                isAgent: isAgent,
+                participantId: participant.id,
+            })
 
             console.log(
                 '🎯 MEETING-SERVICE: Adding participant:',
@@ -247,25 +262,34 @@ export class MeetingService {
                     participant.id
                 )
 
-                this.remoteStreamSubject.next(stream)
-
                 if (stream.kind === 'audio') {
-                    const mediaStream = new MediaStream()
-                    mediaStream.addTrack(stream.track)
                     console.log(
                         '🎯 MEETING-SERVICE: Setting remote audio stream'
                     )
+                    // Create MediaStream from VideoSDK stream track (as per VideoSDK docs)
+                    const mediaStream = new MediaStream()
+                    mediaStream.addTrack(stream.track)
+                    this.remoteStreamSubject.next(mediaStream)
 
                     // Add track ended listener
-                    mediaStream
-                        .getAudioTracks()
-                        .forEach((track: MediaStreamTrack) => {
-                            track.addEventListener('ended', () => {
-                                console.log(
-                                    '🎯 MEETING-SERVICE: REMOTE AUDIO TRACK ENDED'
-                                )
-                            })
+                    if (stream.track) {
+                        stream.track.addEventListener('ended', () => {
+                            console.log(
+                                '🎯 MEETING-SERVICE: REMOTE AUDIO TRACK ENDED'
+                            )
                         })
+                    }
+                } else if (stream.kind === 'video') {
+                    console.log(
+                        '🎯 MEETING-SERVICE: Remote video stream enabled'
+                    )
+                    console.log(
+                        '🎯 MEETING-SERVICE: Setting remote video stream'
+                    )
+                    // Create MediaStream from VideoSDK stream track (as per VideoSDK docs)
+                    const mediaStream = new MediaStream()
+                    mediaStream.addTrack(stream.track)
+                    this.remoteStreamSubject.next(mediaStream)
                 }
             })
 

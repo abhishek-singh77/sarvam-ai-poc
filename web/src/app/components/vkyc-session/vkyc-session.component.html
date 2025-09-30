@@ -7,7 +7,7 @@
     (instructionsCancel)="onInstructionsCancel()"
     (consentProceed)="onConsentProceed()"
     (consentCancel)="onConsentCancel()"
-    (healthCheckProceed)="onHealthCheckProceed()"
+    (healthCheckProceed)="onHealthCheckProceed($event)"
     (healthCheckCancel)="onHealthCheckCancel()"
     (voiceRecognition)="startVoiceRecognition($event)"
     (questionnaireRetry)="onHealthCheckCancel()"
@@ -46,20 +46,5 @@
             (click)="showErrorModal = false">
             Close
         </button>
-    </div>
-</div>
-
-<!-- Custom Spinner -->
-<div
-    *ngIf="isAgentLoading"
-    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 text-center">
-        <div
-            class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">Loading Agent</h3>
-        <p class="text-gray-600">
-            Step {{ agentLoadingStep }}:
-            {{ getLogMessage(agentLoadingStep.toString()) }}
-        </p>
     </div>
 </div>

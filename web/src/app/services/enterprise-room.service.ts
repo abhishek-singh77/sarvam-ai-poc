@@ -9,6 +9,7 @@ import {
 } from './enterprise-api.service'
 import { MeetingService } from './meeting.service'
 import { RoomCreateResponse, JoinConfig } from '../interfaces/room.interface'
+import { SessionStorageService } from './session-storage.service'
 
 @Injectable({
     providedIn: 'root',
@@ -58,7 +59,8 @@ export class EnterpriseRoomService {
 
     constructor(
         private enterpriseApi: EnterpriseApiService,
-        private meetingService: MeetingService
+        private meetingService: MeetingService,
+        private sessionStorage: SessionStorageService
     ) {
         this.initializeSubscriptions()
     }
@@ -122,18 +124,22 @@ export class EnterpriseRoomService {
             this.appendLog(`✅ Session created: ${session.session_id}`)
             this.appendLog(`🏠 Room ID: ${session.room_id}`)
 
+            // Step 2: Store session data for later use
+            this.sessionStorage.saveSessionData({
+                roomId: session.room_id,
+                sessionId: session.session_id,
+                agentToken: session.agent?.token || '',
+                agentParticipantId: session.agent?.participantId || '',
+                clientToken: session.client?.token || '',
+                participantId: session.client?.participantId || '',
+                timestamp: Date.now(),
+            })
+
             // Step 2: Agent is automatically created with the session
             this.appendLog('✅ KYC agent ready (created with session)')
-
-            // Step 3: Initialize VideoSDK meeting
-            this.appendLog('🎥 Initializing VideoSDK meeting...')
-            const joinConfig = this.getJoinConfig()
-            if (!joinConfig) {
-                throw new Error('Failed to get join configuration')
-            }
-
-            await this.meetingService.initializeMeeting(joinConfig)
-            this.appendLog('✅ Client joined VideoSDK meeting')
+            this.appendLog(
+                '⏳ VideoSDK meeting will be initialized after health check'
+            )
 
             // Step 4: Load workflow
             this.appendLog('📋 Loading KYC workflow...')
@@ -158,6 +164,73 @@ export class EnterpriseRoomService {
             this.appendLog(
                 `❌ KYC session initialization failed: ${errorMessage}`
             )
+            this.setStatus(`Error: ${errorMessage}`)
+            return { success: false, error: errorMessage }
+        }
+    }
+
+    // Get session data from storage
+    getSessionData() {
+        return this.sessionStorage.getSessionData()
+    }
+
+    // Initialize VideoSDK meeting after health check
+    async initializeVideoSDKMeeting(): Promise<{
+        success: boolean
+        error?: string
+    }> {
+        try {
+            const sessionData = this.sessionStorage.getSessionData()
+            if (!sessionData) {
+                throw new Error('No session data available')
+            }
+
+            this.appendLog(
+                '🎥 Initializing VideoSDK meeting after health check...'
+            )
+            const joinConfig = this.getJoinConfig()
+            if (!joinConfig) {
+                throw new Error('Failed to get join configuration')
+            }
+
+            await this.meetingService.initializeMeeting(joinConfig)
+            this.appendLog('✅ Client joined VideoSDK meeting')
+
+            return { success: true }
+        } catch (error: any) {
+            const errorMessage =
+                error.message || 'Failed to initialize VideoSDK meeting'
+            this.appendLog(`❌ VideoSDK initialization failed: ${errorMessage}`)
+            return { success: false, error: errorMessage }
+        }
+    }
+
+    // End session and cleanup
+    async endSession(): Promise<{ success: boolean; error?: string }> {
+        try {
+            this.appendLog('🛑 Ending KYC session...')
+            this.setStatus('Ending session...')
+
+            // Leave meeting
+            await this.meetingService.leaveMeeting()
+            this.appendLog('✅ Left VideoSDK meeting')
+
+            // Clear session data
+            this.sessionDataSubject.next(null)
+            this.workflowProgressSubject.next(null)
+            this.agentStatusSubject.next(null)
+
+            // Clear session storage
+            this.sessionStorage.clearAll()
+            this.appendLog('✅ Cleared session storage')
+
+            this.appendLog('✅ KYC session ended successfully')
+            this.setStatus('Session ended')
+
+            return { success: true }
+        } catch (error: any) {
+            const errorMessage = error.message || 'Failed to end session'
+            this.appendLog(`❌ Failed to end session: ${errorMessage}`)
             this.setStatus(`Error: ${errorMessage}`)
             return { success: false, error: errorMessage }
         }

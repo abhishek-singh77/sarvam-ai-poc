@@ -46,6 +46,16 @@ class JoinAgentRequest(BaseModel):
     workflow: str = ""
 
 
+class HealthCheckDataRequest(BaseModel):
+    """Request model for storing health check data."""
+    session_id: str
+    location_data: Optional[Dict[str, Any]] = None
+    network_speed: Optional[Dict[str, Any]] = None
+    is_vpn_detected: bool = False
+    user_agent: str
+    timestamp: int
+
+
 class SelfieSubmissionRequest(BaseModel):
     """Request model for selfie submission."""
     room_id: str
@@ -159,6 +169,61 @@ async def join_agent(request: JoinAgentRequest) -> Dict[str, Any]:
         raise HTTPException(
             status_code=500, 
             detail=f"Failed to join agent: {str(e)}"
+        )
+
+
+@router.post("/health-check-data")
+async def store_health_check_data(request: HealthCheckDataRequest) -> Dict[str, Any]:
+    """
+    Store health check data for a session.
+    
+    Args:
+        request: Health check data request
+        
+    Returns:
+        Storage result
+        
+    Raises:
+        HTTPException: If storage fails
+    """
+    logger.info("🎯 HEALTH-CHECK-API: Endpoint called - store_health_check_data")
+    # Log the complete request payload first
+    logger.info("🎯 HEALTH-CHECK-API: Received complete request payload:", extra={
+        "full_request": request.dict(),
+        "request_type": type(request).__name__
+    })
+    
+    logger.info("Storing health check data", extra={
+        "session_id": request.session_id,
+        "has_location": request.location_data is not None,
+        "has_network": request.network_speed is not None,
+        "is_vpn_detected": request.is_vpn_detected,
+        "timestamp": request.timestamp
+    })
+    
+    try:
+        # Log the health check data to terminal for now
+        logger.info("📍 LOCATION DATA:", extra={"data": request.location_data})
+        logger.info("🌐 NETWORK DATA:", extra={"data": request.network_speed})
+        logger.info("🔒 VPN STATUS:", extra={"is_vpn_detected": request.is_vpn_detected})
+        logger.info("🕒 TIMESTAMP:", extra={"timestamp": request.timestamp})
+        logger.info("🌍 USER AGENT:", extra={"user_agent": request.user_agent})
+        
+        # TODO: Store this data in database against KSA sub-action ID
+        # For now, we're just logging it
+        
+        return {
+            "status": "success",
+            "message": "Health check data stored successfully",
+            "session_id": request.session_id,
+            "timestamp": request.timestamp
+        }
+        
+    except Exception as e:
+        logger.error("Failed to store health check data", extra={"error": str(e)})
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to store health check data: {str(e)}"
         )
 
 

@@ -20,6 +20,8 @@ import { VkycWorkflowFacadeService } from '../../services/vkyc-workflow-facade.s
 import { VkycCaptureFacadeService } from '../../services/vkyc-capture-facade.service'
 import { VkycQuestionnaireFacadeService } from '../../services/vkyc-questionnaire-facade.service'
 import { PreCallFlowService } from '../../services/pre-call-flow.service'
+import { SessionStorageService } from '../../services/session-storage.service'
+import { EnterpriseRoomService } from '../../services/enterprise-room.service'
 
 @Component({
     selector: 'app-vkyc-session',
@@ -47,13 +49,18 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     showErrorModal = false
     errorMessage = ''
 
-    // Agent loading
-    isAgentLoading = false
-    agentLoadingStep = 0
+    // Agent loading (managed by layout component)
     canStartCall = false
 
     // Questionnaire answers
     questionnaireAnswers: { [key: string]: any } = {}
+
+    // Health check data
+    healthCheckData: {
+        locationData: any
+        networkSpeed: any
+        isVpnDetected: boolean
+    } | null = null
 
     constructor(
         public preCallFlowService: PreCallFlowService,
@@ -61,7 +68,9 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         private workflowFacade: VkycWorkflowFacadeService,
         private captureFacade: VkycCaptureFacadeService,
         private questionnaireFacade: VkycQuestionnaireFacadeService,
-        private cdRef: ChangeDetectorRef
+        private cdRef: ChangeDetectorRef,
+        private sessionStorage: SessionStorageService,
+        private roomService: EnterpriseRoomService
     ) {
         console.log('🎯 VKYC-SESSION: Component initialized')
     }
@@ -100,13 +109,20 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             this.workflowFacade.state$.subscribe((state) => {
                 if (!state) return
 
-                this.updateLayoutState({
-                    phase: state.phase,
+                // Don't override phase if we're already in call
+                const updates: Partial<VkycLayoutState> = {
                     currentStep: state.currentStep,
                     captureType: state.currentStep?.data?.captureType,
                     questions: state.currentStep?.data?.questions,
                     answers: this.questionnaireAnswers,
-                })
+                }
+
+                // Only set phase if we're not already in call
+                if (this.layoutState?.phase !== 'in_call') {
+                    updates.phase = state.phase
+                }
+
+                this.updateLayoutState(updates)
 
                 if (state.currentStep) {
                     this.handleStepChange(state.currentStep)
@@ -116,14 +132,36 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         this.workflowFacade.init()
     }
 
-    private initializeAgentLoading(): void {
+    private initializeAgentLoading(healthCheckData?: {
+        locationData: any
+        networkSpeed: any
+        isVpnDetected: boolean
+    }): void {
         this.subscriptions.add(
             this.meetingFacade.agentLoadingStep$.subscribe((step) => {
-                this.agentLoadingStep = step
-                this.isAgentLoading = step < 4 // Assuming 4 steps total
+                // Update layout state with current step
+                this.updateLayoutState({ agentLoadingStep: step })
             })
         )
-        this.meetingFacade.startAgentLoadingSequence()
+
+        // Listen for agent stream ready event
+        this.subscriptions.add(
+            this.meetingFacade.agentStreamReady$.subscribe((isReady) => {
+                if (isReady) {
+                    console.log('🎯 VKYC-SESSION: Agent stream is ready')
+                    this.updateLayoutState({
+                        agentStreamReady: true,
+                        showAgentJoinPopup: false, // Close popup when agent is ready
+                        phase: 'in_call', // Ensure we stay in in_call phase
+                        showPreCallFlow: false, // Ensure pre-call flow is hidden
+                    })
+                    // Start the actual KYC workflow
+                    this.workflowFacade.init()
+                }
+            })
+        )
+
+        this.meetingFacade.startAgentLoadingSequence(healthCheckData)
     }
 
     // Pre-call flow event handlers
@@ -149,7 +187,21 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         console.log('🎯 VKYC-SESSION: User cancelled from consent')
     }
 
-    onHealthCheckProceed(): void {
+    onHealthCheckProceed(healthCheckData: {
+        locationData: any
+        networkSpeed: any
+        isVpnDetected: boolean
+    }): void {
+        // Store health check data for later use in geo-location API
+        this.healthCheckData = healthCheckData
+
+        // Log the health check results
+        console.log('🎯 VKYC-SESSION: Health check completed', {
+            location: healthCheckData.locationData,
+            networkSpeed: healthCheckData.networkSpeed,
+            vpnDetected: healthCheckData.isVpnDetected,
+        })
+
         this.preCallFlowService.completeFlow()
         // Don't automatically join call, wait for user to click "Start Call"
     }
@@ -158,12 +210,45 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         console.log('🎯 VKYC-SESSION: User cancelled from health check')
     }
 
+    // Agent join is now handled automatically when stream is ready
+
     // Start call method - called when user clicks "Start Call" button
-    startCall(): void {
+    async startCall(): Promise<void> {
         console.log('🎯 VKYC-SESSION: Starting call...')
-        this.initializeAgentLoading()
-        this.updateLayoutState({ phase: 'in_call', showPreCallFlow: false })
-        this.joinCall()
+
+        // Show agent join popup immediately
+        this.updateLayoutState({
+            showAgentJoinPopup: true,
+            agentStreamReady: false,
+            phase: 'in_call',
+            showPreCallFlow: false,
+        })
+
+        try {
+            // Initialize VideoSDK meeting after health check
+            console.log('🎯 VKYC-SESSION: Initializing VideoSDK meeting...')
+            const videoResult =
+                await this.roomService.initializeVideoSDKMeeting()
+
+            if (!videoResult.success) {
+                throw new Error(
+                    videoResult.error || 'Failed to initialize VideoSDK'
+                )
+            }
+
+            // Pass health check data to join-agent API
+            if (this.healthCheckData) {
+                console.log(
+                    '🎯 VKYC-SESSION: Passing health check data to join-agent:',
+                    this.healthCheckData
+                )
+            }
+
+            this.initializeAgentLoading(this.healthCheckData || undefined)
+        } catch (error: any) {
+            console.error('🎯 VKYC-SESSION: Failed to start call:', error)
+            // Handle error - maybe show error modal or go back to health check
+        }
     }
 
     // Core workflow methods
@@ -223,9 +308,17 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         console.log('🎯 VKYC-SESSION: Questionnaire submitted:', answers)
     }
 
-    endSession(): void {
-        this.meetingFacade.leaveCall()
-        this.sessionEnded.emit()
+    async endSession(): Promise<void> {
+        try {
+            // End the session and clear all data
+            await this.roomService.endSession()
+            this.meetingFacade.leaveCall()
+            this.sessionEnded.emit()
+        } catch (error) {
+            console.error('🎯 VKYC-SESSION: Error ending session:', error)
+            // Still emit the event to navigate away
+            this.sessionEnded.emit()
+        }
     }
 
     // Utility methods
@@ -243,15 +336,5 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         this.showErrorModal = true
     }
 
-    // Template helper methods
-    getLogMessage(step: string): string {
-        const messages: { [key: string]: string } = {
-            '0': 'Initializing agent...',
-            '1': 'Loading AI model...',
-            '2': 'Connecting to video service...',
-            '3': 'Setting up audio streams...',
-            '4': 'Finalizing setup...',
-        }
-        return messages[step] || 'Loading...'
-    }
+    // Template helper methods (removed getLogMessage as it's no longer needed)
 }

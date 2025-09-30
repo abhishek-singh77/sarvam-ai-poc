@@ -40,11 +40,13 @@ export class MeetingPanelComponent implements OnInit, AfterViewInit, OnDestroy {
     agent: any = null
     agentMicEnabled: boolean = false
     agentWebCamEnabled: boolean = false
+    agentStream: MediaStream | null = null
 
     // Customer state (remote participant)
     customer: any = null
     customerMicEnabled: boolean = true
     customerWebCamEnabled: boolean = true
+    customerStream: MediaStream | null = null
 
     // Retry counters to prevent infinite retries
     private customerTrackRetryCount: number = 0
@@ -197,35 +199,40 @@ export class MeetingPanelComponent implements OnInit, AfterViewInit, OnDestroy {
             })
         )
 
-        // Subscribe to local stream (Agent)
+        // Subscribe to local stream (Customer - local participant)
         this.subscriptions.add(
             this.meetingService.localStream$.subscribe((stream) => {
                 if (stream) {
-                    console.log('🎯 MEETING-PANEL: Agent stream received:', {
-                        kind: stream.kind,
-                        track: stream.track,
-                        enabled: stream.track?.enabled,
-                    })
+                    console.log(
+                        '🎯 MEETING-PANEL: Local stream received (Customer):',
+                        {
+                            streamId: stream.id,
+                            videoTracks: stream.getVideoTracks().length,
+                            audioTracks: stream.getAudioTracks().length,
+                            isActive: stream.active,
+                        }
+                    )
                     this.setCustomerTrack(stream)
                 }
             })
         )
 
-        // Subscribe to remote stream (Customer)
+        // Subscribe to remote stream (Agent - remote participant)
         this.subscriptions.add(
             this.meetingService.remoteStream$.subscribe((stream) => {
                 if (stream) {
-                    console.log('🎯 MEETING-PANEL: Customer stream received:', {
-                        kind: stream.kind,
-                        track: stream.track,
-                        enabled: stream.track?.enabled,
-                        participantId: stream.participantId,
-                    })
+                    console.log(
+                        '🎯 MEETING-PANEL: Remote stream received (Agent):',
+                        {
+                            streamId: stream.id,
+                            videoTracks: stream.getVideoTracks().length,
+                            audioTracks: stream.getAudioTracks().length,
+                            isActive: stream.active,
+                        }
+                    )
                     this.setAgentTrack(stream)
                 } else {
-                    console.log(
-                        '🎯 MEETING-PANEL: No customer stream available'
-                    )
+                    console.log('🎯 MEETING-PANEL: No agent stream available')
                 }
             })
         )
@@ -254,80 +261,36 @@ export class MeetingPanelComponent implements OnInit, AfterViewInit, OnDestroy {
     /**
      * Set customer track (remote participant)
      */
-    setCustomerTrack(stream: any): void {
+    setCustomerTrack(stream: MediaStream): void {
         console.log('🎯 MEETING-PANEL: Setting customer track:', {
-            streamKind: stream.kind,
-            trackId: stream.track?.id,
-            trackEnabled: stream.track?.enabled,
+            streamId: stream.id,
+            videoTracks: stream.getVideoTracks().length,
+            audioTracks: stream.getAudioTracks().length,
+            isActive: stream.active,
         })
 
-        if (stream.kind === 'video') {
-            console.log('🎯 MEETING-PANEL: Processing customer video track')
-            const mediaStream = new MediaStream()
-            mediaStream.addTrack(stream.track)
+        // Store the MediaStream directly
+        this.customerStream = stream
 
-            const customerVideoElement =
-                this.customerTrack?._videoTrack?.nativeElement
+        // Check if it has video tracks
+        const videoTracks = stream.getVideoTracks()
+        if (videoTracks.length > 0) {
+            console.log('🎯 MEETING-PANEL: Customer video track detected')
+            this.isCustomerVideoPlaying = true
+            this.isParticipantPresent = true
+            this.customerWebCamEnabled = true
+            this.customerTrackRetryCount = 0
             console.log(
-                '🎯 MEETING-PANEL: Customer track component:',
-                this.customerTrack
+                '🎯 MEETING-PANEL: Customer video should now be visible'
             )
-            console.log(
-                '🎯 MEETING-PANEL: Customer video element:',
-                customerVideoElement
-            )
-
-            if (customerVideoElement) {
-                console.log(
-                    '🎯 MEETING-PANEL: Customer video element found, setting stream'
-                )
-                customerVideoElement.srcObject = mediaStream
-                this.playVideoTrack(customerVideoElement)
-                this.isCustomerVideoPlaying = true
-                this.customerTrackRetryCount = 0 // Reset retry counter on success
-                console.log(
-                    '🎯 MEETING-PANEL: Customer video track set successfully'
-                )
-            } else {
-                console.warn(
-                    '🎯 MEETING-PANEL: Customer video element not found, retrying...'
-                )
-                console.log(
-                    '🎯 MEETING-PANEL: customerTrack component:',
-                    this.customerTrack
-                )
-                // Retry after a short delay if we haven't exceeded max retries
-                if (this.customerTrackRetryCount < this.maxRetries) {
-                    this.customerTrackRetryCount++
-                    setTimeout(() => {
-                        this.setCustomerTrack(stream)
-                    }, 100)
-                } else {
-                    console.error(
-                        '🎯 MEETING-PANEL: Max retries exceeded for customer track'
-                    )
-                }
-            }
         }
 
-        if (stream.kind === 'audio') {
-            console.log('🎯 MEETING-PANEL: Processing customer audio track')
-            const mediaStream = new MediaStream()
-            mediaStream.addTrack(stream.track)
-            const customerAudioElement =
-                this.customerTrack?._audioTrack?.nativeElement
-            if (customerAudioElement) {
-                customerAudioElement.srcObject = mediaStream
-                this.playAudioTrack(customerAudioElement)
-                this.isCustomerAudioPlaying = true
-                console.log(
-                    '🎯 MEETING-PANEL: Customer audio track set successfully'
-                )
-            } else {
-                console.warn(
-                    '🎯 MEETING-PANEL: Customer audio element not found'
-                )
-            }
+        // Check if it has audio tracks
+        const audioTracks = stream.getAudioTracks()
+        if (audioTracks.length > 0) {
+            console.log('🎯 MEETING-PANEL: Customer audio track detected')
+            this.isCustomerAudioPlaying = true
+            this.customerMicEnabled = true
         }
 
         this.addPlayingEventListeners()
@@ -336,78 +299,33 @@ export class MeetingPanelComponent implements OnInit, AfterViewInit, OnDestroy {
     /**
      * Set agent track (local participant)
      */
-    setAgentTrack(stream: any): void {
+    setAgentTrack(stream: MediaStream): void {
         console.log('🎯 MEETING-PANEL: Setting agent track:', {
-            streamKind: stream.kind,
-            trackId: stream.track?.id,
-            trackEnabled: stream.track?.enabled,
+            streamId: stream.id,
+            videoTracks: stream.getVideoTracks().length,
+            audioTracks: stream.getAudioTracks().length,
+            isActive: stream.active,
         })
 
-        if (stream.kind === 'video') {
-            console.log('🎯 MEETING-PANEL: Processing agent video track')
-            const mediaStream = new MediaStream()
-            mediaStream.addTrack(stream.track)
+        // Store the MediaStream directly
+        this.agentStream = stream
 
-            const agentVideoElement =
-                this.agentTrack?._videoTrack?.nativeElement
-            console.log(
-                '🎯 MEETING-PANEL: Agent track component:',
-                this.agentTrack
-            )
-            console.log(
-                '🎯 MEETING-PANEL: Agent video element:',
-                agentVideoElement
-            )
-
-            if (agentVideoElement) {
-                console.log(
-                    '🎯 MEETING-PANEL: Agent video element found, setting stream'
-                )
-                agentVideoElement.srcObject = mediaStream
-                this.playVideoTrack(agentVideoElement)
-                this.isAgentVideoPlaying = true
-                this.agentTrackRetryCount = 0 // Reset retry counter on success
-                console.log(
-                    '🎯 MEETING-PANEL: Agent video track set successfully'
-                )
-            } else {
-                console.warn(
-                    '🎯 MEETING-PANEL: Agent video element not found, retrying...'
-                )
-                console.log(
-                    '🎯 MEETING-PANEL: agentTrack component:',
-                    this.agentTrack
-                )
-                // Retry after a short delay if we haven't exceeded max retries
-                if (this.agentTrackRetryCount < this.maxRetries) {
-                    this.agentTrackRetryCount++
-                    setTimeout(() => {
-                        this.setAgentTrack(stream)
-                    }, 100)
-                } else {
-                    console.error(
-                        '🎯 MEETING-PANEL: Max retries exceeded for agent track'
-                    )
-                }
-            }
+        // Check if it has video tracks
+        const videoTracks = stream.getVideoTracks()
+        if (videoTracks.length > 0) {
+            console.log('🎯 MEETING-PANEL: Agent video track detected')
+            this.isAgentVideoPlaying = true
+            this.agentWebCamEnabled = true
+            this.agentTrackRetryCount = 0
+            console.log('🎯 MEETING-PANEL: Agent video should now be visible')
         }
 
-        if (stream.kind === 'audio') {
-            console.log('🎯 MEETING-PANEL: Processing agent audio track')
-            const mediaStream = new MediaStream()
-            mediaStream.addTrack(stream.track)
-            const agentAudioElement =
-                this.agentTrack?._audioTrack?.nativeElement
-            if (agentAudioElement) {
-                agentAudioElement.srcObject = mediaStream
-                this.playAudioTrack(agentAudioElement)
-                this.isAgentAudioPlaying = true
-                console.log(
-                    '🎯 MEETING-PANEL: Agent audio track set successfully'
-                )
-            } else {
-                console.warn('🎯 MEETING-PANEL: Agent audio element not found')
-            }
+        // Check if it has audio tracks
+        const audioTracks = stream.getAudioTracks()
+        if (audioTracks.length > 0) {
+            console.log('🎯 MEETING-PANEL: Agent audio track detected')
+            this.isAgentAudioPlaying = true
+            this.agentMicEnabled = true
         }
 
         this.addPlayingEventListeners()

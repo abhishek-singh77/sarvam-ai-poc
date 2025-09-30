@@ -6,6 +6,8 @@ import { UserConsentComponent } from '../pre-call-flow/user-consent.component'
 import { HealthCheckComponent } from '../pre-call-flow/health-check.component'
 import { DetectionOverlaysComponent } from '../detection-overlays/detection-overlays.component'
 import { QuestionnaireFormComponent } from '../questionnaire-form/questionnaire-form.component'
+import { AgentJoinPopupComponent } from '../agent-join-popup/agent-join-popup.component'
+import { MeetingPanelComponent } from '../meeting-panel/meeting-panel.component'
 
 export interface VkycLayoutState {
     phase: 'pre' | 'in_call' | 'post'
@@ -18,6 +20,9 @@ export interface VkycLayoutState {
     captureType?: 'FACE_CAPTURE' | 'DOCUMENT_CAPTURE' | null
     questions?: any[]
     answers?: { [key: string]: any }
+    showAgentJoinPopup?: boolean
+    agentStreamReady?: boolean
+    agentLoadingStep?: number
 }
 
 @Component({
@@ -31,6 +36,8 @@ export interface VkycLayoutState {
         HealthCheckComponent,
         DetectionOverlaysComponent,
         QuestionnaireFormComponent,
+        AgentJoinPopupComponent,
+        MeetingPanelComponent,
     ],
     templateUrl: './vkyc-session-layout.component.html',
     styleUrls: ['./vkyc-session-layout.component.css'],
@@ -45,10 +52,36 @@ export class VkycSessionLayoutComponent {
     @Output() instructionsCancel = new EventEmitter<void>()
     @Output() consentProceed = new EventEmitter<void>()
     @Output() consentCancel = new EventEmitter<void>()
-    @Output() healthCheckProceed = new EventEmitter<void>()
+    @Output() healthCheckProceed = new EventEmitter<{
+        locationData: any
+        networkSpeed: any
+        isVpnDetected: boolean
+    }>()
     @Output() healthCheckCancel = new EventEmitter<void>()
     @Output() voiceRecognition = new EventEmitter<any>()
     @Output() questionnaireRetry = new EventEmitter<void>()
     @Output() questionnaireSubmit = new EventEmitter<void>()
     @Output() startCall = new EventEmitter<void>()
+
+    // Meeting panel event handlers
+    onStreamsActive(active: boolean): void {
+        console.log('🎯 LAYOUT: Streams active:', active)
+    }
+
+    onMicToggle(): void {
+        console.log('🎯 LAYOUT: Mic toggle requested')
+    }
+
+    onCameraToggle(): void {
+        console.log('🎯 LAYOUT: Camera toggle requested')
+    }
+
+    onChatToggle(): void {
+        console.log('🎯 LAYOUT: Chat toggle requested')
+    }
+
+    onEndCall(): void {
+        console.log('🎯 LAYOUT: End call requested')
+        this.endSession.emit()
+    }
 }

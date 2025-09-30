@@ -27,9 +27,8 @@
         <!-- Health Check -->
         <app-health-check
             *ngIf="state?.preCallStep === 'health-check'"
-            [healthChecks]="preCallFlowService?.getHealthChecks() || []"
             [autoStart]="true"
-            (proceed)="healthCheckProceed.emit()"
+            (proceed)="healthCheckProceed.emit($event)"
             (cancel)="healthCheckCancel.emit()">
         </app-health-check>
     </div>
@@ -103,13 +102,14 @@
 
         <!-- Video and Detection Area -->
         <div class="flex-1 relative bg-black">
-            <!-- Video Element -->
-            <video
-                #localVideo
-                class="w-full h-full object-cover"
-                autoplay
-                muted
-                playsinline></video>
+            <!-- Meeting Panel Component -->
+            <app-meeting-panel
+                (streamsActive)="onStreamsActive($event)"
+                (micToggle)="onMicToggle()"
+                (cameraToggle)="onCameraToggle()"
+                (chatToggle)="onChatToggle()"
+                (endCall)="onEndCall()">
+            </app-meeting-panel>
 
             <!-- Detection Overlays -->
             <app-detection-overlays
@@ -207,4 +207,12 @@
             </button>
         </div>
     </div>
+
+    <!-- Agent Join Popup -->
+    <app-agent-join-popup
+        [isVisible]="state?.showAgentJoinPopup || false"
+        [isLoading]="!state?.agentStreamReady"
+        [isReady]="state?.agentStreamReady || false"
+        [currentStep]="state?.agentLoadingStep || 0">
+    </app-agent-join-popup>
 </div>

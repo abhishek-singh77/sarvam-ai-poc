@@ -3,6 +3,7 @@ import { BehaviorSubject, Observable } from 'rxjs'
 import { UserInstruction } from '../components/pre-call-flow/user-instruction.component'
 import { ConsentItem } from '../components/pre-call-flow/user-consent.component'
 import { HealthCheckItem } from '../components/pre-call-flow/health-check.component'
+import { SessionStorageService } from './session-storage.service'
 
 export interface PreCallFlowState {
     currentStep: 'instructions' | 'consent' | 'health-check' | 'complete'
@@ -21,6 +22,22 @@ export class PreCallFlowService {
     })
 
     public flowState$ = this.flowState.asObservable()
+
+    constructor(private sessionStorage: SessionStorageService) {
+        // Initialize with saved state if available
+        this.initializeFromSession()
+    }
+
+    private initializeFromSession(): void {
+        const currentStep = this.sessionStorage.getCurrentStep()
+        const isComplete = currentStep === 'complete'
+
+        this.flowState.next({
+            currentStep,
+            canProceed: isComplete,
+            isComplete,
+        })
+    }
 
     // Default instructions for KYC
     private defaultInstructions: UserInstruction[] = [
@@ -94,45 +111,7 @@ export class PreCallFlowService {
         },
     ]
 
-    // Default health checks
-    private defaultHealthChecks: HealthCheckItem[] = [
-        {
-            name: 'Camera',
-            icon: 'camera',
-            status: 'pending',
-            description: 'Checking camera access and quality',
-        },
-        {
-            name: 'Microphone',
-            icon: 'microphone',
-            status: 'pending',
-            description: 'Checking microphone access and quality',
-        },
-        {
-            name: 'Location',
-            icon: 'location',
-            status: 'pending',
-            description: 'Checking location permissions',
-        },
-        {
-            name: 'Network Strength',
-            icon: 'network',
-            status: 'pending',
-            description: 'Checking network connectivity',
-        },
-        {
-            name: 'Browser',
-            icon: 'browser',
-            status: 'pending',
-            description: 'Checking browser compatibility',
-        },
-        {
-            name: 'VPN',
-            icon: 'vpn',
-            status: 'pending',
-            description: 'Checking VPN status',
-        },
-    ]
+    // Health checks are now handled by HealthCheckService
 
     getInstructions(): UserInstruction[] {
         return [...this.defaultInstructions]
@@ -142,11 +121,10 @@ export class PreCallFlowService {
         return [...this.defaultConsentItems]
     }
 
-    getHealthChecks(): HealthCheckItem[] {
-        return [...this.defaultHealthChecks]
-    }
+    // Health checks are now handled by HealthCheckService
 
     proceedToConsent(): void {
+        this.sessionStorage.markStepCompleted('instructions')
         this.flowState.next({
             currentStep: 'consent',
             canProceed: false,
@@ -155,6 +133,7 @@ export class PreCallFlowService {
     }
 
     proceedToHealthCheck(): void {
+        this.sessionStorage.markStepCompleted('consent')
         this.flowState.next({
             currentStep: 'health-check',
             canProceed: false,
@@ -163,6 +142,7 @@ export class PreCallFlowService {
     }
 
     completeFlow(): void {
+        this.sessionStorage.markStepCompleted('healthCheck')
         this.flowState.next({
             currentStep: 'complete',
             canProceed: true,
@@ -171,6 +151,7 @@ export class PreCallFlowService {
     }
 
     resetFlow(): void {
+        this.sessionStorage.clearCompletedSteps()
         this.flowState.next({
             currentStep: 'instructions',
             canProceed: false,

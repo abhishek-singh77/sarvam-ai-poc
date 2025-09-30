@@ -55,7 +55,7 @@
         <div
             class="w-full min-h-[15rem] max-h-[18rem] mb-auto rounded-xl bg-gray-200">
             <div
-                *ngIf="!isParticipantPresent && !isCustomerVideoPlaying"
+                *ngIf="!isCustomerVideoPlaying"
                 class="h-full w-full flex items-center justify-center text-gray-500">
                 <div class="text-center">
                     <div class="mb-2">
@@ -71,12 +71,13 @@
                                 d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                         </svg>
                     </div>
-                    <span>Waiting for customer to join</span>
+                    <span>Waiting for customer video</span>
                 </div>
             </div>
             <app-audio-video-track
-                *ngIf="isParticipantPresent"
+                *ngIf="isCustomerVideoPlaying"
                 #customerTrack
+                [stream]="customerStream"
                 class="flex justify-center h-full"></app-audio-video-track>
         </div>
 
@@ -120,10 +121,9 @@
                         class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
                 </div>
                 <app-audio-video-track
-                    [ngStyle]="{
-                        display: !isAgentVideoPlaying ? 'none' : 'block'
-                    }"
+                    *ngIf="isAgentVideoPlaying"
                     #agentTrack
+                    [stream]="agentStream"
                     [mirrorVideoStream]="true"></app-audio-video-track>
             </div>
         </div>

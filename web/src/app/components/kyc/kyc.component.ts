@@ -17,6 +17,7 @@ import {
     ErrorModalComponent,
     ErrorModalData,
 } from '../error-modal/error-modal.component'
+import { SessionStorageService } from '../../services/session-storage.service'
 
 @Component({
     selector: 'app-kyc',
@@ -34,6 +35,7 @@ export class KYCComponent implements OnInit, OnDestroy {
     // Component state
     status: string = 'Ready'
     isLoading: boolean = false
+    isSessionActive: boolean = false
     apiBase: string = 'http://localhost:8000'
 
     // Error modal state
@@ -45,33 +47,57 @@ export class KYCComponent implements OnInit, OnDestroy {
     constructor(
         private roomService: EnterpriseRoomService,
         private mediaService: MediaService,
-        private router: Router
+        private router: Router,
+        private sessionStorage: SessionStorageService
     ) {}
 
     ngOnInit(): void {
         this.initializeSubscriptions()
-        this.checkAndRejoinSession()
+        this.checkExistingSession()
     }
 
-    private checkAndRejoinSession(): void {
-        // Check if we have room data from a previous session
-        this.roomService.roomData$.subscribe(async (roomData) => {
-            if (roomData) {
-                console.log(
-                    'Found existing room data, rejoining session:',
-                    roomData.roomId
-                )
-                this.setStatus('Rejoining KYC session...')
-                await this.rejoinSession(roomData)
+    private checkExistingSession(): void {
+        // Check if we have existing session data
+        const sessionData = this.sessionStorage.getSessionData()
+        const completedSteps = this.sessionStorage.getCompletedSteps()
+
+        if (sessionData && completedSteps) {
+            console.log('🔄 Found existing session data, resuming session...')
+            this.isSessionActive = true
+            // The VKYC session component will handle the rest based on completed steps
+        } else {
+            console.log('🆕 No existing session data, creating new session')
+            this.initializeNewSession()
+        }
+    }
+
+    private async initializeNewSession(): Promise<void> {
+        try {
+            this.isLoading = true
+            this.setStatus('Creating new KYC session...')
+
+            const result = await this.roomService.initializeKYCSession()
+
+            if (result.success) {
+                this.isSessionActive = true
+                this.setStatus('KYC session ready')
             } else {
-                console.log('No room data found, redirecting to home')
-                this.setStatus('No active session found')
-                // Redirect to home after a short delay to show the message
-                setTimeout(() => {
-                    this.returnToHome()
-                }, 2000)
+                throw new Error(result.error || 'Failed to create session')
             }
-        })
+        } catch (error: any) {
+            console.error('Failed to initialize new session:', error)
+            this.setStatus('Error: ' + error.message)
+            this.showErrorModal = true
+            this.errorModalData = {
+                title: 'Session Creation Failed',
+                message: error.message || 'Failed to create KYC session',
+                type: 'general',
+                showRetry: true,
+                retryAction: () => this.initializeNewSession(),
+            }
+        } finally {
+            this.isLoading = false
+        }
     }
 
     private async rejoinSession(roomData: any): Promise<void> {
@@ -84,21 +110,8 @@ export class KYCComponent implements OnInit, OnDestroy {
                 // The room data is already available, so we can proceed
                 this.setStatus('Session rejoined successfully')
 
-                // Start the KYC agent after rejoining the session
-                this.setStatus('Starting KYC agent...')
-                const kycResult = await this.roomService.startKyc()
-
-                if (kycResult.success) {
-                    this.setStatus('KYC session ready')
-                    console.log('✅ KYC session started successfully')
-                } else {
-                    this.setStatus('Failed to start KYC agent')
-                    this.showUserFriendlyError(
-                        `Failed to start KYC agent: ${
-                            kycResult.error || 'Unknown error'
-                        }`
-                    )
-                }
+                // Session rejoined - user should start call from VKYC flow
+                this.setStatus('Session rejoined. Start call from VKYC flow.')
             } else {
                 this.setStatus('Session expired')
                 this.showUserFriendlyError(
