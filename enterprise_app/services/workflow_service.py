@@ -140,16 +140,22 @@ class WorkflowService:
     def load_workflow(self, room_id: str, workflow_type: str = "kyc") -> Dict[str, Any]:
         """Load a workflow for a room"""
         try:
-            # Get workflow template
-            template = self.workflow_templates.get(workflow_type, self.workflow_templates.get("default"))
-            if not template:
+            # Try to load new format first, fallback to old format
+            workflow_config = self._load_workflow_config(workflow_type)
+            
+            if not workflow_config:
                 raise ValueError(f"Workflow template '{workflow_type}' not found")
             
-            # Create workflow steps
+            # Create workflow steps based on format
             steps = []
-            for step_data in template.get("steps", []):
-                step = WorkflowStep(step_data)
-                steps.append(step)
+            if "actionables" in workflow_config:
+                # New format with actionables
+                steps = self._parse_new_format(workflow_config)
+            elif "workflow" in workflow_config and "steps" in workflow_config["workflow"]:
+                # Old format with workflow.steps
+                steps = self._parse_old_format(workflow_config)
+            else:
+                raise ValueError("Invalid workflow format")
             
             # Store workflow
             self.workflows[room_id] = steps
@@ -163,7 +169,7 @@ class WorkflowService:
                 "workflow_type": workflow_type,
                 "total_steps": len(steps),
                 "current_step": self.current_steps[room_id],
-                "workflow": template
+                "workflow": workflow_config
             }
             
         except Exception as e:
@@ -173,6 +179,64 @@ class WorkflowService:
                 "room_id": room_id,
                 "error": str(e)
             }
+    
+    def _load_workflow_config(self, workflow_type: str) -> Dict[str, Any]:
+        """Load workflow configuration from file"""
+        try:
+            # Try new format first
+            new_config_path = f"configs/sessions/{workflow_type}_new.json"
+            if os.path.exists(new_config_path):
+                with open(new_config_path, 'r') as f:
+                    return json.load(f)
+            
+            # Fallback to old format
+            old_config_path = f"configs/sessions/{workflow_type}.json"
+            if os.path.exists(old_config_path):
+                with open(old_config_path, 'r') as f:
+                    return json.load(f)
+            
+            return None
+        except Exception as e:
+            logger.error(f"❌ Failed to load workflow config: {e}")
+            return None
+    
+    def _parse_new_format(self, config: Dict[str, Any]) -> List[WorkflowStep]:
+        """Parse new workflow format with actionables"""
+        steps = []
+        
+        for actionable in config.get("actionables", []):
+            for sub_action in actionable.get("sub_actions", []):
+                step_data = {
+                    "id": sub_action.get("sub_action_ref", f"{sub_action.get('type', 'unknown')}-{len(steps)}"),
+                    "type": sub_action.get("type", "unknown"),
+                    "title": sub_action.get("title", sub_action.get("sub_action_name", "Unknown Step")),
+                    "description": sub_action.get("description", ""),
+                    "status": "pending",
+                    "data": {
+                        "sub_action_step": sub_action.get("sub_action_step", "in_call"),
+                        "captureType": sub_action.get("frame_capture_type"),
+                        "questions": sub_action.get("questionnaire", {}).get("questions", []),
+                        "optional": sub_action.get("optional", False),
+                        "validation_type": sub_action.get("strict_validation_type"),
+                        "face_match_sources": sub_action.get("face_match_sources", []),
+                        "perform_face_match_in_sync": sub_action.get("perform_face_match_in_sync", False),
+                        "perform_central_db_check_in_sync": sub_action.get("perform_central_db_check_in_sync", False)
+                    }
+                }
+                steps.append(WorkflowStep(step_data))
+        
+        # Sort steps by phase (pre, in_call, post)
+        phase_order = {"pre": 0, "in_call": 1, "post": 2}
+        steps.sort(key=lambda x: phase_order.get(x.data.get("sub_action_step", "in_call"), 1))
+        
+        return steps
+    
+    def _parse_old_format(self, config: Dict[str, Any]) -> List[WorkflowStep]:
+        """Parse old workflow format with workflow.steps"""
+        steps = []
+        for step_data in config.get("workflow", {}).get("steps", []):
+            steps.append(WorkflowStep(step_data))
+        return steps
     
     def get_workflow_progress(self, room_id: str) -> Dict[str, Any]:
         """Get workflow progress for a room"""

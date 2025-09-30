@@ -1,0 +1,48 @@
+<div class="absolute inset-0 pointer-events-none">
+    <!-- Face Detection -->
+    <div
+        *ngIf="detectionResult && captureType === 'FACE_CAPTURE'"
+        class="absolute border-2 rounded-lg transition-all duration-200"
+        [ngClass]="{
+            'border-green-500': detectionResult.steady,
+            'border-yellow-500': !detectionResult.steady
+        }"
+        [style.left.px]="detectionResult.boundingBox.x"
+        [style.top.px]="detectionResult.boundingBox.y"
+        [style.width.px]="detectionResult.boundingBox.width"
+        [style.height.px]="detectionResult.boundingBox.height"></div>
+
+    <!-- Document Detection -->
+    <div
+        *ngIf="documentDetectionResult && captureType === 'DOCUMENT_CAPTURE'"
+        class="absolute border-2 rounded-lg transition-all duration-200"
+        [ngClass]="{
+            'border-green-500': documentDetectionResult.steady,
+            'border-yellow-500': !documentDetectionResult.steady
+        }"
+        [style.left.px]="documentDetectionResult.boundingBox.x"
+        [style.top.px]="documentDetectionResult.boundingBox.y"
+        [style.width.px]="documentDetectionResult.boundingBox.width"
+        [style.height.px]="documentDetectionResult.boundingBox.height"></div>
+
+    <!-- Status Message -->
+    <div
+        *ngIf="detectionResult || documentDetectionResult"
+        class="absolute top-4 left-4 right-4">
+        <div
+            class="bg-black bg-opacity-75 text-white px-4 py-2 rounded-lg text-center">
+            <p class="text-sm">
+                {{
+                    detectionResult?.message ||
+                        documentDetectionResult?.message ||
+                        'Object detected'
+                }}
+            </p>
+            <p
+                *ngIf="(detectionResult || documentDetectionResult)?.steady"
+                class="text-xs mt-1 text-green-300">
+                Auto-capturing in 2 seconds...
+            </p>
+        </div>
+    </div>
+</div>

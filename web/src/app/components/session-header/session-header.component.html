@@ -1,0 +1,37 @@
+<div
+    class="bg-white shadow-sm border-b border-gray-200 px-6 py-3 flex-shrink-0">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center">
+            <img
+                *ngIf="showLogo"
+                src="assets/logos/digio_logo.svg"
+                alt="Digio"
+                class="h-8 w-auto" />
+            <div class="ml-4" *ngIf="title || subtitle">
+                <div class="text-sm font-medium text-gray-900" *ngIf="title">
+                    {{ title }}
+                </div>
+                <div class="text-xs text-gray-500" *ngIf="subtitle">
+                    {{ subtitle }}
+                </div>
+            </div>
+        </div>
+
+        <button
+            class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center"
+            (click)="end.emit()">
+            <svg
+                class="w-4 h-4 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24">
+                <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            End Session
+        </button>
+    </div>
+</div>

@@ -11,3 +11,36 @@
         transform: rotate(360deg);
     }
 }
+
+/* Background Grid Pattern */
+.bg-grid-pattern {
+    background-image: linear-gradient(
+            rgba(59, 130, 246, 0.1) 1px,
+            transparent 1px
+        ),
+        linear-gradient(90deg, rgba(59, 130, 246, 0.1) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+/* Smooth scrolling for anchor links */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Custom gradient animations */
+@keyframes gradient-shift {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+.animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient-shift 3s ease infinite;
+}

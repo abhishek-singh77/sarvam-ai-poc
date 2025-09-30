@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  sarvam-videsdk:
+    build: .
+    ports:
+      - "8000:8000"
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PYTHON_ENV=production
+      - API_URL=http://localhost:8000/api/v1
+      - WEBSOCKET_URL=ws://localhost:8000/ws
+    volumes:
+      - ./recordings:/app/recordings
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Add database service
+  # postgres:
+  #   image: postgres:15-alpine
+  #   environment:
+  #     POSTGRES_DB: sarvam_videsdk
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: password
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+
+  # Optional: Add Redis for caching
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+
+# volumes:
+#   postgres_data:
+#   redis_data:

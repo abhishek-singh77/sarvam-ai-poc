@@ -1,0 +1,210 @@
+<app-session-header (end)="endSession.emit()"></app-session-header>
+
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col bg-gray-50">
+    <!-- Pre-call Flow -->
+    <div *ngIf="state?.showPreCallFlow" class="flex-1 flex flex-col h-full">
+        <!-- User Instructions -->
+        <app-user-instruction
+            *ngIf="state?.preCallStep === 'instructions'"
+            [instructions]="preCallFlowService?.getInstructions() || []"
+            [canProceed]="true"
+            (proceed)="instructionsProceed.emit()"
+            (reschedule)="instructionsReschedule.emit()"
+            (cancel)="instructionsCancel.emit()">
+        </app-user-instruction>
+
+        <!-- User Consent -->
+        <app-user-consent
+            *ngIf="state?.preCallStep === 'consent'"
+            [consentItems]="preCallFlowService?.getConsentItems() || []"
+            [userName]="'Akash Kumar'"
+            [vcipId]="'123456'"
+            (proceed)="consentProceed.emit()"
+            (cancel)="consentCancel.emit()">
+        </app-user-consent>
+
+        <!-- Health Check -->
+        <app-health-check
+            *ngIf="state?.preCallStep === 'health-check'"
+            [healthChecks]="preCallFlowService?.getHealthChecks() || []"
+            [autoStart]="true"
+            (proceed)="healthCheckProceed.emit()"
+            (cancel)="healthCheckCancel.emit()">
+        </app-health-check>
+    </div>
+
+    <!-- Start Call Section -->
+    <div
+        *ngIf="
+            state?.canStartCall &&
+            !state?.showPreCallFlow &&
+            state?.phase !== 'in_call'
+        "
+        class="flex-1 flex flex-col items-center justify-center p-6">
+        <div
+            class="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+            <div
+                class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg
+                    class="w-10 h-10 text-green-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h2 class="text-2xl font-semibold text-gray-900 mb-4">
+                Ready to Start
+            </h2>
+            <p class="text-gray-600 mb-8">
+                All pre-call checks are complete. You're ready to begin your KYC
+                verification session.
+            </p>
+            <button
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors"
+                (click)="startCall.emit()">
+                <svg
+                    class="w-5 h-5 mr-2 inline"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                </svg>
+                Start Video Call
+            </button>
+        </div>
+    </div>
+
+    <!-- In-call Phase -->
+    <div *ngIf="state?.phase === 'in_call'" class="flex-1 flex flex-col">
+        <!-- Header (simplified) -->
+        <div class="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900">
+                        {{ state?.currentStep?.title }}
+                    </h3>
+                    <p class="text-sm text-gray-600">
+                        {{ state?.currentStep?.description }}
+                    </p>
+                </div>
+                <span class="text-sm text-gray-500">Live video call</span>
+            </div>
+        </div>
+
+        <!-- Video and Detection Area -->
+        <div class="flex-1 relative bg-black">
+            <!-- Video Element -->
+            <video
+                #localVideo
+                class="w-full h-full object-cover"
+                autoplay
+                muted
+                playsinline></video>
+
+            <!-- Detection Overlays -->
+            <app-detection-overlays
+                [detectionResult]="state?.detectionResult"
+                [documentDetectionResult]="state?.documentDetectionResult"
+                [captureType]="state?.captureType || null">
+            </app-detection-overlays>
+
+            <!-- Action Buttons -->
+            <div
+                class="absolute bottom-6 left-6 right-6 flex justify-center space-x-4">
+                <!-- Manual Capture Button -->
+                <button
+                    *ngIf="state?.currentStep?.type === 'FRAME_CAPTURE'"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                    <svg
+                        class="w-5 h-5 mr-2 inline"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    Capture
+                </button>
+
+                <!-- Auto-capture Toggle -->
+                <button
+                    class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-3 rounded-lg font-medium transition-colors">
+                    <svg
+                        class="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span class="ml-2">Auto</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Questionnaire UI -->
+        <app-questionnaire-form
+            *ngIf="state?.currentStep?.type === 'QUESTIONNAIRE'"
+            [questions]="state?.questions || []"
+            [answers]="state?.answers || {}"
+            (voice)="voiceRecognition.emit($event)"
+            (retry)="questionnaireRetry.emit()"
+            (submit)="questionnaireSubmit.emit()">
+        </app-questionnaire-form>
+    </div>
+
+    <!-- Post-call Phase -->
+    <div
+        *ngIf="state?.phase === 'post'"
+        class="flex-1 flex flex-col items-center justify-center p-6">
+        <div
+            class="max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center">
+            <div
+                class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg
+                    class="w-8 h-8 text-green-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <h2 class="text-xl font-semibold text-gray-900 mb-2">
+                Session Complete
+            </h2>
+            <p class="text-gray-600 mb-6">
+                Your KYC verification has been completed successfully.
+            </p>
+            <button
+                class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
+                (click)="endSession.emit()">
+                Close Session
+            </button>
+        </div>
+    </div>
+</div>

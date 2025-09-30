@@ -1,0 +1,171 @@
+<!-- Header -->
+<div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+    <div class="flex items-center justify-between">
+        <button class="text-white font-medium">Your Logo</button>
+        <div class="flex items-center text-white text-sm">
+            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                    fill-rule="evenodd"
+                    d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
+                    clip-rule="evenodd"></path>
+            </svg>
+            Powered by <span class="font-semibold ml-1">digio</span>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content -->
+<div class="flex-1 flex flex-col bg-gray-50">
+    <!-- Title Section -->
+    <div class="bg-white px-6 py-6">
+        <h1 class="text-2xl font-bold text-gray-900 mb-2">User Consent</h1>
+    </div>
+
+    <!-- Consent Items -->
+    <div class="flex-1 px-6 py-4">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="space-y-4">
+                <div
+                    *ngFor="let item of consentItems"
+                    class="flex items-start space-x-3">
+                    <div class="flex-shrink-0">
+                        <div
+                            class="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                            <svg
+                                *ngIf="item.icon === 'video'"
+                                class="w-4 h-4 text-blue-600"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                            <svg
+                                *ngIf="item.icon === 'camera'"
+                                class="w-4 h-4 text-blue-600"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            <svg
+                                *ngIf="item.icon === 'aadhaar'"
+                                class="w-4 h-4 text-blue-600"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path>
+                            </svg>
+                            <svg
+                                *ngIf="item.icon === 'pan'"
+                                class="w-4 h-4 text-blue-600"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path>
+                            </svg>
+                            <svg
+                                *ngIf="item.icon === 'location'"
+                                class="w-4 h-4 text-blue-600"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            <svg
+                                *ngIf="item.icon === 'calendar'"
+                                class="w-4 h-4 text-blue-600"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-sm text-gray-700 leading-relaxed">
+                            {{ item.description }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Agreement Statement -->
+            <div class="mt-6 p-4 bg-gray-50 rounded-lg">
+                <p class="text-sm text-gray-700">
+                    I, <span class="font-semibold">{{ userName }}</span> with
+                    the VCIP ID -
+                    <span class="font-semibold">{{ vcipId }}</span> agrees with
+                    all the above-mentioned points and hereby, confirm my
+                    consent.
+                </p>
+            </div>
+
+            <!-- Terms Checkbox -->
+            <div class="mt-4">
+                <label class="flex items-start space-x-3 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        [checked]="isAgreed"
+                        (change)="
+                            onAgreementChange($any($event.target).checked)
+                        "
+                        class="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                    <span class="text-sm text-gray-700"
+                        >I agree to the above terms & conditions.</span
+                    >
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="px-6 pb-8">
+        <div class="flex space-x-4">
+            <button
+                (click)="onCancel()"
+                class="flex-1 border-2 border-blue-600 text-blue-600 hover:bg-blue-50 font-medium py-3 px-6 rounded-lg transition-colors">
+                Cancel
+            </button>
+            <button
+                (click)="onProceed()"
+                [disabled]="!isAgreed"
+                class="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-lg transition-colors">
+                Proceed for Health Check
+            </button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,12 @@
+/* User Consent Component Styles */
+.space-y-4 > * + * {
+    margin-top: 1rem;
+}
+
+.space-x-3 > * + * {
+    margin-left: 0.75rem;
+}
+
+.space-x-4 > * + * {
+    margin-left: 1rem;
+}

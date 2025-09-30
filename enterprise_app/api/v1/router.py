@@ -10,6 +10,8 @@ from .sessions import router as sessions_router
 from .workflows import router as workflows_router
 from .agents import router as agents_router
 from .health import router as health_router
+from .workflow_submissions import router as workflow_submissions_router
+from .websocket import router as websocket_router
 
 # Create main API router
 api_router = APIRouter()
@@ -19,3 +21,5 @@ api_router.include_router(sessions_router, prefix="/sessions", tags=["Sessions"]
 api_router.include_router(workflows_router, prefix="/workflows", tags=["Workflows"])
 api_router.include_router(agents_router, prefix="/agents", tags=["Agents"])
 api_router.include_router(health_router, prefix="/health", tags=["Health"])
+api_router.include_router(workflow_submissions_router, prefix="/kyc", tags=["KYC Submissions"])
+api_router.include_router(websocket_router, tags=["WebSocket"])
