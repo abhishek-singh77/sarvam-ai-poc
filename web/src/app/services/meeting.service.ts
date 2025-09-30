@@ -110,12 +110,18 @@ export class MeetingService {
             )
             console.log('🎯 MEETING-SERVICE: Stream kind:', stream.kind)
 
+            // Get or create the combined MediaStream for local participant
+            let combinedStream = this.localStreamSubject.value
+            if (!combinedStream) {
+                combinedStream = new MediaStream()
+            }
+
             if (stream.kind === 'audio') {
-                console.log('🎯 MEETING-SERVICE: Setting local audio stream')
-                // Create MediaStream from VideoSDK stream track (as per VideoSDK docs)
-                const mediaStream = new MediaStream()
-                mediaStream.addTrack(stream.track)
-                this.localStreamSubject.next(mediaStream)
+                console.log(
+                    '🎯 MEETING-SERVICE: Adding local audio track to combined stream'
+                )
+                // Add audio track to the combined stream
+                combinedStream.addTrack(stream.track)
 
                 // Add track ended listener
                 if (stream.track) {
@@ -127,13 +133,20 @@ export class MeetingService {
                     })
                 }
             } else if (stream.kind === 'video') {
-                console.log('🎯 MEETING-SERVICE: Local video stream enabled')
-                console.log('🎯 MEETING-SERVICE: Setting local video stream')
-                // Create MediaStream from VideoSDK stream track (as per VideoSDK docs)
-                const mediaStream = new MediaStream()
-                mediaStream.addTrack(stream.track)
-                this.localStreamSubject.next(mediaStream)
+                console.log(
+                    '🎯 MEETING-SERVICE: Adding local video track to combined stream'
+                )
+                // Add video track to the combined stream
+                combinedStream.addTrack(stream.track)
             }
+
+            // Emit the combined stream with both audio and video tracks
+            this.localStreamSubject.next(combinedStream)
+            console.log('🎯 MEETING-SERVICE: Combined local stream updated:', {
+                audioTracks: combinedStream.getAudioTracks().length,
+                videoTracks: combinedStream.getVideoTracks().length,
+                streamId: combinedStream.id,
+            })
         })
 
         this.meeting.localParticipant.on('stream-disabled', (stream: any) => {
@@ -262,14 +275,18 @@ export class MeetingService {
                     participant.id
                 )
 
+                // Get or create the combined MediaStream for this participant
+                let combinedStream = this.remoteStreamSubject.value
+                if (!combinedStream) {
+                    combinedStream = new MediaStream()
+                }
+
                 if (stream.kind === 'audio') {
                     console.log(
-                        '🎯 MEETING-SERVICE: Setting remote audio stream'
+                        '🎯 MEETING-SERVICE: Adding remote audio track to combined stream'
                     )
-                    // Create MediaStream from VideoSDK stream track (as per VideoSDK docs)
-                    const mediaStream = new MediaStream()
-                    mediaStream.addTrack(stream.track)
-                    this.remoteStreamSubject.next(mediaStream)
+                    // Add audio track to the combined stream
+                    combinedStream.addTrack(stream.track)
 
                     // Add track ended listener
                     if (stream.track) {
@@ -281,16 +298,22 @@ export class MeetingService {
                     }
                 } else if (stream.kind === 'video') {
                     console.log(
-                        '🎯 MEETING-SERVICE: Remote video stream enabled'
+                        '🎯 MEETING-SERVICE: Adding remote video track to combined stream'
                     )
-                    console.log(
-                        '🎯 MEETING-SERVICE: Setting remote video stream'
-                    )
-                    // Create MediaStream from VideoSDK stream track (as per VideoSDK docs)
-                    const mediaStream = new MediaStream()
-                    mediaStream.addTrack(stream.track)
-                    this.remoteStreamSubject.next(mediaStream)
+                    // Add video track to the combined stream
+                    combinedStream.addTrack(stream.track)
                 }
+
+                // Emit the combined stream with both audio and video tracks
+                this.remoteStreamSubject.next(combinedStream)
+                console.log(
+                    '🎯 MEETING-SERVICE: Combined remote stream updated:',
+                    {
+                        audioTracks: combinedStream.getAudioTracks().length,
+                        videoTracks: combinedStream.getVideoTracks().length,
+                        streamId: combinedStream.id,
+                    }
+                )
             })
 
             participant.on('stream-disabled', (stream: any) => {

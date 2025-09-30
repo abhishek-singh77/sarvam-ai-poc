@@ -1,260 +1,40 @@
-<div
-    class="shadow-md flex-1 h-auto bg-gray-50 flex flex-col justify-between rounded-xl p-4 overflow-auto">
-    <!-- Header with customer info and recording status -->
-    <div class="flex flex-col gap-3.5">
-        <div class="flex items-center justify-between text-xs">
-            <div class="flex items-center gap-2">
-                <div class="flex items-center gap-2">
-                    <span class="font-medium text-gray-700">Customer</span>
-                    <span
-                        class="material-symbols-outlined text-sm transition-all"
-                        [ngClass]="{
-                            'text-green-500': customerMicEnabled,
-                            'text-red-500': !customerMicEnabled
-                        }">
-                        {{ customerMicEnabled ? 'mic' : 'mic_off' }}
-                    </span>
-                    <span
-                        class="material-symbols-outlined text-sm transition-all"
-                        [ngClass]="{
-                            'text-green-500': customerWebCamEnabled,
-                            'text-red-500': !customerWebCamEnabled
-                        }">
-                        {{
-                            customerWebCamEnabled ? 'videocam' : 'videocam_off'
-                        }}
-                    </span>
-                </div>
-                <!-- Network speed indicator -->
-                <app-network-speed-bar
-                    [networkSpeedKbps]="networkStats.customerNetworkSpeed"
-                    [stats]="networkStats.remote"
-                    (info_click)="openStatsDialog('remote')">
-                </app-network-speed-bar>
-            </div>
-            <div *ngIf="isRecording" class="flex items-center gap-2">
-                <span class="text-gray-600">Session Duration</span>
-                <div
-                    class="rounded-full flex items-center pr-2.5 gap-2 bg-red-500 text-white">
-                    <div class="p-1.5">
-                        <span class="relative flex h-3 w-3">
-                            <span
-                                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-700 opacity-75"></span>
-                            <span
-                                class="relative inline-flex rounded-full h-3 w-3 bg-red-700"></span>
-                        </span>
-                    </div>
-                    <span class="text-xs">{{
-                        recordingDuration | date : 'mm:ss'
-                    }}</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Customer video container (top position) -->
+<!-- Mobile Video Layout -->
+<div class="w-full h-full relative min-h-[400px]">
+    <!-- Customer Video (Full Screen Background) -->
+    <div class="absolute inset-0 w-full h-full min-h-[400px]">
         <div
-            class="w-full min-h-[15rem] max-h-[18rem] mb-auto rounded-xl bg-gray-200">
-            <div
-                *ngIf="!isCustomerVideoPlaying"
-                class="h-full w-full flex items-center justify-center text-gray-500">
-                <div class="text-center">
-                    <div class="mb-2">
-                        <svg
-                            class="w-12 h-12 mx-auto text-gray-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                        </svg>
-                    </div>
-                    <span>Waiting for customer video</span>
-                </div>
-            </div>
-            <app-audio-video-track
-                *ngIf="isCustomerVideoPlaying"
-                #customerTrack
-                [stream]="customerStream"
-                class="flex justify-center h-full"></app-audio-video-track>
-        </div>
-
-        <!-- Agent info -->
-        <div class="flex items-center text-xs gap-2">
-            <div class="flex items-center gap-2">
-                <span class="font-medium text-gray-700">Agent</span>
-                <span
-                    class="material-symbols-outlined text-sm transition-all"
-                    [ngClass]="{
-                        'text-green-500': agentMicEnabled,
-                        'text-red-500': !agentMicEnabled
-                    }">
-                    {{ agentMicEnabled ? 'mic' : 'mic_off' }}
-                </span>
-                <span
-                    class="material-symbols-outlined text-sm transition-all"
-                    [ngClass]="{
-                        'text-green-500': agentWebCamEnabled,
-                        'text-red-500': !agentWebCamEnabled
-                    }">
-                    {{ agentWebCamEnabled ? 'videocam' : 'videocam_off' }}
-                </span>
-            </div>
-            <!-- Agent network speed indicator -->
-            <app-network-speed-bar
-                [networkSpeedKbps]="agentNetworkSpeed"
-                [stats]="networkStats.local"
-                (info_click)="openStatsDialog('local')">
-            </app-network-speed-bar>
-        </div>
-
-        <!-- Agent video container (bottom position) -->
-        <div class="flex-1">
-            <div
-                class="w-full max-w-[12rem] min-h-24 bg-slate-200 rounded-xl flex items-center justify-center">
+            *ngIf="!isCustomerVideoPlaying"
+            class="h-full w-full flex items-center justify-center text-white bg-gray-900">
+            <div class="text-center">
                 <div
-                    *ngIf="!isAgentVideoPlaying"
-                    class="flex items-center justify-center">
-                    <div
-                        class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-                </div>
-                <app-audio-video-track
-                    *ngIf="isAgentVideoPlaying"
-                    #agentTrack
-                    [stream]="agentStream"
-                    [mirrorVideoStream]="true"></app-audio-video-track>
+                    class="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
+                <p class="text-sm">Loading your video...</p>
             </div>
         </div>
+        <app-audio-video-track
+            *ngIf="isCustomerVideoPlaying"
+            #customerTrack
+            [stream]="customerStream"
+            class="w-full h-full object-cover"></app-audio-video-track>
     </div>
 
-    <!-- Control buttons -->
+    <!-- Agent Video Overlay (Bottom Right) -->
     <div
-        class="w-full rounded-full bg-gray-800 flex items-center justify-between p-3 z-10 mt-2 shadow-lg">
-        <div class="flex items-center gap-8">
-            <!-- Customer Controls -->
-            <div class="flex items-center gap-3">
-                <span class="text-sm font-medium text-white/80">Customer</span>
-                <div class="flex items-center gap-2">
-                    <!-- Customer Mic toggle button -->
-                    <button
-                        (click)="toggleCustomerMicState()"
-                        class="aspect-square flex items-center justify-center rounded-full size-12 border-none hover:bg-white/20 transition-all duration-200"
-                        [ngClass]="{
-                            'bg-white shadow-md': customerMicEnabled,
-                            'bg-white/10': !customerMicEnabled
-                        }"
-                        [title]="
-                            customerMicEnabled
-                                ? 'Mute microphone'
-                                : 'Unmute microphone'
-                        ">
-                        <span
-                            class="material-symbols-outlined text-lg"
-                            [ngClass]="{
-                                'text-gray-700': customerMicEnabled,
-                                'text-white/70': !customerMicEnabled
-                            }">
-                            {{ customerMicEnabled ? 'mic' : 'mic_off' }}
-                        </span>
-                    </button>
-
-                    <!-- Customer Camera toggle button -->
-                    <button
-                        (click)="toggleCustomerCamState()"
-                        class="aspect-square flex items-center justify-center rounded-full size-12 border-none hover:bg-white/20 transition-all duration-200"
-                        [ngClass]="{
-                            'bg-white shadow-md': customerWebCamEnabled,
-                            'bg-white/10': !customerWebCamEnabled
-                        }"
-                        [title]="
-                            customerWebCamEnabled
-                                ? 'Turn off camera'
-                                : 'Turn on camera'
-                        ">
-                        <span
-                            class="material-symbols-outlined text-lg"
-                            [ngClass]="{
-                                'text-gray-700': customerWebCamEnabled,
-                                'text-white/70': !customerWebCamEnabled
-                            }">
-                            {{
-                                customerWebCamEnabled
-                                    ? 'videocam'
-                                    : 'videocam_off'
-                            }}
-                        </span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Agent Controls -->
-            <div class="flex items-center gap-3">
-                <span class="text-sm font-medium text-white/80">Agent</span>
-                <div class="flex items-center gap-2">
-                    <!-- Agent Mic toggle button -->
-                    <button
-                        [disabled]="!agent"
-                        (click)="toggleAgentMicState()"
-                        class="aspect-square flex items-center justify-center rounded-full size-12 border-none hover:bg-white/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        [ngClass]="{
-                            'bg-white shadow-md': agentMicEnabled,
-                            'bg-white/10': !agentMicEnabled
-                        }"
-                        [title]="
-                            agentMicEnabled
-                                ? 'Mute agent microphone'
-                                : 'Unmute agent microphone'
-                        ">
-                        <span
-                            class="material-symbols-outlined text-lg"
-                            [ngClass]="{
-                                'text-gray-700': agentMicEnabled,
-                                'text-white/70': !agentMicEnabled
-                            }">
-                            {{ agentMicEnabled ? 'mic' : 'mic_off' }}
-                        </span>
-                    </button>
-
-                    <!-- Agent Camera toggle button -->
-                    <button
-                        [disabled]="!agent"
-                        (click)="toggleAgentCamState()"
-                        class="aspect-square flex items-center justify-center rounded-full size-12 border-none hover:bg-white/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        [ngClass]="{
-                            'bg-white shadow-md': agentWebCamEnabled,
-                            'bg-white/10': !agentWebCamEnabled
-                        }"
-                        [title]="
-                            agentWebCamEnabled
-                                ? 'Turn off agent camera'
-                                : 'Turn on agent camera'
-                        ">
-                        <span
-                            class="material-symbols-outlined text-lg"
-                            [ngClass]="{
-                                'text-gray-700': agentWebCamEnabled,
-                                'text-white/70': !agentWebCamEnabled
-                            }">
-                            {{
-                                agentWebCamEnabled ? 'videocam' : 'videocam_off'
-                            }}
-                        </span>
-                    </button>
-                </div>
+        class="absolute bottom-4 right-4 w-24 h-32 bg-gray-800 rounded-xl overflow-hidden shadow-lg">
+        <div
+            *ngIf="!isAgentVideoPlaying"
+            class="h-full w-full flex items-center justify-center text-white">
+            <div class="text-center">
+                <div
+                    class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mx-auto mb-1"></div>
+                <p class="text-xs">Agent</p>
             </div>
         </div>
-
-        <!-- End call button -->
-        <div class="flex items-center text-white">
-            <button
-                (click)="onCallTerminate()"
-                class="border-none flex px-6 py-3 text-sm items-center gap-2 rounded-full bg-red-500 hover:bg-red-600 transition-all duration-200 shadow-md"
-                title="End the session">
-                <span class="material-symbols-outlined text-sm">call_end</span>
-                <span class="text-sm font-medium">End Session</span>
-            </button>
-        </div>
+        <app-audio-video-track
+            *ngIf="isAgentVideoPlaying"
+            #agentTrack
+            [stream]="agentStream"
+            [mirrorVideoStream]="true"
+            class="w-full h-full object-cover"></app-audio-video-track>
     </div>
 </div>

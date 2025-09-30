@@ -32,13 +32,19 @@ export class AudioVideoTrackComponent implements OnChanges, AfterViewInit {
     ngAfterViewInit(): void {
         // Set initial stream if available
         if (this.stream) {
-            this.setStream(this.stream)
+            // Wait for video element to be ready
+            setTimeout(() => {
+                this.setStream(this.stream!)
+            }, 100)
         }
     }
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['stream'] && this.stream) {
-            this.setStream(this.stream)
+            // Wait for video element to be ready
+            setTimeout(() => {
+                this.setStream(this.stream!)
+            }, 100)
         }
     }
 
@@ -50,16 +56,83 @@ export class AudioVideoTrackComponent implements OnChanges, AfterViewInit {
             audioTracks: stream.getAudioTracks().length,
         })
 
+        // Check if this is the same stream to avoid AbortError
+        if (
+            this.currentVideoStream &&
+            this.currentVideoStream.id === stream.id
+        ) {
+            console.log(
+                '🎯 AUDIO-VIDEO-TRACK: Same stream already set, skipping'
+            )
+            return
+        }
+
         // Set video stream
         const videoTracks = stream.getVideoTracks()
         if (videoTracks.length > 0 && this._videoTrack) {
             console.log('🎯 AUDIO-VIDEO-TRACK: Setting video track')
-            this._videoTrack.nativeElement.srcObject = stream
+
+            // Store the current stream
+            this.currentVideoStream = stream
+
+            // Ensure video element is ready
+            const videoElement = this._videoTrack.nativeElement
+            if (!videoElement) {
+                console.error('🎯 AUDIO-VIDEO-TRACK: Video element not found')
+                return
+            }
+
+            // Clear any existing stream first to prevent AbortError
+            if (videoElement.srcObject) {
+                videoElement.srcObject = null
+            }
+
+            videoElement.srcObject = stream
 
             // Ensure video element is visible and has proper dimensions
-            this._videoTrack.nativeElement.style.width = '100%'
-            this._videoTrack.nativeElement.style.height = '100%'
-            this._videoTrack.nativeElement.style.objectFit = 'cover'
+            videoElement.style.width = '100%'
+            videoElement.style.height = '100%'
+            videoElement.style.objectFit = 'cover'
+            videoElement.style.display = 'block'
+            videoElement.style.visibility = 'visible'
+            videoElement.style.backgroundColor = '#000000'
+
+            // Force video to be visible
+            videoElement.style.opacity = '1'
+            videoElement.style.zIndex = '1'
+
+            // Add event listeners for debugging
+            videoElement.addEventListener('loadedmetadata', () => {
+                console.log('🎯 AUDIO-VIDEO-TRACK: Video metadata loaded:', {
+                    videoWidth: videoElement.videoWidth,
+                    videoHeight: videoElement.videoHeight,
+                    duration: videoElement.duration,
+                    srcObject: !!videoElement.srcObject,
+                    readyState: videoElement.readyState,
+                })
+
+                // Ensure video has proper dimensions
+                if (
+                    videoElement.videoWidth > 0 &&
+                    videoElement.videoHeight > 0
+                ) {
+                    videoElement.style.width = '100%'
+                    videoElement.style.height = '100%'
+                    console.log('🎯 AUDIO-VIDEO-TRACK: Video dimensions set')
+                }
+            })
+
+            videoElement.addEventListener('canplay', () => {
+                console.log('🎯 AUDIO-VIDEO-TRACK: Video can play')
+            })
+
+            videoElement.addEventListener('playing', () => {
+                console.log('🎯 AUDIO-VIDEO-TRACK: Video is playing')
+            })
+
+            videoElement.addEventListener('error', (e) => {
+                console.error('🎯 AUDIO-VIDEO-TRACK: Video error:', e)
+            })
 
             // Play the video
             this._videoTrack.nativeElement
@@ -77,7 +150,11 @@ export class AudioVideoTrackComponent implements OnChanges, AfterViewInit {
                 })
         } else {
             console.log(
-                '🎯 AUDIO-VIDEO-TRACK: No video track or video element available'
+                '🎯 AUDIO-VIDEO-TRACK: No video track or video element available',
+                {
+                    hasVideoTracks: videoTracks.length > 0,
+                    hasVideoElement: !!this._videoTrack,
+                }
             )
         }
 
@@ -105,6 +182,65 @@ export class AudioVideoTrackComponent implements OnChanges, AfterViewInit {
             console.log(
                 '🎯 AUDIO-VIDEO-TRACK: No audio track or audio element available'
             )
+        }
+    }
+
+    getVideoElement(): HTMLVideoElement | null {
+        return this._videoTrack?.nativeElement || null
+    }
+
+    onVideoLoadedMetadata(event: Event): void {
+        const video = event.target as HTMLVideoElement
+        console.log('🎯 AUDIO-VIDEO-TRACK: Video metadata loaded via event:', {
+            videoWidth: video.videoWidth,
+            videoHeight: video.videoHeight,
+            duration: video.duration,
+        })
+    }
+
+    onVideoCanPlay(event: Event): void {
+        console.log('🎯 AUDIO-VIDEO-TRACK: Video can play via event')
+    }
+
+    onVideoPlaying(event: Event): void {
+        console.log('🎯 AUDIO-VIDEO-TRACK: Video is playing via event')
+    }
+
+    // Debug method to check video element state
+    checkVideoState(): void {
+        if (this._videoTrack) {
+            const video = this._videoTrack.nativeElement
+            const rect = video.getBoundingClientRect()
+            console.log('🎯 AUDIO-VIDEO-TRACK: Video element state:', {
+                srcObject: !!video.srcObject,
+                videoWidth: video.videoWidth,
+                videoHeight: video.videoHeight,
+                readyState: video.readyState,
+                paused: video.paused,
+                currentTime: video.currentTime,
+                duration: video.duration,
+                boundingRect: {
+                    width: rect.width,
+                    height: rect.height,
+                    top: rect.top,
+                    left: rect.left,
+                    visible: rect.width > 0 && rect.height > 0,
+                },
+                style: {
+                    width: video.style.width,
+                    height: video.style.height,
+                    display: video.style.display,
+                    visibility: video.style.visibility,
+                    opacity: video.style.opacity,
+                },
+                computedStyle: {
+                    width: getComputedStyle(video).width,
+                    height: getComputedStyle(video).height,
+                    display: getComputedStyle(video).display,
+                    visibility: getComputedStyle(video).visibility,
+                    opacity: getComputedStyle(video).opacity,
+                },
+            })
         }
     }
 }

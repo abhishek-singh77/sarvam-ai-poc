@@ -14,6 +14,7 @@ import {
     VkycSessionLayoutComponent,
     VkycLayoutState,
 } from '../vkyc-session-layout/vkyc-session-layout.component'
+import { ImageManipulatorComponent } from '../image-manipulator/image-manipulator.component'
 import { Subscription } from 'rxjs'
 import { VkycMeetingFacadeService } from '../../services/vkyc-meeting-facade.service'
 import { VkycWorkflowFacadeService } from '../../services/vkyc-workflow-facade.service'
@@ -26,7 +27,12 @@ import { EnterpriseRoomService } from '../../services/enterprise-room.service'
 @Component({
     selector: 'app-vkyc-session',
     standalone: true,
-    imports: [CommonModule, FormsModule, VkycSessionLayoutComponent],
+    imports: [
+        CommonModule,
+        FormsModule,
+        VkycSessionLayoutComponent,
+        ImageManipulatorComponent,
+    ],
     templateUrl: './vkyc-session.component.html',
     styleUrls: ['./vkyc-session.component.css'],
 })
@@ -49,6 +55,10 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     showErrorModal = false
     errorMessage = ''
 
+    // Image manipulator data
+    capturedImageBlob: Blob | null = null
+    capturedImageBase64: string = ''
+
     // Agent loading (managed by layout component)
     canStartCall = false
 
@@ -61,6 +71,18 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         networkSpeed: any
         isVpnDetected: boolean
     } | null = null
+
+    // Room ID for workflow progress
+    roomId: string = ''
+
+    // Flag to prevent multiple workflow initializations
+    workflowInitialized: boolean = false
+
+    // Flag to prevent multiple agent loading initializations
+    agentLoadingInitialized: boolean = false
+
+    // Flag to prevent multiple startCall calls
+    startCallInProgress: boolean = false
 
     constructor(
         public preCallFlowService: PreCallFlowService,
@@ -76,6 +98,12 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     }
 
     ngOnInit(): void {
+        // Get room ID from session storage
+        const sessionData = this.sessionStorage.getSessionData()
+        if (sessionData) {
+            this.roomId = sessionData.roomId
+        }
+
         this.initializePreCallFlow()
         this.initializeWorkflow()
         // Don't initialize agent loading until user clicks "Start Call"
@@ -86,6 +114,11 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         this.meetingFacade.cleanup()
         this.workflowFacade.cleanup()
         this.captureFacade.stopDetection()
+
+        // Reset initialization flags
+        this.workflowInitialized = false
+        this.agentLoadingInitialized = false
+        this.startCallInProgress = false
     }
 
     // Initialization methods
@@ -115,6 +148,7 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                     captureType: state.currentStep?.data?.captureType,
                     questions: state.currentStep?.data?.questions,
                     answers: this.questionnaireAnswers,
+                    workflowSteps: state.steps || [],
                 }
 
                 // Only set phase if we're not already in call
@@ -129,7 +163,119 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                 }
             })
         )
-        this.workflowFacade.init()
+
+        // Initialize face detection and auto-capture
+        this.initializeFaceDetection()
+
+        // Don't initialize workflow here - wait for agent stream to be ready
+        // this.workflowFacade.init()
+    }
+
+    private initializeFaceDetection(): void {
+        // Subscribe to face detection results
+        this.subscriptions.add(
+            this.captureFacade.faceDetection$.subscribe((result) => {
+                this.updateLayoutState({
+                    detectionResult: result,
+                })
+
+                // Auto-capture if face is detected and auto-capture is enabled
+                if (
+                    result &&
+                    result.confidence > 0.8 &&
+                    result.steady &&
+                    this.captureFacade.isAutoCaptureEnabled$.value &&
+                    this.layoutState?.currentStep?.type === 'FRAME_CAPTURE'
+                ) {
+                    this.performAutoCapture()
+                }
+            })
+        )
+
+        // Subscribe to document detection results
+        this.subscriptions.add(
+            this.captureFacade.documentDetection$.subscribe((result) => {
+                this.updateLayoutState({
+                    documentDetectionResult: result,
+                })
+
+                // Auto-capture if document is detected and auto-capture is enabled
+                if (
+                    result &&
+                    result.confidence > 0.8 &&
+                    result.steady &&
+                    this.captureFacade.isAutoCaptureEnabled$.value &&
+                    this.layoutState?.currentStep?.type === 'FRAME_CAPTURE'
+                ) {
+                    this.performAutoCapture()
+                }
+            })
+        )
+    }
+
+    private performAutoCapture(): void {
+        console.log('🎯 VKYC-SESSION: Performing auto-capture')
+        this.captureFacade.setCapturing(true)
+
+        // Get the video element from the meeting panel
+        const videoElement = document.querySelector('video') as HTMLVideoElement
+        if (videoElement) {
+            // Create canvas to capture frame
+            const canvas = document.createElement('canvas')
+            const ctx = canvas.getContext('2d')
+
+            if (ctx) {
+                canvas.width = videoElement.videoWidth
+                canvas.height = videoElement.videoHeight
+                ctx.drawImage(videoElement, 0, 0)
+
+                // Convert to blob and submit
+                canvas.toBlob(
+                    (blob) => {
+                        if (blob) {
+                            this.submitCapture(blob)
+                        }
+                    },
+                    'image/jpeg',
+                    0.9
+                )
+            }
+        }
+
+        setTimeout(() => {
+            this.captureFacade.setCapturing(false)
+        }, 1000)
+    }
+
+    private submitCapture(blob: Blob): void {
+        console.log('🎯 VKYC-SESSION: Submitting capture')
+
+        // Store the captured image
+        this.capturedImageBlob = blob
+
+        // Convert blob to base64 for the image manipulator
+        const reader = new FileReader()
+        reader.onload = () => {
+            this.capturedImageBase64 = reader.result as string
+            // Show the image manipulator
+            this.showImageManipulator = true
+            console.log('🎯 VKYC-SESSION: Image manipulator opened')
+        }
+        reader.readAsDataURL(blob)
+    }
+
+    private startFaceDetectionOnVideo(videoElement: HTMLVideoElement): void {
+        console.log('🎯 VKYC-SESSION: Starting face detection on video element')
+
+        // Start face detection based on current step
+        if (this.layoutState?.currentStep?.type === 'FRAME_CAPTURE') {
+            const captureType = this.layoutState.currentStep?.data?.captureType
+            if (captureType === 'FACE_CAPTURE') {
+                this.captureFacade.startFaceDetection(videoElement)
+            } else if (captureType === 'DOCUMENT_CAPTURE') {
+                this.captureFacade.startDocumentDetection(videoElement)
+            }
+        }
     }
 
     private initializeAgentLoading(healthCheckData?: {
@@ -137,6 +283,17 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         networkSpeed: any
         isVpnDetected: boolean
     }): void {
+        // Prevent multiple initializations
+        if (this.agentLoadingInitialized) {
+            console.log(
+                '🎯 VKYC-SESSION: Agent loading already initialized, skipping'
+            )
+            return
+        }
+
+        this.agentLoadingInitialized = true
+        console.log('🎯 VKYC-SESSION: Initializing agent loading...')
+
         this.subscriptions.add(
             this.meetingFacade.agentLoadingStep$.subscribe((step) => {
                 // Update layout state with current step
@@ -147,7 +304,7 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         // Listen for agent stream ready event
         this.subscriptions.add(
             this.meetingFacade.agentStreamReady$.subscribe((isReady) => {
-                if (isReady) {
+                if (isReady && !this.layoutState?.agentStreamReady) {
                     console.log('🎯 VKYC-SESSION: Agent stream is ready')
                     this.updateLayoutState({
                         agentStreamReady: true,
@@ -155,8 +312,11 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                         phase: 'in_call', // Ensure we stay in in_call phase
                         showPreCallFlow: false, // Ensure pre-call flow is hidden
                     })
-                    // Start the actual KYC workflow
-                    this.workflowFacade.init()
+                    // Start the actual KYC workflow (only if not already initialized)
+                    if (!this.workflowInitialized) {
+                        this.workflowInitialized = true
+                        this.workflowFacade.init()
+                    }
                 }
             })
         )
@@ -214,6 +374,15 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     // Start call method - called when user clicks "Start Call" button
     async startCall(): Promise<void> {
+        // Prevent multiple startCall calls
+        if (this.startCallInProgress) {
+            console.log(
+                '🎯 VKYC-SESSION: Start call already in progress, skipping'
+            )
+            return
+        }
+
+        this.startCallInProgress = true
         console.log('🎯 VKYC-SESSION: Starting call...')
 
         // Show agent join popup immediately
@@ -245,8 +414,20 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             }
 
             this.initializeAgentLoading(this.healthCheckData || undefined)
+
+            // Start face detection when video is ready
+            setTimeout(() => {
+                const videoElement = document.querySelector(
+                    'video'
+                ) as HTMLVideoElement
+                if (videoElement) {
+                    this.startFaceDetectionOnVideo(videoElement)
+                }
+            }, 2000) // Wait for video to be ready
         } catch (error: any) {
             console.error('🎯 VKYC-SESSION: Failed to start call:', error)
+            // Reset the flag so user can try again
+            this.startCallInProgress = false
             // Handle error - maybe show error modal or go back to health check
         }
     }
@@ -327,6 +508,7 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             ...this.layoutState,
             ...updates,
             canStartCall: this.canStartCall,
+            roomId: this.roomId,
         }
         this.cdRef.detectChanges()
     }
@@ -334,6 +516,42 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     private showError(message: string): void {
         this.errorMessage = message
         this.showErrorModal = true
+    }
+
+    // Image manipulator event handlers
+    onImageProcessed(response: any): void {
+        console.log('🎯 VKYC-SESSION: Image processed successfully:', response)
+        this.showImageManipulator = false
+        this.capturedImageBlob = null
+        this.capturedImageBase64 = ''
+
+        // TODO: Handle the processed image response
+        // This could include submitting to backend, updating workflow state, etc.
+    }
+
+    onImageManipulatorError(error: string): void {
+        console.error('🎯 VKYC-SESSION: Image manipulator error:', error)
+        this.showErrorModal = true
+        this.errorMessage = error
+    }
+
+    onImageManipulatorClose(): void {
+        console.log('🎯 VKYC-SESSION: Image manipulator closed')
+        this.showImageManipulator = false
+        this.capturedImageBlob = null
+        this.capturedImageBase64 = ''
+    }
+
+    getImageManipulatorConfig(): any {
+        return {
+            base64: this.capturedImageBase64,
+            subActionId: this.layoutState?.currentStep?.id || '',
+            mode:
+                this.layoutState?.captureType === 'FACE_CAPTURE'
+                    ? 'selfie'
+                    : 'document',
+            frontImage: this.capturedImageBlob || new Blob(),
+        }
     }
 
     // Template helper methods (removed getLogMessage as it's no longer needed)

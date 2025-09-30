@@ -23,6 +23,16 @@ export interface VkycLayoutState {
     showAgentJoinPopup?: boolean
     agentStreamReady?: boolean
     agentLoadingStep?: number
+    roomId?: string
+    workflowSteps?: WorkflowStep[]
+}
+
+export interface WorkflowStep {
+    id: string
+    title: string
+    type: string
+    status: 'pending' | 'active' | 'completed' | 'skipped' | 'error'
+    subActionStep?: 'pre' | 'in_call' | 'post'
 }
 
 @Component({
@@ -66,22 +76,102 @@ export class VkycSessionLayoutComponent {
     // Meeting panel event handlers
     onStreamsActive(active: boolean): void {
         console.log('🎯 LAYOUT: Streams active:', active)
+        // Note: Face detection is now handled directly in the vkyc-session component
+        // No need to emit startCall here as it would cause infinite loops
     }
 
     onMicToggle(): void {
         console.log('🎯 LAYOUT: Mic toggle requested')
+        // TODO: Implement mic toggle logic
     }
 
     onCameraToggle(): void {
         console.log('🎯 LAYOUT: Camera toggle requested')
+        // TODO: Implement camera flip logic
     }
 
     onChatToggle(): void {
         console.log('🎯 LAYOUT: Chat toggle requested')
+        // TODO: Implement chat toggle logic
     }
 
     onEndCall(): void {
         console.log('🎯 LAYOUT: End call requested')
         this.endSession.emit()
+    }
+
+    // Workflow step helper methods
+    getStepStatusColor(step: WorkflowStep): string {
+        switch (step.status) {
+            case 'completed':
+                return 'bg-green-500'
+            case 'active':
+                return 'bg-yellow-500'
+            case 'pending':
+            case 'skipped':
+            case 'error':
+            default:
+                return 'bg-gray-400'
+        }
+    }
+
+    getStepTextColor(step: WorkflowStep): string {
+        switch (step.status) {
+            case 'completed':
+                return 'text-green-800 bg-green-100'
+            case 'active':
+                return 'text-yellow-800 bg-yellow-100'
+            case 'pending':
+            case 'skipped':
+            case 'error':
+            default:
+                return 'text-gray-600 bg-gray-100'
+        }
+    }
+
+    getStepIcon(step: WorkflowStep): string {
+        switch (step.type) {
+            case 'FRAME_CAPTURE':
+                return 'M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z'
+            case 'QUESTIONNAIRE':
+                return 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'
+            case 'GEO_TAGGING':
+                return 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z'
+            case 'USER_INSTRUCTION':
+                return 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+            default:
+                return 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'
+        }
+    }
+
+    getInCallSteps(): WorkflowStep[] {
+        if (!this.state?.workflowSteps) return []
+        return this.state.workflowSteps.filter(
+            (step) => step.subActionStep === 'in_call'
+        )
+    }
+
+    getCompletedStepsCount(): number {
+        if (!this.state?.workflowSteps) return 0
+        return this.state.workflowSteps.filter(
+            (step) => step.status === 'completed'
+        ).length
+    }
+
+    getTotalStepsCount(): number {
+        if (!this.state?.workflowSteps) return 0
+        return this.state.workflowSteps.length
+    }
+
+    getProgressPercentage(): number {
+        const completed = this.getCompletedStepsCount()
+        const total = this.getTotalStepsCount()
+        return total > 0 ? Math.round((completed / total) * 100) : 0
+    }
+
+    hasWorkflowSteps(): boolean {
+        return !!(
+            this.state?.workflowSteps && this.state.workflowSteps.length > 0
+        )
     }
 }

@@ -83,83 +83,255 @@
         </div>
     </div>
 
-    <!-- In-call Phase -->
-    <div *ngIf="state?.phase === 'in_call'" class="flex-1 flex flex-col">
-        <!-- Header (simplified) -->
-        <div class="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+    <!-- In-call Phase - Mobile Design -->
+    <div
+        *ngIf="state?.phase === 'in_call'"
+        class="flex-1 flex flex-col bg-black">
+        <!-- Progress Indicator Bar -->
+        <div class="bg-white rounded-lg mx-4 mt-4 p-4 shadow-lg">
             <div class="flex items-center justify-between">
-                <div>
-                    <h3 class="text-lg font-medium text-gray-900">
-                        {{ state?.currentStep?.title }}
-                    </h3>
-                    <p class="text-sm text-gray-600">
-                        {{ state?.currentStep?.description }}
-                    </p>
+                <!-- Progress Icon -->
+                <div class="flex items-center">
+                    <div
+                        class="w-8 h-8 rounded-full flex items-center justify-center mr-3"
+                        [ngClass]="
+                            getStepStatusColor(
+                                state?.currentStep || { status: 'pending' }
+                            )
+                        ">
+                        <svg
+                            class="w-5 h-5 text-white"
+                            fill="currentColor"
+                            viewBox="0 0 20 20">
+                            <path
+                                fill-rule="evenodd"
+                                [attr.d]="
+                                    getStepIcon(
+                                        state?.currentStep || {
+                                            type: 'FRAME_CAPTURE'
+                                        }
+                                    )
+                                "
+                                clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+
+                    <!-- Step Progress -->
+                    <div class="flex items-center space-x-2">
+                        <!-- Current Step -->
+                        <div
+                            class="flex items-center px-3 py-1 rounded-full"
+                            [ngClass]="
+                                getStepTextColor(
+                                    state?.currentStep || { status: 'pending' }
+                                )
+                            ">
+                            <svg
+                                class="w-4 h-4 mr-1"
+                                fill="currentColor"
+                                viewBox="0 0 20 20">
+                                <path
+                                    fill-rule="evenodd"
+                                    [attr.d]="
+                                        getStepIcon(
+                                            state?.currentStep || {
+                                                type: 'FRAME_CAPTURE'
+                                            }
+                                        )
+                                    "
+                                    clip-rule="evenodd"></path>
+                            </svg>
+                            <span class="text-sm font-medium">{{
+                                state?.currentStep?.title || 'Loading...'
+                            }}</span>
+                        </div>
+
+                        <!-- Progress Counter -->
+                        <div class="flex items-center text-gray-500">
+                            <span class="text-sm">
+                                {{ getCompletedStepsCount() }}/{{
+                                    getTotalStepsCount()
+                                }}
+                                Steps
+                            </span>
+                        </div>
+                    </div>
                 </div>
-                <span class="text-sm text-gray-500">Live video call</span>
+
+                <!-- Progress Percentage -->
+                <div class="flex items-center text-blue-600">
+                    <div
+                        class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-2">
+                        <span class="text-xs font-bold"
+                            >{{ getProgressPercentage() }}%</span
+                        >
+                    </div>
+                    <span class="text-sm font-medium">Complete</span>
+                </div>
+            </div>
+
+            <!-- Workflow Steps List -->
+            <div *ngIf="hasWorkflowSteps()" class="mt-4">
+                <div class="grid grid-cols-1 gap-2">
+                    <div
+                        *ngFor="let step of state?.workflowSteps; let i = index"
+                        class="flex items-center justify-between p-2 rounded-lg"
+                        [ngClass]="
+                            step.status === 'active'
+                                ? 'bg-yellow-50 border border-yellow-200'
+                                : 'bg-gray-50'
+                        ">
+                        <div class="flex items-center">
+                            <div
+                                class="w-6 h-6 rounded-full flex items-center justify-center mr-3"
+                                [ngClass]="getStepStatusColor(step)">
+                                <svg
+                                    class="w-3 h-3 text-white"
+                                    fill="currentColor"
+                                    viewBox="0 0 20 20">
+                                    <path
+                                        fill-rule="evenodd"
+                                        [attr.d]="getStepIcon(step)"
+                                        clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <span class="text-sm font-medium">{{
+                                    step.title
+                                }}</span>
+                                <span class="text-xs text-gray-500 ml-2"
+                                    >({{ step.type }})</span
+                                >
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <span
+                                class="text-xs px-2 py-1 rounded-full"
+                                [ngClass]="getStepTextColor(step)">
+                                {{ step.status | titlecase }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Video and Detection Area -->
-        <div class="flex-1 relative bg-black">
-            <!-- Meeting Panel Component -->
-            <app-meeting-panel
-                (streamsActive)="onStreamsActive($event)"
-                (micToggle)="onMicToggle()"
-                (cameraToggle)="onCameraToggle()"
-                (chatToggle)="onChatToggle()"
-                (endCall)="onEndCall()">
-            </app-meeting-panel>
+        <!-- Main Video Area -->
+        <div
+            class="flex-1 relative mx-4 my-4 rounded-xl overflow-hidden min-h-0">
+            <!-- Customer Video (Main) -->
+            <div class="w-full h-full relative bg-gray-900 min-h-[400px]">
+                <app-meeting-panel
+                    (streamsActive)="onStreamsActive($event)"
+                    (micToggle)="onMicToggle()"
+                    (cameraToggle)="onCameraToggle()"
+                    (chatToggle)="onChatToggle()"
+                    (endCall)="onEndCall()">
+                </app-meeting-panel>
 
-            <!-- Detection Overlays -->
-            <app-detection-overlays
-                [detectionResult]="state?.detectionResult"
-                [documentDetectionResult]="state?.documentDetectionResult"
-                [captureType]="state?.captureType || null">
-            </app-detection-overlays>
+                <!-- Detection Overlays -->
+                <app-detection-overlays
+                    [detectionResult]="state?.detectionResult"
+                    [documentDetectionResult]="state?.documentDetectionResult"
+                    [captureType]="state?.captureType || null">
+                </app-detection-overlays>
+            </div>
+        </div>
 
-            <!-- Action Buttons -->
-            <div
-                class="absolute bottom-6 left-6 right-6 flex justify-center space-x-4">
-                <!-- Manual Capture Button -->
-                <button
-                    *ngIf="state?.currentStep?.type === 'FRAME_CAPTURE'"
-                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
-                    <svg
-                        class="w-5 h-5 mr-2 inline"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    </svg>
-                    Capture
-                </button>
+        <!-- Agent Message Bubble -->
+        <div class="mx-4 mb-4">
+            <div class="bg-white rounded-2xl p-4 shadow-lg">
+                <div class="flex items-start">
+                    <div
+                        class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                        <svg
+                            class="w-5 h-5 text-white"
+                            fill="currentColor"
+                            viewBox="0 0 20 20">
+                            <path
+                                fill-rule="evenodd"
+                                d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"
+                                clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-sm font-medium text-gray-900 mb-1">
+                            Agent:
+                        </p>
+                        <p class="text-sm text-gray-700">
+                            {{
+                                state?.currentStep?.description ||
+                                    'Please capture your selfie...'
+                            }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                <!-- Auto-capture Toggle -->
-                <button
-                    class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-3 rounded-lg font-medium transition-colors">
-                    <svg
-                        class="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    <span class="ml-2">Auto</span>
-                </button>
+        <!-- Control Buttons -->
+        <div class="mx-4 mb-6">
+            <div class="bg-gray-800 bg-opacity-90 rounded-2xl p-4">
+                <div class="flex items-center justify-center space-x-6">
+                    <!-- Chat Button -->
+                    <button
+                        (click)="onChatToggle()"
+                        class="w-12 h-12 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors">
+                        <svg
+                            class="w-6 h-6 text-white"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                        </svg>
+                    </button>
+
+                    <!-- Camera Flip Button -->
+                    <button
+                        (click)="onCameraToggle()"
+                        class="w-12 h-12 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors">
+                        <svg
+                            class="w-6 h-6 text-white"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                    </button>
+
+                    <!-- Capture Button -->
+                    <button
+                        *ngIf="state?.currentStep?.type === 'FRAME_CAPTURE'"
+                        class="w-12 h-12 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors">
+                        <div
+                            class="w-8 h-8 border-2 border-white rounded-full"></div>
+                    </button>
+
+                    <!-- End Call Button -->
+                    <button
+                        (click)="onEndCall()"
+                        class="w-12 h-12 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center transition-colors">
+                        <svg
+                            class="w-6 h-6 text-white"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 3l18 18"></path>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
 

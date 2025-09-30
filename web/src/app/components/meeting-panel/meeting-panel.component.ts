@@ -13,7 +13,6 @@ import { MeetingService } from '../../services/meeting.service'
 import { MediaService } from '../../services/media.service'
 import { EnterpriseRoomService } from '../../services/enterprise-room.service'
 import { AudioVideoTrackComponent } from './components/audio-video-track/audio-video-track.component'
-import { NetworkSpeedBarComponent } from '../network-speed-bar/network-speed-bar.component'
 import { Subscription } from 'rxjs'
 
 @Component({
@@ -21,10 +20,14 @@ import { Subscription } from 'rxjs'
     standalone: true,
     templateUrl: './meeting-panel.component.html',
     styleUrls: ['./meeting-panel.component.css'],
-    imports: [CommonModule, AudioVideoTrackComponent, NetworkSpeedBarComponent],
+    imports: [CommonModule, AudioVideoTrackComponent],
 })
 export class MeetingPanelComponent implements OnInit, AfterViewInit, OnDestroy {
     @Output() streamsActive: EventEmitter<boolean> = new EventEmitter()
+    @Output() micToggle: EventEmitter<void> = new EventEmitter()
+    @Output() cameraToggle: EventEmitter<void> = new EventEmitter()
+    @Output() chatToggle: EventEmitter<void> = new EventEmitter()
+    @Output() endCall: EventEmitter<void> = new EventEmitter()
     @ViewChild('customerTrack') customerTrack!: AudioVideoTrackComponent
     @ViewChild('agentTrack') agentTrack!: AudioVideoTrackComponent
 
@@ -35,6 +38,9 @@ export class MeetingPanelComponent implements OnInit, AfterViewInit, OnDestroy {
     isAgentVideoPlaying: boolean = false
     isAgentAudioPlaying: boolean = false
     callEnded: boolean = false
+
+    // Stream state tracking
+    private lastStreamsActiveState: boolean | null = null
 
     // Agent state (local participant)
     agent: any = null
@@ -230,6 +236,37 @@ export class MeetingPanelComponent implements OnInit, AfterViewInit, OnDestroy {
                             isActive: stream.active,
                         }
                     )
+
+                    // Log detailed track information
+                    const videoTracks = stream.getVideoTracks()
+                    const audioTracks = stream.getAudioTracks()
+
+                    if (videoTracks.length > 0) {
+                        console.log(
+                            '🎯 MEETING-PANEL: Agent video track details:',
+                            {
+                                trackId: videoTracks[0].id,
+                                trackLabel: videoTracks[0].label,
+                                trackEnabled: videoTracks[0].enabled,
+                                trackReadyState: videoTracks[0].readyState,
+                                trackKind: videoTracks[0].kind,
+                            }
+                        )
+                    }
+
+                    if (audioTracks.length > 0) {
+                        console.log(
+                            '🎯 MEETING-PANEL: Agent audio track details:',
+                            {
+                                trackId: audioTracks[0].id,
+                                trackLabel: audioTracks[0].label,
+                                trackEnabled: audioTracks[0].enabled,
+                                trackReadyState: audioTracks[0].readyState,
+                                trackKind: audioTracks[0].kind,
+                            }
+                        )
+                    }
+
                     this.setAgentTrack(stream)
                 } else {
                     console.log('🎯 MEETING-PANEL: No agent stream available')
@@ -275,13 +312,22 @@ export class MeetingPanelComponent implements OnInit, AfterViewInit, OnDestroy {
         // Check if it has video tracks
         const videoTracks = stream.getVideoTracks()
         if (videoTracks.length > 0) {
-            console.log('🎯 MEETING-PANEL: Customer video track detected')
+            console.log('🎯 MEETING-PANEL: Customer video track detected:', {
+                trackId: videoTracks[0].id,
+                trackLabel: videoTracks[0].label,
+                trackEnabled: videoTracks[0].enabled,
+                trackReadyState: videoTracks[0].readyState,
+            })
             this.isCustomerVideoPlaying = true
             this.isParticipantPresent = true
             this.customerWebCamEnabled = true
             this.customerTrackRetryCount = 0
             console.log(
                 '🎯 MEETING-PANEL: Customer video should now be visible'
+            )
+        } else {
+            console.log(
+                '🎯 MEETING-PANEL: No video tracks found in customer stream'
             )
         }
 
@@ -294,6 +340,16 @@ export class MeetingPanelComponent implements OnInit, AfterViewInit, OnDestroy {
         }
 
         this.addPlayingEventListeners()
+
+        // Start face detection when customer video is ready
+        this.startFaceDetectionIfNeeded()
+
+        // Debug video state
+        setTimeout(() => {
+            if (this.customerTrack) {
+                this.customerTrack.checkVideoState()
+            }
+        }, 1000)
     }
 
     /**
@@ -313,11 +369,20 @@ export class MeetingPanelComponent implements OnInit, AfterViewInit, OnDestroy {
         // Check if it has video tracks
         const videoTracks = stream.getVideoTracks()
         if (videoTracks.length > 0) {
-            console.log('🎯 MEETING-PANEL: Agent video track detected')
+            console.log('🎯 MEETING-PANEL: Agent video track detected:', {
+                trackId: videoTracks[0].id,
+                trackLabel: videoTracks[0].label,
+                trackEnabled: videoTracks[0].enabled,
+                trackReadyState: videoTracks[0].readyState,
+            })
             this.isAgentVideoPlaying = true
             this.agentWebCamEnabled = true
             this.agentTrackRetryCount = 0
             console.log('🎯 MEETING-PANEL: Agent video should now be visible')
+        } else {
+            console.log(
+                '🎯 MEETING-PANEL: No video tracks found in agent stream'
+            )
         }
 
         // Check if it has audio tracks
@@ -329,6 +394,13 @@ export class MeetingPanelComponent implements OnInit, AfterViewInit, OnDestroy {
         }
 
         this.addPlayingEventListeners()
+
+        // Debug video state
+        setTimeout(() => {
+            if (this.agentTrack) {
+                this.agentTrack.checkVideoState()
+            }
+        }, 1000)
     }
 
     private addPlayingEventListeners(): void {
@@ -355,6 +427,21 @@ export class MeetingPanelComponent implements OnInit, AfterViewInit, OnDestroy {
             'playing',
             this.handleAgentVideoPlayingEvent
         )
+    }
+
+    private startFaceDetectionIfNeeded(): void {
+        // Check if we have a customer video track and it's playing
+        if (this.customerTrack && this.isCustomerVideoPlaying) {
+            // Get the video element from the customer track component
+            const videoElement = this.customerTrack.getVideoElement()
+            if (videoElement) {
+                console.log(
+                    '🎯 MEETING-PANEL: Customer video is ready for face detection'
+                )
+                // Note: Face detection is now handled directly in the vkyc-session component
+                // No need to emit streamsActive here as it would cause infinite loops
+            }
+        }
     }
 
     handleCustomerAudioPlayingEvent = () => {
@@ -445,7 +532,12 @@ export class MeetingPanelComponent implements OnInit, AfterViewInit, OnDestroy {
         const streamsActive =
             this.isCustomerAudioPlaying && this.isCustomerVideoPlaying
         console.log('🎯 MEETING-PANEL: Streams active:', streamsActive)
-        this.streamsActive.emit(streamsActive)
+
+        // Only emit if the state has changed to prevent unnecessary emissions
+        if (this.lastStreamsActiveState !== streamsActive) {
+            this.lastStreamsActiveState = streamsActive
+            this.streamsActive.emit(streamsActive)
+        }
     }
 
     /**
@@ -601,5 +693,26 @@ export class MeetingPanelComponent implements OnInit, AfterViewInit, OnDestroy {
             'playing',
             this.handleAgentVideoPlayingEvent
         )
+    }
+
+    // Simplified event handlers for mobile design
+    onMicToggle(): void {
+        console.log('🎯 MEETING-PANEL: Mic toggle requested')
+        this.micToggle.emit()
+    }
+
+    onCameraToggle(): void {
+        console.log('🎯 MEETING-PANEL: Camera toggle requested')
+        this.cameraToggle.emit()
+    }
+
+    onChatToggle(): void {
+        console.log('🎯 MEETING-PANEL: Chat toggle requested')
+        this.chatToggle.emit()
+    }
+
+    onEndCall(): void {
+        console.log('🎯 MEETING-PANEL: End call requested')
+        this.endCall.emit()
     }
 }

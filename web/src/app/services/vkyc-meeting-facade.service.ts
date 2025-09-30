@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core'
-import { BehaviorSubject } from 'rxjs'
+import { BehaviorSubject, Subscription } from 'rxjs'
 import { EnterpriseRoomService } from './enterprise-room.service'
 import { MediaService } from './media.service'
 import { MeetingService } from './meeting.service'
@@ -25,6 +25,7 @@ export class VkycMeetingFacadeService {
     })
 
     private agentLoadingTimeout: any = null
+    private agentStreamSubscription: Subscription | null = null
 
     constructor(
         private roomService: EnterpriseRoomService,
@@ -74,6 +75,13 @@ export class VkycMeetingFacadeService {
         if (this.agentLoadingTimeout) {
             clearTimeout(this.agentLoadingTimeout)
         }
+
+        // Clean up the agent stream subscription
+        if (this.agentStreamSubscription) {
+            this.agentStreamSubscription.unsubscribe()
+            this.agentStreamSubscription = null
+        }
+
         this.isAgentLoading$.next(false)
         this.agentStreamReady$.next(false)
         this.updateLoadingState({
@@ -84,6 +92,14 @@ export class VkycMeetingFacadeService {
     }
 
     private waitForAgentStream(): void {
+        // Prevent multiple subscriptions
+        if (this.agentStreamSubscription) {
+            console.log(
+                '🎯 MEETING-FACADE: Already waiting for agent stream, skipping'
+            )
+            return
+        }
+
         // Listen to actual VideoSDK stream-enabled events
         console.log(
             '🎯 MEETING-FACADE: Waiting for agent stream to be ready...'
@@ -92,48 +108,51 @@ export class VkycMeetingFacadeService {
         let agentParticipantFound = false
 
         // Subscribe to meeting service to detect when agent participant joins
-        this.meetingService.participants$.subscribe((participants) => {
-            console.log(
-                '🎯 MEETING-FACADE: Participants updated:',
-                participants.map((p) => ({
-                    id: p.id,
-                    displayName: p.displayName,
-                    isLocal: p.isLocal,
-                    isAgent: p.isAgent,
-                    hasStream: !!p.stream,
-                }))
-            )
-
-            const agentParticipant = participants.find(
-                (p) => p.isAgent && !p.isLocal
-            )
-
-            if (agentParticipant && !agentParticipantFound) {
-                agentParticipantFound = true
-                console.log('🎯 MEETING-FACADE: Agent participant found:', {
-                    id: agentParticipant.id,
-                    displayName: agentParticipant.displayName,
-                    hasStream: !!agentParticipant.stream,
-                })
+        this.agentStreamSubscription =
+            this.meetingService.participants$.subscribe((participants) => {
                 console.log(
-                    '🎯 MEETING-FACADE: Waiting for agent video stream...'
+                    '🎯 MEETING-FACADE: Participants updated:',
+                    participants.map((p) => ({
+                        id: p.id,
+                        displayName: p.displayName,
+                        isLocal: p.isLocal,
+                        isAgent: p.isAgent,
+                        hasStream: !!p.stream,
+                    }))
                 )
-            }
-        })
+
+                const agentParticipant = participants.find(
+                    (p) => p.isAgent && !p.isLocal
+                )
+
+                if (agentParticipant && !agentParticipantFound) {
+                    agentParticipantFound = true
+                    console.log('🎯 MEETING-FACADE: Agent participant found:', {
+                        id: agentParticipant.id,
+                        displayName: agentParticipant.displayName,
+                        hasStream: !!agentParticipant.stream,
+                    })
+                    console.log(
+                        '🎯 MEETING-FACADE: Waiting for agent video stream...'
+                    )
+                }
+            })
 
         // Subscribe to remote stream to detect when agent video is actually available
-        this.meetingService.remoteStream$.subscribe((stream) => {
-            if (stream && agentParticipantFound) {
-                const videoTracks = stream.getVideoTracks()
-                if (videoTracks.length > 0) {
-                    console.log(
-                        '🎯 MEETING-FACADE: Agent video stream detected!'
-                    )
-                    this.agentStreamReady$.next(true)
-                    this.completeAgentLoading()
+        this.agentStreamSubscription.add(
+            this.meetingService.remoteStream$.subscribe((stream) => {
+                if (stream && agentParticipantFound) {
+                    const videoTracks = stream.getVideoTracks()
+                    if (videoTracks.length > 0) {
+                        console.log(
+                            '🎯 MEETING-FACADE: Agent video stream detected!'
+                        )
+                        this.agentStreamReady$.next(true)
+                        this.completeAgentLoading()
+                    }
                 }
-            }
-        })
+            })
+        )
 
         // Fallback timeout in case stream detection fails
         clearTimeout(this.agentLoadingTimeout)
@@ -155,6 +174,12 @@ export class VkycMeetingFacadeService {
             isStreamReady: true,
         })
         clearTimeout(this.agentLoadingTimeout)
+
+        // Clean up the agent stream subscription
+        if (this.agentStreamSubscription) {
+            this.agentStreamSubscription.unsubscribe()
+            this.agentStreamSubscription = null
+        }
     }
 
     private async joinAgentWithHealthData(healthCheckData?: {

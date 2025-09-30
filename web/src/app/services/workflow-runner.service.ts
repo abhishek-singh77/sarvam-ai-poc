@@ -3,6 +3,10 @@ import { BehaviorSubject, Observable } from 'rxjs'
 import { HttpClient } from '@angular/common/http'
 import { StepHandlerRegistry } from './step-handlers/step-handler.registry'
 import { StepHandler } from './step-handlers/step-handler.interface'
+import {
+    SessionStorageService,
+    WorkflowConfig as SessionWorkflowConfig,
+} from './session-storage.service'
 
 export interface SubAction {
     type:
@@ -102,6 +106,7 @@ export interface WorkflowState {
 })
 export class WorkflowRunnerService {
     private workflowConfig: WorkflowConfig | null = null
+    private isWorkflowLoaded = false
     private currentState: WorkflowState = {
         currentStep: null,
         steps: [],
@@ -120,28 +125,61 @@ export class WorkflowRunnerService {
 
     constructor(
         private http: HttpClient,
-        private stepHandlerRegistry: StepHandlerRegistry
+        private stepHandlerRegistry: StepHandlerRegistry,
+        private sessionStorage: SessionStorageService
     ) {}
 
     async loadWorkflow(): Promise<void> {
-        try {
-            console.log('🎯 WORKFLOW-RUNNER: Loading workflow configuration...')
-            const config = await this.http
-                .get<WorkflowConfig>('/assets/workflow.json')
-                .toPromise()
+        if (this.isWorkflowLoaded) {
+            console.log('🎯 WORKFLOW-RUNNER: Workflow already loaded, skipping')
+            return
+        }
 
-            if (config) {
-                this.workflowConfig = config
-                this.initializeSteps()
+        // First check if we have workflow config in session storage
+        let config = this.sessionStorage.getWorkflowConfig()
+
+        if (!config) {
+            try {
                 console.log(
-                    '🎯 WORKFLOW-RUNNER: Workflow loaded successfully',
-                    this.currentState.steps.length,
-                    'steps'
+                    '🎯 WORKFLOW-RUNNER: Loading workflow configuration from assets...'
                 )
+                const httpConfig = await this.http
+                    .get<WorkflowConfig>('/assets/workflow.json')
+                    .toPromise()
+
+                if (httpConfig) {
+                    // Save to session storage for future use
+                    this.sessionStorage.saveWorkflowConfig(httpConfig)
+                    console.log(
+                        '🎯 WORKFLOW-RUNNER: Workflow config saved to session storage'
+                    )
+
+                    // Use the original config for processing
+                    config = httpConfig
+                }
+            } catch (error) {
+                console.error(
+                    '🎯 WORKFLOW-RUNNER: Failed to load workflow:',
+                    error
+                )
+                throw error
             }
-        } catch (error) {
-            console.error('🎯 WORKFLOW-RUNNER: Failed to load workflow:', error)
-            throw error
+        } else {
+            console.log(
+                '🎯 WORKFLOW-RUNNER: Using workflow config from session storage'
+            )
+            // Use the config directly as it's already in the correct format
+        }
+
+        if (config) {
+            this.workflowConfig = config
+            this.isWorkflowLoaded = true
+            this.initializeSteps()
+            console.log(
+                '🎯 WORKFLOW-RUNNER: Workflow loaded successfully',
+                this.currentState.steps.length,
+                'steps'
+            )
         }
     }
 

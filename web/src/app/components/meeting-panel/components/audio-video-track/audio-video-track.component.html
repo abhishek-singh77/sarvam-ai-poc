@@ -4,5 +4,16 @@
     muted
     playsinline
     [ngClass]="{ 'horizontal-flip-video': mirrorVideoStream }"
-    class="rounded w-full h-full object-cover"></video>
+    class="rounded w-full h-full object-cover"
+    style="
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        visibility: visible;
+        background-color: #000000;
+    "
+    (loadedmetadata)="onVideoLoadedMetadata($event)"
+    (canplay)="onVideoCanPlay($event)"
+    (playing)="onVideoPlaying($event)"></video>
 <audio #audioTrack autoplay [muted]="muted"></audio>

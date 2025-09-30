@@ -6,11 +6,19 @@ import { WorkflowRunnerService, WorkflowState } from './workflow-runner.service'
 export class VkycWorkflowFacadeService {
     state$ = new BehaviorSubject<WorkflowState | null>(null)
     private subs = new Subscription()
+    private isInitialized = false
 
     constructor(private runner: WorkflowRunnerService) {}
 
     async init(): Promise<void> {
+        if (this.isInitialized) {
+            console.log('🎯 WORKFLOW-FACADE: Already initialized, skipping')
+            return
+        }
+
         console.log('🎯 WORKFLOW-FACADE: Initializing workflow')
+        this.isInitialized = true
+        
         await this.runner.loadWorkflow()
         this.subs.add(
             this.runner.state$.subscribe((s) => {
@@ -41,5 +49,12 @@ export class VkycWorkflowFacadeService {
     cleanup(): void {
         console.log('🎯 WORKFLOW-FACADE: Cleaning up')
         this.subs.unsubscribe()
+        this.isInitialized = false
+    }
+
+    reset(): void {
+        console.log('🎯 WORKFLOW-FACADE: Resetting workflow')
+        this.cleanup()
+        this.state$.next(null)
     }
 }

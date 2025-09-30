@@ -17,12 +17,22 @@ export interface CompletedSteps {
     timestamp: number
 }
 
+export interface WorkflowConfig {
+    request_params: string[]
+    actionables: any[]
+    additional_validations: any[]
+    show_steps: boolean
+    show_skipped_steps: boolean
+    request_status_invocations: any
+}
+
 @Injectable({
     providedIn: 'root',
 })
 export class SessionStorageService {
     private readonly SESSION_KEY = 'kyc_session_data'
     private readonly STEPS_KEY = 'kyc_completed_steps'
+    private readonly WORKFLOW_KEY = 'kyc_workflow_config'
 
     // Session Data Management
     saveSessionData(data: SessionData): void {
@@ -130,10 +140,51 @@ export class SessionStorageService {
         return steps ? steps[step] : false
     }
 
+    // Workflow Config Management
+    saveWorkflowConfig(config: WorkflowConfig): void {
+        try {
+            sessionStorage.setItem(this.WORKFLOW_KEY, JSON.stringify(config))
+            console.log('🎯 SESSION-STORAGE: Saved workflow config', config)
+        } catch (error) {
+            console.error('Failed to save workflow config:', error)
+        }
+    }
+
+    getWorkflowConfig(): WorkflowConfig | null {
+        try {
+            const data = sessionStorage.getItem(this.WORKFLOW_KEY)
+            if (data) {
+                const parsed = JSON.parse(data) as WorkflowConfig
+                console.log(
+                    '🎯 SESSION-STORAGE: Retrieved workflow config',
+                    parsed
+                )
+                return parsed
+            }
+        } catch (error) {
+            console.error('Failed to get workflow config:', error)
+        }
+        return null
+    }
+
+    clearWorkflowConfig(): void {
+        try {
+            sessionStorage.removeItem(this.WORKFLOW_KEY)
+            console.log('🎯 SESSION-STORAGE: Cleared workflow config')
+        } catch (error) {
+            console.error('Failed to clear workflow config:', error)
+        }
+    }
+
+    hasWorkflowConfig(): boolean {
+        return this.getWorkflowConfig() !== null
+    }
+
     // Clear all data (for end session)
     clearAll(): void {
         this.clearSessionData()
         this.clearCompletedSteps()
+        this.clearWorkflowConfig()
         console.log('🎯 SESSION-STORAGE: Cleared all session data')
     }
 
