@@ -69,6 +69,7 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     isAgentLoading: boolean = true
     agentLoadingStep: number = 0
     agentLoadingTimeout: any = null
+    agentStreamReady: boolean = false
 
     // Workflow
     workflowSteps: WorkflowStep[] = []
@@ -226,8 +227,9 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         console.log('🎯 VKYC-SESSION: Starting agent loading sequence...')
         this.isAgentLoading = true
         this.agentLoadingStep = 0
+        this.agentStreamReady = false
 
-        // Simulate loading steps with realistic timing
+        // Start with initial loading steps
         this.agentLoadingTimeout = setTimeout(() => {
             this.agentLoadingStep = 1
             this.cdRef.detectChanges()
@@ -240,23 +242,49 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                     this.agentLoadingStep = 3
                     this.cdRef.detectChanges()
 
-                    setTimeout(() => {
-                        this.agentLoadingStep = 4
-                        this.cdRef.detectChanges()
-
-                        // Hide modal after a short delay
-                        setTimeout(() => {
-                            this.hideAgentLoadingModal()
-                        }, 1000)
-                    }, 2000) // Avatar setup takes longer
+                    // Wait for agent stream to be ready before completing
+                    this.waitForAgentStream()
                 }, 1500) // AI components initialization
             }, 1000) // VideoSDK connection
         }, 500) // Initial delay
     }
 
+    private waitForAgentStream(): void {
+        console.log('🎯 VKYC-SESSION: Waiting for agent stream...')
+
+        // Check if stream is already ready
+        if (this.agentStreamReady) {
+            this.completeAgentLoading()
+            return
+        }
+
+        // Set up a timeout as fallback (in case stream never comes)
+        const fallbackTimeout = setTimeout(() => {
+            console.log(
+                '🎯 VKYC-SESSION: Agent stream timeout, proceeding anyway...'
+            )
+            this.completeAgentLoading()
+        }, 10000) // 10 second fallback
+
+        // Store timeout for cleanup
+        this.agentLoadingTimeout = fallbackTimeout
+    }
+
+    private completeAgentLoading(): void {
+        console.log('🎯 VKYC-SESSION: Completing agent loading...')
+        this.agentLoadingStep = 4
+        this.cdRef.detectChanges()
+
+        // Hide modal after a short delay
+        setTimeout(() => {
+            this.hideAgentLoadingModal()
+        }, 1000)
+    }
+
     private hideAgentLoadingModal(): void {
         console.log('🎯 VKYC-SESSION: Hiding agent loading modal...')
         this.isAgentLoading = false
+        this.clearAgentLoadingTimeout()
         this.cdRef.detectChanges()
     }
 
@@ -452,6 +480,11 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             .play()
             .then(() => {
                 console.log('🎯 VKYC-SESSION: Agent audio started playing')
+                // Mark agent stream as ready and complete loading if waiting
+                this.agentStreamReady = true
+                if (this.isAgentLoading && this.agentLoadingStep >= 3) {
+                    this.completeAgentLoading()
+                }
             })
             .catch((error: any) => {
                 console.error(
@@ -489,9 +522,10 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             .then(() => {
                 console.log('🎯 VKYC-SESSION: Agent video started playing')
                 this.hasAgentVideo = true
-                // Hide loading modal when agent video is ready
-                if (this.isAgentLoading) {
-                    this.hideAgentLoadingModal()
+                // Mark agent stream as ready and complete loading if waiting
+                this.agentStreamReady = true
+                if (this.isAgentLoading && this.agentLoadingStep >= 3) {
+                    this.completeAgentLoading()
                 }
             })
             .catch((error: any) => {
