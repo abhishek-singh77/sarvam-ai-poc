@@ -18,16 +18,17 @@
             class="w-full h-full object-cover"></app-audio-video-track>
     </div>
 
-    <!-- Agent Video Overlay (Bottom Right) -->
+    <!-- Agent Video Overlay (Bottom Right) - Responsive Size -->
     <div
-        class="absolute bottom-4 right-4 w-24 h-32 bg-gray-800 rounded-xl overflow-hidden shadow-lg">
+        class="absolute bottom-4 right-4 bg-gray-800 rounded-xl overflow-hidden shadow-lg border-2 border-white w-32 h-40 sm:w-40 sm:h-48 md:w-48 md:h-56 lg:w-56 lg:h-64 xl:w-64 xl:h-72">
         <div
             *ngIf="!isAgentVideoPlaying"
             class="h-full w-full flex items-center justify-center text-white">
             <div class="text-center">
                 <div
-                    class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mx-auto mb-1"></div>
-                <p class="text-xs">Agent</p>
+                    class="animate-spin rounded-full h-6 w-6 border-b-2 border-white mx-auto mb-2"></div>
+                <p class="text-sm font-medium">Agent</p>
+                <p class="text-xs text-gray-300">Joining...</p>
             </div>
         </div>
         <app-audio-video-track

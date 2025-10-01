@@ -361,6 +361,7 @@ export class MeetingService {
     leaveMeeting(): void {
         if (this.meeting) {
             this.meeting.leave()
+            // this.meeting.end()
             this.meeting = null
             this.meetingSubject.next(null)
             this.hasActiveMeetingSubject.next(false)
@@ -444,5 +445,150 @@ export class MeetingService {
     isLocalCameraEnabled(): boolean {
         if (!this.meeting || !this.meeting.localParticipant) return false
         return this.meeting.localParticipant.webcam
+    }
+
+    // Image capture method - capture from local video stream
+    captureImage(): Promise<string | null> {
+        if (!this.meeting || !this.meeting.localParticipant) {
+            console.warn(
+                '🎯 MEETING-SERVICE: No active meeting or local participant to capture image'
+            )
+            return Promise.resolve(null)
+        }
+
+        try {
+            console.log(
+                '🎯 MEETING-SERVICE: Capturing image from local video stream'
+            )
+
+            // Get the local video track
+            const localStream = this.localStreamSubject.value
+            if (!localStream) {
+                console.warn(
+                    '🎯 MEETING-SERVICE: No local stream available for capture'
+                )
+                return Promise.resolve(null)
+            }
+
+            const videoTracks = localStream.getVideoTracks()
+            if (videoTracks.length === 0) {
+                console.warn(
+                    '🎯 MEETING-SERVICE: No video tracks available for capture'
+                )
+                return Promise.resolve(null)
+            }
+
+            // Create a canvas to capture the video frame
+            const videoTrack = videoTracks[0]
+            const stream = new MediaStream([videoTrack])
+
+            return new Promise((resolve) => {
+                const video = document.createElement('video')
+                video.srcObject = stream
+                video.play()
+
+                video.onloadedmetadata = () => {
+                    const canvas = document.createElement('canvas')
+                    canvas.width = video.videoWidth
+                    canvas.height = video.videoHeight
+
+                    const ctx = canvas.getContext('2d')
+                    if (ctx) {
+                        ctx.drawImage(video, 0, 0)
+                        const imageData = canvas.toDataURL('image/jpeg', 0.8)
+                        console.log(
+                            '🎯 MEETING-SERVICE: Image captured successfully'
+                        )
+                        resolve(imageData)
+                    } else {
+                        console.error(
+                            '🎯 MEETING-SERVICE: Could not get canvas context'
+                        )
+                        resolve(null)
+                    }
+                }
+
+                video.onerror = () => {
+                    console.error(
+                        '🎯 MEETING-SERVICE: Error loading video for capture'
+                    )
+                    resolve(null)
+                }
+            })
+        } catch (error) {
+            console.error('🎯 MEETING-SERVICE: Error capturing image:', error)
+            return Promise.resolve(null)
+        }
+    }
+
+    // Camera flip method
+    async flipCamera(): Promise<{ success: boolean; message: string }> {
+        if (!this.meeting) {
+            const message = 'No active meeting to flip camera'
+            console.warn('🎯 MEETING-SERVICE:', message)
+            return { success: false, message }
+        }
+
+        try {
+            console.log('🎯 MEETING-SERVICE: Flipping camera')
+
+            // Get available cameras
+            const cameras = await VideoSDK.getCameras()
+            const cameraList = Array.isArray(cameras)
+                ? cameras
+                : Object.values(cameras || {})
+
+            if (cameraList.length < 2) {
+                const message =
+                    'Not enough cameras available for flipping. Only one camera detected.'
+                console.warn('🎯 MEETING-SERVICE:', message)
+                return { success: false, message }
+            }
+
+            // Find front and back cameras
+            const frontCamera = cameraList.find(
+                (cam: any) =>
+                    (cam.label || '').toLowerCase().includes('front') ||
+                    (cam.label || '').toLowerCase().includes('user')
+            )
+            const backCamera = cameraList.find(
+                (cam: any) =>
+                    (cam.label || '').toLowerCase().includes('back') ||
+                    (cam.label || '').toLowerCase().includes('environment')
+            )
+
+            if (!frontCamera || !backCamera) {
+                const message =
+                    'Front or back camera not found. Cannot flip camera.'
+                console.warn('🎯 MEETING-SERVICE:', message)
+                return { success: false, message }
+            }
+
+            // Get current camera to determine which one to switch to
+            const currentCamera = this.meeting.localParticipant?.webcam
+                ?.getVideoTracks()?.[0]
+                ?.getSettings()?.deviceId
+
+            let targetCamera
+            if (currentCamera === frontCamera.deviceId) {
+                targetCamera = backCamera
+                console.log('🎯 MEETING-SERVICE: Switching to back camera')
+            } else {
+                targetCamera = frontCamera
+                console.log('🎯 MEETING-SERVICE: Switching to front camera')
+            }
+
+            // Change camera
+            await this.meeting.changeWebcam(targetCamera.deviceId)
+            const message = `Camera switched to ${
+                targetCamera.label || 'unknown camera'
+            }`
+            console.log('🎯 MEETING-SERVICE: Camera flipped successfully')
+            return { success: true, message }
+        } catch (error) {
+            const message = `Error flipping camera: ${error}`
+            console.error('🎯 MEETING-SERVICE:', message)
+            return { success: false, message }
+        }
     }
 }

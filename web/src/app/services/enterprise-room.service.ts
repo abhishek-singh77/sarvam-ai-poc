@@ -211,9 +211,31 @@ export class EnterpriseRoomService {
             this.appendLog('🛑 Ending KYC session...')
             this.setStatus('Ending session...')
 
+            // Get current session ID for backend cleanup
+            const currentSession = this.sessionDataSubject.value
+            const sessionId = currentSession?.session_id
+
             // Leave meeting
             await this.meetingService.leaveMeeting()
             this.appendLog('✅ Left VideoSDK meeting')
+
+            // Call backend API to end session
+            if (sessionId) {
+                try {
+                    await this.enterpriseApi
+                        .deleteSession(sessionId)
+                        .toPromise()
+                    this.appendLog('✅ Session ended on backend')
+                } catch (apiError) {
+                    console.warn(
+                        '🎯 ROOM-SERVICE: Failed to end session on backend:',
+                        apiError
+                    )
+                    this.appendLog(
+                        '⚠️ Failed to end session on backend, but continuing...'
+                    )
+                }
+            }
 
             // Clear session data
             this.sessionDataSubject.next(null)

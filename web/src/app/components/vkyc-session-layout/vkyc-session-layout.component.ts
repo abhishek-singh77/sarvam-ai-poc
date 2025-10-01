@@ -67,6 +67,13 @@ export class VkycSessionLayoutComponent {
         networkSpeed: any
         isVpnDetected: boolean
     }>()
+    @Output() chatToggle = new EventEmitter<void>()
+    @Output() cameraToggle = new EventEmitter<void>()
+    @Output() micToggle = new EventEmitter<void>()
+    @Output() capturePhoto = new EventEmitter<void>()
+
+    // Mic mute state
+    isMicMuted = false
     @Output() healthCheckCancel = new EventEmitter<void>()
     @Output() voiceRecognition = new EventEmitter<any>()
     @Output() questionnaireRetry = new EventEmitter<void>()
@@ -80,24 +87,30 @@ export class VkycSessionLayoutComponent {
         // No need to emit startCall here as it would cause infinite loops
     }
 
-    onMicToggle(): void {
-        console.log('🎯 LAYOUT: Mic toggle requested')
-        // TODO: Implement mic toggle logic
-    }
-
-    onCameraToggle(): void {
-        console.log('🎯 LAYOUT: Camera toggle requested')
-        // TODO: Implement camera flip logic
+    onEndCall(): void {
+        console.log('🎯 LAYOUT: End call requested')
+        this.endSession.emit()
     }
 
     onChatToggle(): void {
         console.log('🎯 LAYOUT: Chat toggle requested')
-        // TODO: Implement chat toggle logic
+        this.chatToggle.emit()
     }
 
-    onEndCall(): void {
-        console.log('🎯 LAYOUT: End call requested')
-        this.endSession.emit()
+    onCameraToggle(): void {
+        console.log('🎯 LAYOUT: Camera toggle requested')
+        this.cameraToggle.emit()
+    }
+
+    onMicToggle(): void {
+        console.log('🎯 LAYOUT: Mic toggle requested')
+        this.isMicMuted = !this.isMicMuted
+        this.micToggle.emit()
+    }
+
+    onCapturePhoto(): void {
+        console.log('🎯 LAYOUT: Capture photo requested')
+        this.capturePhoto.emit()
     }
 
     // Workflow step helper methods

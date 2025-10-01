@@ -23,6 +23,7 @@ import { VkycQuestionnaireFacadeService } from '../../services/vkyc-questionnair
 import { PreCallFlowService } from '../../services/pre-call-flow.service'
 import { SessionStorageService } from '../../services/session-storage.service'
 import { EnterpriseRoomService } from '../../services/enterprise-room.service'
+import { MeetingService } from '../../services/meeting.service'
 
 @Component({
     selector: 'app-vkyc-session',
@@ -92,7 +93,8 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         private questionnaireFacade: VkycQuestionnaireFacadeService,
         private cdRef: ChangeDetectorRef,
         private sessionStorage: SessionStorageService,
-        private roomService: EnterpriseRoomService
+        private roomService: EnterpriseRoomService,
+        private meetingService: MeetingService
     ) {
         console.log('🎯 VKYC-SESSION: Component initialized')
     }
@@ -555,4 +557,81 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     }
 
     // Template helper methods (removed getLogMessage as it's no longer needed)
+
+    // Control button handlers
+    onChatToggle(): void {
+        console.log('🎯 VKYC-SESSION: Chat toggle requested')
+        // TODO: Implement chat functionality
+    }
+
+    onCameraToggle(): void {
+        console.log('🎯 VKYC-SESSION: Camera toggle requested')
+        // Use the flipCamera method from meeting service
+        this.meetingService
+            .flipCamera()
+            .then((result: { success: boolean; message: string }) => {
+                if (result.success) {
+                    console.log(
+                        '🎯 VKYC-SESSION: Camera flipped successfully:',
+                        result.message
+                    )
+                    // TODO: Show success notification
+                } else {
+                    console.warn(
+                        '🎯 VKYC-SESSION: Camera flip failed:',
+                        result.message
+                    )
+                    this.showErrorNotification(result.message)
+                }
+            })
+            .catch((error: any) => {
+                console.error('🎯 VKYC-SESSION: Error flipping camera:', error)
+                this.showErrorNotification('Failed to flip camera')
+            })
+    }
+
+    onMicToggle(): void {
+        console.log('🎯 VKYC-SESSION: Mic toggle requested')
+        // Use the existing toggleLocalMic method from meeting service
+        this.meetingService
+            .toggleLocalMic()
+            .then((isMicEnabled: boolean) => {
+                console.log(
+                    '🎯 VKYC-SESSION: Mic toggled, enabled:',
+                    isMicEnabled
+                )
+            })
+            .catch((error: any) => {
+                console.error('🎯 VKYC-SESSION: Error toggling mic:', error)
+            })
+    }
+
+    onCapturePhoto(): void {
+        console.log('🎯 VKYC-SESSION: Capture photo requested')
+        // Use the captureImage method from meeting service
+        this.meetingService
+            .captureImage()
+            .then((imageData: string | null) => {
+                if (imageData) {
+                    console.log('🎯 VKYC-SESSION: Photo captured successfully')
+                    // TODO: Handle the captured image data
+                    // This could trigger the auto-capture flow or show the image manipulator
+                } else {
+                    console.warn('🎯 VKYC-SESSION: Failed to capture photo')
+                    this.showErrorNotification('Failed to capture photo')
+                }
+            })
+            .catch((error: any) => {
+                console.error('🎯 VKYC-SESSION: Error capturing photo:', error)
+                this.showErrorNotification('Failed to capture photo')
+            })
+    }
+
+    private showErrorNotification(message: string): void {
+        // TODO: Implement proper notification system
+        // For now, we'll use the existing error modal
+        this.showErrorModal = true
+        this.errorMessage = message
+        console.error('🎯 VKYC-SESSION: Error notification:', message)
+    }
 }
