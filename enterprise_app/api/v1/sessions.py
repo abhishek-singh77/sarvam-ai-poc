@@ -307,6 +307,51 @@ async def list_sessions(
         raise HTTPException(status_code=500, detail="Failed to list sessions")
 
 
+@router.post("/{session_id}/complete-step")
+async def complete_workflow_step(
+    session_id: str, 
+    request: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Complete a workflow step and notify the agent.
+    
+    Args:
+        session_id: Session identifier (actually room_id)
+        request: Step completion data
+        
+    Returns:
+        Step completion result
+    """
+    logger.info("Completing workflow step", extra={
+        "session_id": session_id,
+        "step_id": request.get("step_id"),
+        "result": request.get("result")
+    })
+    
+    try:
+        # Get step data from request
+        step_id = request.get("step_id")
+        result = request.get("result", "completed")
+        
+        if not step_id:
+            raise HTTPException(status_code=400, detail="step_id is required")
+        
+        # TODO: Store step completion in database
+        # For now, just log the completion
+        logger.info(f"Step {step_id} completed with result: {result}")
+        
+        return {
+            "status": "success",
+            "message": f"Step {step_id} completed successfully",
+            "step_id": step_id,
+            "result": result
+        }
+        
+    except Exception as e:
+        logger.error("Failed to complete workflow step", extra={"error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Failed to complete step: {str(e)}")
+
+
 @router.delete("/{session_id}")
 async def delete_session(session_id: str) -> Dict[str, Any]:
     """

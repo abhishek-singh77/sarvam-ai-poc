@@ -13,6 +13,7 @@
         </div>
         <app-audio-video-track
             *ngIf="isCustomerVideoPlaying"
+            [muted]="true"
             #customerTrack
             [stream]="customerStream"
             class="w-full h-full object-cover"></app-audio-video-track>

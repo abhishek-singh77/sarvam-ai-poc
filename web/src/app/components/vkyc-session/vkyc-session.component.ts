@@ -539,6 +539,23 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             console.log(
                 '🎯 VKYC-SESSION: Step completed after image processing'
             )
+
+            // Notify the agent about step completion
+            if (this.layoutState?.currentStep) {
+                const currentStep = this.layoutState.currentStep
+                const stepId =
+                    currentStep.id || currentStep.sub_action_ref || 'unknown'
+
+                // Call the agent workflow service to notify about step completion
+                this.agentWorkflowService.handleStepCompletion(
+                    currentStep,
+                    null
+                )
+
+                console.log(
+                    `🎯 VKYC-SESSION: Notified agent about step completion: ${stepId}`
+                )
+            }
         } catch (error) {
             console.error('🎯 VKYC-SESSION: Failed to complete step:', error)
             this.showErrorNotification('Failed to complete step')

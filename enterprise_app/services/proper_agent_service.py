@@ -29,7 +29,7 @@ class KYCVoiceAgent(Agent):
     KYC Voice Agent that helps with identity verification process using voice interaction
     """
     
-    def __init__(self):
+    def __init__(self, workflow_json: str = ""):
         instructions = """
         You are a KYC (Know Your Customer) Voice Assistant. Your role is to guide users through the identity verification process using natural conversation.
         
@@ -44,13 +44,13 @@ class KYCVoiceAgent(Agent):
         8. Use natural speech patterns and maintain conversation flow
         
         WORKFLOW MANAGEMENT:
-        - Always check the current workflow step using get_current_workflow_step(room_id)
+        - You have access to the current workflow configuration
         - Guide the user through each step based on the workflow
         - When a step is completed, use complete_workflow_step(room_id, step_id, data) to mark it as done
         - Provide clear instructions for each step type:
-          * selfie_capture: Guide user to take a clear selfie
-          * questionnaire: Ask the required questions and collect answers
-          * id_upload: Help user upload their ID document
+          * FACE_CAPTURE: Guide user to take a clear selfie
+          * DOCUMENT_CAPTURE: Help user capture their ID document
+          * QUESTIONNAIRE: Ask the required questions and collect answers
           * verification: Confirm completion and next steps
         
         IMPORTANT INTERRUPTION HANDLING:
@@ -79,12 +79,107 @@ class KYCVoiceAgent(Agent):
             instructions=instructions,
             agent_id="kyc-voice-agent"
         )
+        
+        # Store workflow data
+        self.workflow_json = workflow_json
+        self.workflow_data = None
+        self.current_step_index = 0
+        self.completed_steps = []
+        
+        # Parse workflow if provided
+        if workflow_json:
+            try:
+                import json
+                self.workflow_data = json.loads(workflow_json)
+                logger.info("🎯 Workflow data loaded successfully")
+            except Exception as e:
+                logger.error(f"❌ Failed to parse workflow JSON: {e}")
     
     async def on_enter(self) -> None:
         """Called when the agent enters the meeting"""
         logger.info("🎯 KYC Voice Agent entered the meeting")
-        # Note: We'll handle the greeting in the session setup
-        pass
+        
+        # Get the first in-call step to start with
+        first_step = self.get_current_step()
+        if first_step:
+            greeting = self.generate_step_greeting(first_step)
+            await self.session.say(greeting)
+            logger.info(f"🎯 Step-specific greeting sent for: {first_step.get('title', 'Unknown')}")
+        else:
+            # Fallback to generic greeting
+            await self.session.say("Hello! I am your KYC Virtual Assistant. I'm here to help you complete your identity verification process.")
+    
+    def get_current_step(self):
+        """Get the current step from workflow"""
+        if not self.workflow_data or not self.workflow_data.get('actionables'):
+            return None
+        
+        # Get in-call steps (sub_action_step: "in_call" or not specified for main flow)
+        in_call_steps = []
+        for actionable in self.workflow_data['actionables']:
+            if actionable.get('sub_actions'):
+                for sub_action in actionable['sub_actions']:
+                    # Include steps that are not explicitly marked as "pre"
+                    if sub_action.get('sub_action_step') != 'pre':
+                        in_call_steps.append(sub_action)
+        
+        if self.current_step_index < len(in_call_steps):
+            return in_call_steps[self.current_step_index]
+        return None
+    
+    def generate_step_greeting(self, step):
+        """Generate a greeting specific to the current step"""
+        step_type = step.get('type', '')
+        step_title = step.get('title', '')
+        step_description = step.get('description', '')
+        
+        if step_type == 'FRAME_CAPTURE':
+            if step.get('frame_capture_type') == 'FACE_CAPTURE':
+                return f"Hello! I'm your KYC assistant. Let's start with {step_title}. {step_description} Please position your face in the camera frame and click the capture button when ready."
+            elif step.get('frame_capture_type') == 'DOCUMENT_CAPTURE':
+                return f"Great! Now let's capture your {step_title}. {step_description} Please position your document in the camera frame and click the capture button when ready."
+        elif step_type == 'QUESTIONNAIRE':
+            return f"Excellent! Now I have a few questions for you. {step_description} Please answer each question clearly."
+        
+        return f"Hello! Let's proceed with {step_title}. {step_description}"
+    
+    def get_function_tools(self):
+        """Return function tools for the agent"""
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "complete_step",
+                    "description": "Mark the current step as completed and move to the next step",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "step_id": {
+                                "type": "string",
+                                "description": "The ID of the completed step"
+                            },
+                            "result": {
+                                "type": "string", 
+                                "description": "The result of the step completion"
+                            }
+                        },
+                        "required": ["step_id", "result"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_next_step_instruction",
+                    "description": "Get instructions for the next step in the workflow",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": []
+                    }
+                }
+            }
+        ]
     
     async def on_exit(self) -> None:
         """Called when the agent exits the meeting"""
@@ -326,8 +421,12 @@ class ProperAgentService:
                     # Create the worker job using the proper VideoSDK pattern
                     options = Options(register=False)
                     job_context = self._make_job_context(room_id, agent_token)
+                    # Create a proper coroutine function for the entrypoint
+                    async def agent_entrypoint(ctx: JobContext):
+                        return await self._start_agent_session(ctx, workflow_json)
+                    
                     job = WorkerJob(
-                        entrypoint=self._start_agent_session,
+                        entrypoint=agent_entrypoint,
                         jobctx=job_context,
                         options=options
                     )
@@ -551,7 +650,7 @@ class ProperAgentService:
         return result + ('.' if clean_sentences and not result.endswith('.') else '')
     
     
-    async def _start_agent_session(self, context: JobContext):
+    async def _start_agent_session(self, context: JobContext, workflow_json: str = ""):
         """Start the agent session using the proper VideoSDK pattern"""
         session = None
         room_id = context.room_options.room_id
@@ -559,21 +658,56 @@ class ProperAgentService:
         try:
             logger.info(f"🎯 Starting KYC Agent session for room {room_id}")
             
-            # Create the KYC voice agent
-            agent = KYCVoiceAgent()
+            # Create the KYC voice agent with workflow data
+            agent = KYCVoiceAgent(workflow_json=workflow_json)
             
             # Register workflow management tools
             @function_tool
             def get_current_workflow_step(room_id: str) -> Dict[str, Any]:
                 """Get the current workflow step for the room"""
-                # TODO: Implement workflow step retrieval when needed
-                return {"error": "Workflow service not implemented"}
+                current_step = agent.get_current_step()
+                if current_step:
+                    return {
+                        "status": "success",
+                        "current_step": current_step.get('type', 'unknown'),
+                        "step_title": current_step.get('title', ''),
+                        "step_description": current_step.get('description', ''),
+                        "step_id": current_step.get('sub_action_ref', ''),
+                        "frame_capture_type": current_step.get('frame_capture_type', '')
+                    }
+                return {
+                    "status": "success",
+                    "current_step": "completed",
+                    "message": "All workflow steps completed"
+                }
             
             @function_tool
             def complete_workflow_step(room_id: str, step_id: str, data: Dict[str, Any] | None = None) -> Dict[str, Any]:
-                """Complete a workflow step with provided data"""
-                # TODO: Implement workflow step completion when needed
-                return {"error": "Workflow service not implemented"}
+                """Complete a workflow step and move to the next one"""
+                logger.info(f"🎯 Workflow step completed: {step_id} for room {room_id}")
+                
+                # Mark current step as completed
+                agent.completed_steps.append(step_id)
+                agent.current_step_index += 1
+                
+                # Get next step
+                next_step = agent.get_current_step()
+                if next_step:
+                    next_instruction = agent.generate_step_greeting(next_step)
+                    return {
+                        "status": "success",
+                        "message": f"Step {step_id} completed successfully",
+                        "next_step": next_step.get('type', 'unknown'),
+                        "next_step_title": next_step.get('title', ''),
+                        "next_instruction": next_instruction
+                    }
+                else:
+                    return {
+                        "status": "success",
+                        "message": f"Step {step_id} completed successfully",
+                        "next_step": "completed",
+                        "message": "All workflow steps completed"
+                    }
             
             # Note: Tools are automatically available to the agent through the function_tool decorator
             # The LLM will have access to these tools during conversation
@@ -758,32 +892,8 @@ class ProperAgentService:
             
             logger.info("🎯 KYC Agent session started successfully")
             
-            # Send initial greeting with better error handling
-            try:
-                greeting = "Hello! I am your KYC Virtual Assistant. I'm here to help you complete your identity verification process. Let's get started with a friendly conversation!"
-                await session.say(greeting)
-                logger.info("🎯 Initial greeting sent")
-            except Exception as e:
-                error_str = str(e).lower()
-                if "audio track" in error_str or "loop not initialized" in error_str:
-                    logger.warning("🎯 Audio track error - this is normal when avatar fails to connect")
-                    logger.info("🎯 Agent will continue in voice-only mode")
-                else:
-                    logger.warning(f"Could not send initial greeting: {e}")
-                
-                # Try a simpler greeting as fallback
-                try:
-                    simple_greeting = "Hello! I'm your KYC assistant. How can I help you today?"
-                    await session.say(simple_greeting)
-                    logger.info("🎯 Simple greeting sent as fallback")
-                except Exception as e2:
-                    error_str2 = str(e2).lower()
-                    if "audio track" in error_str2 or "loop not initialized" in error_str2:
-                        logger.warning("🎯 Audio track error in fallback - continuing without audio")
-                        logger.info("🎯 Agent is functional but may not have audio output")
-                    else:
-                        logger.warning(f"Could not send simple greeting either: {e2}")
-                    # Continue anyway - the agent is still functional
+            # Note: Initial greeting is now handled by the agent's on_enter method
+            logger.info("🎯 Agent will handle initial greeting in on_enter method")
             
             # Keep the session running until manually terminated
             # Use a proper event loop that can be cancelled
