@@ -161,18 +161,6 @@ export class EnterpriseApiService {
             .pipe(catchError(this.handleError))
     }
 
-    pauseSession(sessionId: string): Observable<any> {
-        return this.http
-            .post(`${this.API_BASE}/sessions/${sessionId}/pause`, {})
-            .pipe(catchError(this.handleError))
-    }
-
-    resumeSession(sessionId: string): Observable<any> {
-        return this.http
-            .post(`${this.API_BASE}/sessions/${sessionId}/resume`, {})
-            .pipe(catchError(this.handleError))
-    }
-
     deleteSession(sessionId: string): Observable<any> {
         return this.http.delete(`${this.API_BASE}/sessions/${sessionId}`).pipe(
             map(() => {
@@ -182,74 +170,6 @@ export class EnterpriseApiService {
             }),
             catchError(this.handleError)
         )
-    }
-
-    // Workflow Management Methods
-    getWorkflowTypes(): Observable<{ workflow_types: string[] }> {
-        return this.http
-            .get<{ workflow_types: string[] }>(
-                `${this.API_BASE}/workflows/types`
-            )
-            .pipe(catchError(this.handleError))
-    }
-
-    getWorkflowTemplate(workflowType: string): Observable<any> {
-        return this.http
-            .get(`${this.API_BASE}/workflows/${workflowType}/template`)
-            .pipe(catchError(this.handleError))
-    }
-
-    getWorkflowProgress(
-        sessionId: string
-    ): Observable<WorkflowProgressResponse> {
-        return this.http
-            .get<WorkflowProgressResponse>(
-                `${this.API_BASE}/workflows/${sessionId}/progress`
-            )
-            .pipe(
-                map((response) => {
-                    this.workflowProgressSubject.next(response)
-                    return response
-                }),
-                catchError(this.handleError)
-            )
-    }
-
-    startWorkflowStep(sessionId: string, stepId: string): Observable<any> {
-        return this.http
-            .post(
-                `${this.API_BASE}/workflows/${sessionId}/steps/${stepId}/start`,
-                {}
-            )
-            .pipe(catchError(this.handleError))
-    }
-
-    completeWorkflowStep(
-        sessionId: string,
-        stepId: string,
-        data?: any
-    ): Observable<any> {
-        return this.http
-            .post(
-                `${this.API_BASE}/workflows/${sessionId}/steps/${stepId}/complete`,
-                {
-                    step_id: stepId,
-                    data: data,
-                }
-            )
-            .pipe(catchError(this.handleError))
-    }
-
-    pauseWorkflow(sessionId: string): Observable<any> {
-        return this.http
-            .post(`${this.API_BASE}/workflows/${sessionId}/pause`, {})
-            .pipe(catchError(this.handleError))
-    }
-
-    resumeWorkflow(sessionId: string): Observable<any> {
-        return this.http
-            .post(`${this.API_BASE}/workflows/${sessionId}/resume`, {})
-            .pipe(catchError(this.handleError))
     }
 
     // Agent Management Methods
@@ -303,18 +223,6 @@ export class EnterpriseApiService {
 
         return this.http
             .get<AgentStatusResponse[]>(`${this.API_BASE}/agents/`, { params })
-            .pipe(catchError(this.handleError))
-    }
-
-    pauseAgent(agentId: string): Observable<any> {
-        return this.http
-            .post(`${this.API_BASE}/agents/${agentId}/pause`, {})
-            .pipe(catchError(this.handleError))
-    }
-
-    resumeAgent(agentId: string): Observable<any> {
-        return this.http
-            .post(`${this.API_BASE}/agents/${agentId}/resume`, {})
             .pipe(catchError(this.handleError))
     }
 

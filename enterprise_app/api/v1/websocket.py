@@ -7,7 +7,7 @@ import json
 import asyncio
 from typing import Dict, Any, List
 from fastapi import WebSocket, WebSocketDisconnect, APIRouter
-from utils.logging.logger import get_logger
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter()

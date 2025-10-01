@@ -7,6 +7,7 @@ import {
     SessionStorageService,
     WorkflowConfig as SessionWorkflowConfig,
 } from './session-storage.service'
+import { AgentWorkflowService } from './agent-workflow.service'
 
 export interface SubAction {
     type:
@@ -126,7 +127,8 @@ export class WorkflowRunnerService {
     constructor(
         private http: HttpClient,
         private stepHandlerRegistry: StepHandlerRegistry,
-        private sessionStorage: SessionStorageService
+        private sessionStorage: SessionStorageService,
+        private agentWorkflowService: AgentWorkflowService
     ) {}
 
     async loadWorkflow(): Promise<void> {
@@ -436,19 +438,84 @@ export class WorkflowRunnerService {
         return this.currentState.currentStep
     }
 
-    completeCurrentStep(): void {
+    async completeCurrentStep(): Promise<void> {
         if (this.currentState.currentStep) {
-            this.currentState.currentStep.status = 'completed'
-            console.log(
-                '🎯 WORKFLOW-RUNNER: Completed step:',
-                this.currentState.currentStep.id
-            )
-            this.executeNextStep()
+            const step = this.currentState.currentStep
+            step.status = 'completed'
+
+            console.log('🎯 WORKFLOW-RUNNER: Completed step:', step.id)
+
+            // Call backend API to complete the step
+            try {
+                await this.callStepCompletionAPI(step)
+
+                // Notify agent workflow service about step completion
+                const nextStep = this.getNextStep()
+                this.agentWorkflowService.handleStepCompletion(step, nextStep)
+
+                this.updateState()
+                this.executeNextStep()
+            } catch (error) {
+                console.error(
+                    '🎯 WORKFLOW-RUNNER: Failed to complete step on backend:',
+                    error
+                )
+                step.status = 'error'
+                step.error =
+                    error instanceof Error
+                        ? error.message
+                        : 'Failed to complete step'
+                this.updateState()
+            }
+        }
+    }
+
+    private async callStepCompletionAPI(step: WorkflowStep): Promise<void> {
+        // Get session ID from session storage
+        const sessionData = this.sessionStorage.getSessionData()
+        if (!sessionData?.sessionId) {
+            throw new Error('No session ID found')
+        }
+        const sessionId = sessionData.sessionId
+
+        // Call the correct step completion API endpoint
+        const response = await fetch(
+            `/api/v1/kyc/workflow-submissions/steps/${sessionId}/${step.id}/complete`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    step_id: step.id,
+                    data: step.data || {},
+                }),
+            }
+        )
+
+        if (!response.ok) {
+            throw new Error(`Step completion failed: ${response.statusText}`)
+        }
+
+        const result = await response.json()
+        console.log('🎯 WORKFLOW-RUNNER: Step completion API response:', result)
+
+        // Update step data with API response
+        if (result.data) {
+            step.data = { ...step.data, ...result.data }
         }
     }
 
     getStepsByPhase(phase: 'pre' | 'in_call' | 'post'): WorkflowStep[] {
         return this.currentState.steps.filter((step) => step.phase === phase)
+    }
+
+    private getNextStep(): WorkflowStep | null {
+        const nextIndex = this.stepIndex + 1
+        if (nextIndex < this.currentState.steps.length) {
+            return this.currentState.steps[nextIndex]
+        }
+        return null
     }
 
     getPreCallSteps(): WorkflowStep[] {

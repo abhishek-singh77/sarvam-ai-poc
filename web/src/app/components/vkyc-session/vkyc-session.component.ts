@@ -24,6 +24,7 @@ import { PreCallFlowService } from '../../services/pre-call-flow.service'
 import { SessionStorageService } from '../../services/session-storage.service'
 import { EnterpriseRoomService } from '../../services/enterprise-room.service'
 import { MeetingService } from '../../services/meeting.service'
+import { AgentWorkflowService } from '../../services/agent-workflow.service'
 
 @Component({
     selector: 'app-vkyc-session',
@@ -49,6 +50,7 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         phase: 'pre',
         showPreCallFlow: true,
         preCallStep: 'instructions',
+        isMicMuted: false, // Initialize mic state
     }
 
     // Modal states
@@ -94,7 +96,8 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         private cdRef: ChangeDetectorRef,
         private sessionStorage: SessionStorageService,
         private roomService: EnterpriseRoomService,
-        private meetingService: MeetingService
+        private meetingService: MeetingService,
+        private agentWorkflowService: AgentWorkflowService
     ) {
         console.log('🎯 VKYC-SESSION: Component initialized')
     }
@@ -318,6 +321,9 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                     if (!this.workflowInitialized) {
                         this.workflowInitialized = true
                         this.workflowFacade.init()
+
+                        // Initialize agent workflow
+                        this.initializeAgentWorkflow()
                     }
                 }
             })
@@ -521,14 +527,22 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     }
 
     // Image manipulator event handlers
-    onImageProcessed(response: any): void {
+    async onImageProcessed(response: any): Promise<void> {
         console.log('🎯 VKYC-SESSION: Image processed successfully:', response)
         this.showImageManipulator = false
         this.capturedImageBlob = null
         this.capturedImageBase64 = ''
 
-        // TODO: Handle the processed image response
-        // This could include submitting to backend, updating workflow state, etc.
+        // Complete the current step after image processing
+        try {
+            await this.workflowFacade.completeCurrentStep()
+            console.log(
+                '🎯 VKYC-SESSION: Step completed after image processing'
+            )
+        } catch (error) {
+            console.error('🎯 VKYC-SESSION: Failed to complete step:', error)
+            this.showErrorNotification('Failed to complete step')
+        }
     }
 
     onImageManipulatorError(error: string): void {
@@ -590,22 +604,6 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             })
     }
 
-    onMicToggle(): void {
-        console.log('🎯 VKYC-SESSION: Mic toggle requested')
-        // Use the existing toggleLocalMic method from meeting service
-        this.meetingService
-            .toggleLocalMic()
-            .then((isMicEnabled: boolean) => {
-                console.log(
-                    '🎯 VKYC-SESSION: Mic toggled, enabled:',
-                    isMicEnabled
-                )
-            })
-            .catch((error: any) => {
-                console.error('🎯 VKYC-SESSION: Error toggling mic:', error)
-            })
-    }
-
     onCapturePhoto(): void {
         console.log('🎯 VKYC-SESSION: Capture photo requested')
         // Use the captureImage method from meeting service
@@ -633,5 +631,75 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         this.showErrorModal = true
         this.errorMessage = message
         console.error('🎯 VKYC-SESSION: Error notification:', message)
+    }
+
+    private initializeAgentWorkflow(): void {
+        console.log('🎯 VKYC-SESSION: Initializing agent workflow')
+
+        // Subscribe to workflow steps to initialize agent workflow
+        this.subscriptions.add(
+            this.workflowFacade.state$.subscribe((state: any) => {
+                if (state?.steps && state.steps.length > 0) {
+                    // Initialize agent workflow with the steps
+                    this.agentWorkflowService.initializeAgentWorkflow(
+                        state.steps
+                    )
+
+                    // Update layout state with workflow steps
+                    this.updateLayoutState({ workflowSteps: state.steps })
+                }
+            })
+        )
+
+        // Subscribe to agent workflow state for UI updates
+        this.subscriptions.add(
+            this.agentWorkflowService.workflowState$.subscribe(
+                (workflowState) => {
+                    // Update layout state with current prompt
+                    this.updateLayoutState({
+                        currentPrompt: workflowState.currentPrompt,
+                        isWaitingForResponse:
+                            workflowState.isWaitingForResponse,
+                    })
+                }
+            )
+        )
+
+        // Subscribe to workflow step completion to update agent workflow
+        this.subscriptions.add(
+            this.workflowFacade.state$.subscribe((state: any) => {
+                if (state?.currentStep) {
+                    // Update agent workflow with current step
+                    this.agentWorkflowService.updateCurrentStep(
+                        state.currentStep
+                    )
+
+                    // Generate step instruction prompt
+                    this.agentWorkflowService.generateStepInstructionPrompt()
+                }
+            })
+        )
+    }
+
+    onAgentResponseSubmitted(event: {
+        questionId: string
+        response: string
+    }): void {
+        console.log('🎯 VKYC-SESSION: Agent response submitted:', event)
+        this.agentWorkflowService.handleCustomerResponse(
+            event.questionId,
+            event.response
+        )
+    }
+
+    onAgentResponseUpdated(event: {
+        questionId: string
+        response: string
+    }): void {
+        console.log('🎯 VKYC-SESSION: Agent response updated:', event)
+        this.agentWorkflowService.handleCustomerResponse(
+            event.questionId,
+            event.response
+        )
     }
 }

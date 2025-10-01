@@ -8,7 +8,7 @@ from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from utils.logging.logger import get_logger
+from utils.logger import get_logger
 
 router = APIRouter()
 logger = get_logger(__name__)

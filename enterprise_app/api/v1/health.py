@@ -7,8 +7,8 @@ This module provides endpoints for health monitoring and system status.
 from typing import Dict, Any
 from fastapi import APIRouter, HTTPException
 
-from utils.logging.logger import get_logger
-from utils.health.health_checker import health_checker
+from utils.logger import get_logger
+from utils.health_checker import health_checker
 
 router = APIRouter()
 logger = get_logger(__name__)

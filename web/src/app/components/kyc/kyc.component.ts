@@ -22,12 +22,7 @@ import { SessionStorageService } from '../../services/session-storage.service'
 @Component({
     selector: 'app-kyc',
     standalone: true,
-    imports: [
-        CommonModule,
-        VkycSessionComponent,
-        NotificationComponent,
-        ErrorModalComponent,
-    ],
+    imports: [CommonModule, VkycSessionComponent, ErrorModalComponent],
     templateUrl: './kyc.component.html',
     styleUrls: ['./kyc.component.css'],
 })
@@ -59,12 +54,15 @@ export class KYCComponent implements OnInit, OnDestroy {
     private checkExistingSession(): void {
         // Check if we have existing session data
         const sessionData = this.sessionStorage.getSessionData()
-        const completedSteps = this.sessionStorage.getCompletedSteps()
 
-        if (sessionData && completedSteps) {
-            console.log('🔄 Found existing session data, resuming session...')
+        if (sessionData && sessionData.sessionId) {
+            console.log(
+                '🔄 Found existing session data, resuming session...',
+                sessionData
+            )
             this.isSessionActive = true
-            // The VKYC session component will handle the rest based on completed steps
+            this.setStatus('KYC session ready')
+            // The VKYC session component will handle the rest based on existing session
         } else {
             console.log('🆕 No existing session data, creating new session')
             this.initializeNewSession()
@@ -75,6 +73,9 @@ export class KYCComponent implements OnInit, OnDestroy {
         try {
             this.isLoading = true
             this.setStatus('Creating new KYC session...')
+            console.log(
+                '🎯 KYC: Creating new session (this should not happen if Home component already created one)'
+            )
 
             const result = await this.roomService.initializeKYCSession()
 

@@ -36,22 +36,26 @@ export class HomeComponent implements OnInit, OnDestroy {
         this.isLoading = true
 
         try {
+            console.log('🏠 HOME: Starting KYC session initialization...')
             // First, initialize the KYC session (this calls the /create API)
             const result = await this.roomService.initializeKYCSession()
 
             if (result.success) {
+                console.log(
+                    '🏠 HOME: KYC session created successfully, navigating to /kyc'
+                )
                 // Only navigate to KYC route after successful initialization
                 this.router.navigate(['/kyc'])
             } else {
                 console.error(
-                    'KYC session initialization failed:',
+                    '🏠 HOME: KYC session initialization failed:',
                     result.error
                 )
             }
         } catch (error: any) {
             const errorMessage =
                 error.message || 'Failed to initialize KYC session'
-            console.error('KYC session error:', errorMessage)
+            console.error('🏠 HOME: KYC session error:', errorMessage)
         } finally {
             this.isLoading = false
         }

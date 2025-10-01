@@ -175,7 +175,6 @@ export class WebSocketBridgeService {
             case 'agent_message':
                 this.agentMessageSubject.next(message.data as AgentMessage)
                 break
-            case 'workflow_progress':
                 // Handle workflow progress updates
                 console.log('🔌 WEBSOCKET: Workflow progress:', message.data)
                 break

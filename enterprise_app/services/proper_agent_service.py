@@ -10,10 +10,9 @@ import time
 import os
 import threading
 from typing import Dict, Any, List
-from utils.config.settings import get_settings
-from utils.logging.logger import get_logger
+from utils.settings import get_settings
+from utils.logger import get_logger
 from .conversation_logger import conversation_logger
-from .workflow_service import workflow_service
 from videosdk.agents import Agent, AgentSession, JobContext, RoomOptions, function_tool, ConversationFlow, WorkerJob, Options
 from videosdk.agents import CascadingPipeline, RealTimePipeline, STT, TTS, LLM
 from videosdk.plugins.sarvamai import SarvamAISTT, SarvamAITTS, SarvamAILLM
@@ -103,6 +102,8 @@ class ProperAgentService:
         self.active_agents: Dict[str, Any] = {}
         self.agent_jobs: Dict[str, WorkerJob] = {}
         self.agent_sessions: Dict[str, AgentSession] = {}
+        self._session_events: Dict[str, asyncio.Event] = {}
+        self._job_contexts: Dict[str, JobContext] = {}
         
         # Thread lock to prevent race conditions
         self._agent_start_lock = threading.Lock()
@@ -113,6 +114,45 @@ class ProperAgentService:
             logger.info("✅ Turn Detector model pre-downloaded successfully")
         except Exception as e:
             logger.warning("Failed to pre-download Turn Detector model", extra={"error": str(e)})
+        
+        # Start periodic cleanup task
+        self._start_periodic_cleanup()
+    
+    def _start_periodic_cleanup(self):
+        """Start a periodic cleanup task to prevent Simli sessions from running indefinitely"""
+        import threading
+        
+        def cleanup_worker():
+            import time
+            while True:
+                try:
+                    time.sleep(30)  # Check every 30 seconds
+                    # Check for any sessions that should be cleaned up
+                    current_time = time.time()
+                    for room_id in list(self.active_agents.keys()):
+                        agent_info = self.active_agents.get(room_id, {})
+                        if agent_info.get("status") == "stopped":
+                            logger.info(f"🧹 Periodic cleanup: Removing stopped agent for room {room_id}")
+                            try:
+                                # Force cleanup of stopped agents
+                                if room_id in self.agent_sessions:
+                                    del self.agent_sessions[room_id]
+                                if room_id in self._session_events:
+                                    del self._session_events[room_id]
+                                if room_id in self._job_contexts:
+                                    del self._job_contexts[room_id]
+                                if room_id in self.agent_jobs:
+                                    del self.agent_jobs[room_id]
+                                del self.active_agents[room_id]
+                            except Exception as e:
+                                logger.error(f"❌ Error in periodic cleanup for room {room_id}: {e}")
+                except Exception as e:
+                    logger.error(f"❌ Error in periodic cleanup worker: {e}")
+                    time.sleep(60)  # Wait longer on error
+        
+        cleanup_thread = threading.Thread(target=cleanup_worker, daemon=True)
+        cleanup_thread.start()
+        logger.info("🧹 Periodic cleanup task started")
     
     def _create_pipeline(self, pipeline_kwargs: Dict[str, Any], simli_avatar: Any = None):
         """
@@ -230,6 +270,9 @@ class ProperAgentService:
         agent_token: str,
         workflow_json: str = ""
     ) -> Dict[str, Any]:
+        logger.info(f"🎯 JOIN-AGENT: Starting agent join for room_id: {room_id}")
+        logger.info(f"🎯 JOIN-AGENT: Agent participant ID: {agent_participant_id}")
+        logger.info(f"🎯 JOIN-AGENT: Current active agents: {list(self.active_agents.keys())}")
         """
         Join AI agent to the VideoSDK room using the proper Worker pattern
         
@@ -282,14 +325,16 @@ class ProperAgentService:
                 try:
                     # Create the worker job using the proper VideoSDK pattern
                     options = Options(register=False)
+                    job_context = self._make_job_context(room_id, agent_token)
                     job = WorkerJob(
                         entrypoint=self._start_agent_session,
-                        jobctx=self._make_job_context(room_id, agent_token),
+                        jobctx=job_context,
                         options=options
                     )
                     
-                    # Store the job for proper cleanup
+                    # Store the job and context for proper cleanup
                     self.agent_jobs[room_id] = job
+                    self._job_contexts[room_id] = job_context
                     
                     # Start the job in a separate thread to avoid event loop conflict
                     job_thread = threading.Thread(target=job.start, daemon=True)
@@ -521,23 +566,14 @@ class ProperAgentService:
             @function_tool
             def get_current_workflow_step(room_id: str) -> Dict[str, Any]:
                 """Get the current workflow step for the room"""
-                current_step = workflow_service.get_current_step(room_id)
-                if current_step:
-                    return {
-                        "step_id": current_step.id,
-                        "title": current_step.title,
-                        "description": current_step.description,
-                        "type": current_step.type,
-                        "status": current_step.status,
-                        "instructions": current_step.instructions
-                    }
-                return {"error": "No current step found"}
+                # TODO: Implement workflow step retrieval when needed
+                return {"error": "Workflow service not implemented"}
             
             @function_tool
             def complete_workflow_step(room_id: str, step_id: str, data: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 """Complete a workflow step with provided data"""
-                result = workflow_service.complete_workflow_step(room_id, step_id, data)
-                return result
+                # TODO: Implement workflow step completion when needed
+                return {"error": "Workflow service not implemented"}
             
             # Note: Tools are automatically available to the agent through the function_tool decorator
             # The LLM will have access to these tools during conversation
@@ -696,6 +732,30 @@ class ProperAgentService:
                 logger.error(f"❌ Failed to start agent session: {e}")
                 raise
             
+            # Set up participant event handlers for proper cleanup
+            try:
+                # Get the room from the context to set up event handlers
+                room = context.room
+                if room:
+                    # Handle participant left events
+                    def on_participant_left(participant):
+                        logger.info(f"🎯 Participant left: {participant.name if hasattr(participant, 'name') else 'Unknown'}")
+                        # Trigger cleanup when all non-agent participants leave
+                        if room.participants and len(room.participants) <= 1:  # Only agent left
+                            logger.info("🎯 All participants left, triggering agent cleanup...")
+                            # Trigger the session event to end the session
+                            if room_id in self._session_events:
+                                self._session_events[room_id].set()
+                    
+                    # Register the event handler
+                    room.on('participant-left', on_participant_left)
+                    logger.info("✅ Participant event handlers set up")
+                else:
+                    logger.warning("⚠️ No room found in context, cannot set up participant event handlers")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to set up participant event handlers: {e}")
+                # Continue anyway - the session will still work
+            
             logger.info("🎯 KYC Agent session started successfully")
             
             # Send initial greeting with better error handling
@@ -726,8 +786,27 @@ class ProperAgentService:
                     # Continue anyway - the agent is still functional
             
             # Keep the session running until manually terminated
+            # Use a proper event loop that can be cancelled
             try:
-                await asyncio.Event().wait()
+                # Create a cancellation event that can be triggered from outside
+                self._session_events[room_id] = asyncio.Event()
+                
+                # Add a timeout to prevent sessions from running indefinitely
+                try:
+                    await asyncio.wait_for(self._session_events[room_id].wait(), timeout=3600)  # 1 hour timeout
+                    logger.info(f"🎯 Session event triggered for room {room_id}")
+                except asyncio.TimeoutError:
+                    logger.warning(f"⏰ Session timeout reached for room {room_id}, cleaning up...")
+                    # Force cleanup on timeout
+                    if room_id in self.agent_sessions:
+                        try:
+                            await self.agent_sessions[room_id].close()
+                            logger.info(f"✅ Session closed due to timeout for room {room_id}")
+                        except Exception as e:
+                            logger.error(f"❌ Error closing session on timeout for room {room_id}: {e}")
+                    
+            except asyncio.CancelledError:
+                logger.info(f"🎯 Session cancelled for room {room_id}")
             except Exception as e:
                 logger.error(f"❌ Session wait failed: {e}")
                 raise
@@ -740,6 +819,7 @@ class ProperAgentService:
             # Clean up resources when done
             if session:
                 try:
+                    logger.info(f"🎭 Closing Simli avatar session for room {room_id}...")
                     await session.close()
                     logger.info("🎯 Agent session closed")
                 except Exception as e:
@@ -748,6 +828,18 @@ class ProperAgentService:
             # Remove from active sessions
             if room_id and room_id in self.agent_sessions:
                 del self.agent_sessions[room_id]
+            
+            # Clean up session events
+            if room_id and room_id in self._session_events:
+                del self._session_events[room_id]
+            
+            # Clean up job context
+            if room_id and room_id in self._job_contexts:
+                del self._job_contexts[room_id]
+            
+            # Update active agents status
+            if room_id in self.active_agents:
+                self.active_agents[room_id]["status"] = "stopped"
             
             try:
                 await context.shutdown()
@@ -758,54 +850,124 @@ class ProperAgentService:
     async def stop_agent(self, room_id: str) -> Dict[str, Any]:
         """Stop the agent for a specific room and clean up Simli avatar session"""
         try:
-            if room_id in self.active_agents:
-                logger.info(f"🛑 Stopping agent for room {room_id}...")
-                
-                # Stop the agent session (this will close the Simli avatar session)
-                if room_id in self.agent_sessions:
-                    logger.info(f"🎭 Closing Simli avatar session for room {room_id}...")
-                    try:
-                        await self.agent_sessions[room_id].stop()
-                        logger.info(f"✅ Simli avatar session closed for room {room_id}")
-                    except Exception as e:
-                        logger.error(f"❌ Error closing Simli avatar session for room {room_id}: {e}")
-                    finally:
-                        del self.agent_sessions[room_id]
-                
-                # Stop the job
-                if room_id in self.agent_jobs:
-                    logger.info(f"🔄 Stopping agent job for room {room_id}...")
-                    try:
-                        self.agent_jobs[room_id].stop()
-                        logger.info(f"✅ Agent job stopped for room {room_id}")
-                    except Exception as e:
-                        logger.error(f"❌ Error stopping agent job for room {room_id}: {e}")
-                    finally:
-                        del self.agent_jobs[room_id]
-                
-                # Clean up tracking
-                del self.active_agents[room_id]
-                
-                logger.info(f"✅ Agent completely stopped for room {room_id}")
-                return {
-                    "status": "success",
-                    "room_id": room_id,
-                    "message": "Agent stopped successfully and Simli avatar session closed"
-                }
-            else:
+            logger.info(f"🛑 Stopping agent for room {room_id}...")
+            logger.info(f"🔍 Active agents: {list(self.active_agents.keys())}")
+            logger.info(f"🔍 Agent sessions: {list(self.agent_sessions.keys())}")
+            logger.info(f"🔍 Job contexts: {list(self._job_contexts.keys())}")
+            
+            # Check if agent is active
+            if room_id not in self.active_agents:
                 logger.warning(f"⚠️ No active agent found for room {room_id}")
+                # Check if there are any remaining resources to clean up
+                cleanup_performed = False
+                
+                # Clean up any remaining session resources
+                if room_id in self.agent_sessions:
+                    logger.info(f"🧹 Cleaning up remaining session resources for room {room_id}")
+                    try:
+                        await self.agent_sessions[room_id].close()
+                        del self.agent_sessions[room_id]
+                        cleanup_performed = True
+                    except Exception as e:
+                        logger.error(f"❌ Error cleaning up session resources: {e}")
+                
+                # Clean up any remaining job context
+                if room_id in self._job_contexts:
+                    logger.info(f"🧹 Cleaning up remaining job context for room {room_id}")
+                    try:
+                        await self._job_contexts[room_id].shutdown()
+                        del self._job_contexts[room_id]
+                        cleanup_performed = True
+                    except Exception as e:
+                        logger.error(f"❌ Error cleaning up job context: {e}")
+                
+                # Clean up any remaining session events
+                if room_id in self._session_events:
+                    del self._session_events[room_id]
+                    cleanup_performed = True
+                
                 return {
-                    "status": "error",
+                    "status": "success" if cleanup_performed else "warning",
                     "room_id": room_id,
-                    "error": "No active agent found for this room"
+                    "message": "Agent was already stopped, but performed cleanup" if cleanup_performed else "No active agent found and no cleanup needed",
+                    "agent_stopped": cleanup_performed
                 }
+            
+            # Trigger session termination first
+            if room_id in self._session_events:
+                logger.info(f"🎯 Triggering session termination for room {room_id}...")
+                self._session_events[room_id].set()
+                del self._session_events[room_id]
+            
+            # Stop the agent session (this will close the Simli avatar session)
+            if room_id in self.agent_sessions:
+                logger.info(f"🎭 Closing Simli avatar session for room {room_id}...")
+                try:
+                    # First try to close the session properly
+                    await self.agent_sessions[room_id].close()
+                    logger.info(f"✅ Simli avatar session closed for room {room_id}")
+                except Exception as e:
+                    logger.error(f"❌ Error closing Simli avatar session for room {room_id}: {e}")
+                    # If close() fails, try to force stop the session
+                    try:
+                        logger.info(f"🔄 Attempting force stop for room {room_id}...")
+                        # Force stop by setting the session to stopped state
+                        if hasattr(self.agent_sessions[room_id], '_stopping'):
+                            self.agent_sessions[room_id]._stopping = True
+                        if hasattr(self.agent_sessions[room_id], 'run'):
+                            self.agent_sessions[room_id].run = False
+                        logger.info(f"✅ Force stop completed for room {room_id}")
+                    except Exception as force_error:
+                        logger.error(f"❌ Force stop also failed for room {room_id}: {force_error}")
+                finally:
+                    del self.agent_sessions[room_id]
+            else:
+                logger.info(f"ℹ️ Simli avatar session already cleaned up for room {room_id}")
+            
+            # Stop the job
+            if room_id in self.agent_jobs:
+                logger.info(f"🔄 Stopping agent job for room {room_id}...")
+                try:
+                    self.agent_jobs[room_id].stop()
+                    logger.info(f"✅ Agent job stopped for room {room_id}")
+                except Exception as e:
+                    logger.error(f"❌ Error stopping agent job for room {room_id}: {e}")
+                finally:
+                    del self.agent_jobs[room_id]
+            else:
+                logger.info(f"ℹ️ Agent job already cleaned up for room {room_id}")
+            
+            # Shutdown the job context
+            if room_id in self._job_contexts:
+                logger.info(f"🔄 Shutting down job context for room {room_id}...")
+                try:
+                    await self._job_contexts[room_id].shutdown()
+                    logger.info(f"✅ Job context shutdown for room {room_id}")
+                except Exception as e:
+                    logger.error(f"❌ Error shutting down job context for room {room_id}: {e}")
+                finally:
+                    del self._job_contexts[room_id]
+            else:
+                logger.info(f"ℹ️ Job context already cleaned up for room {room_id}")
+            
+            # Clean up tracking
+            del self.active_agents[room_id]
+            
+            logger.info(f"✅ Agent completely stopped for room {room_id}")
+            return {
+                "status": "success",
+                "room_id": room_id,
+                "message": "Agent stopped successfully and Simli avatar session closed",
+                "agent_stopped": True
+            }
                 
         except Exception as e:
             logger.error(f"❌ Failed to stop agent for room {room_id}: {e}")
             return {
                 "status": "error",
                 "room_id": room_id,
-                "error": str(e)
+                "error": str(e),
+                "agent_stopped": False
             }
     
     def get_agent_status(self, room_id: str) -> Dict[str, Any]:
@@ -879,6 +1041,93 @@ class ProperAgentService:
             
         except Exception as e:
             logger.error(f"❌ Failed to stop all agents: {e}")
+            return {
+                "status": "error",
+                "error": str(e)
+            }
+    
+    async def force_cleanup_all_agents(self) -> Dict[str, Any]:
+        """Force cleanup of all active agents and Simli sessions"""
+        try:
+            logger.info("🧹 Force cleaning up all active agents...")
+            
+            cleanup_results = {}
+            
+            # Get all active room IDs
+            active_rooms = list(self.active_agents.keys())
+            
+            for room_id in active_rooms:
+                try:
+                    result = await self.stop_agent(room_id)
+                    cleanup_results[room_id] = result
+                except Exception as e:
+                    logger.error(f"❌ Failed to cleanup agent for room {room_id}: {e}")
+                    cleanup_results[room_id] = {
+                        "status": "error",
+                        "error": str(e)
+                    }
+            
+            # Force cleanup any remaining sessions
+            remaining_sessions = list(self.agent_sessions.keys())
+            for room_id in remaining_sessions:
+                try:
+                    logger.info(f"🧹 Force closing remaining Simli session for room {room_id}")
+                    # Try to close properly first
+                    await self.agent_sessions[room_id].close()
+                    del self.agent_sessions[room_id]
+                except Exception as e:
+                    logger.error(f"❌ Failed to force close Simli session for room {room_id}: {e}")
+                    # Force stop by setting internal flags
+                    try:
+                        if hasattr(self.agent_sessions[room_id], '_stopping'):
+                            self.agent_sessions[room_id]._stopping = True
+                        if hasattr(self.agent_sessions[room_id], 'run'):
+                            self.agent_sessions[room_id].run = False
+                        logger.info(f"✅ Force stop flags set for room {room_id}")
+                    except Exception as force_error:
+                        logger.error(f"❌ Force stop flags failed for room {room_id}: {force_error}")
+                    finally:
+                        del self.agent_sessions[room_id]
+            
+            # Force cleanup any remaining session events
+            remaining_events = list(self._session_events.keys())
+            for room_id in remaining_events:
+                try:
+                    logger.info(f"🧹 Force triggering remaining session event for room {room_id}")
+                    self._session_events[room_id].set()
+                    del self._session_events[room_id]
+                except Exception as e:
+                    logger.error(f"❌ Failed to force trigger session event for room {room_id}: {e}")
+            
+            # Force cleanup any remaining jobs
+            remaining_jobs = list(self.agent_jobs.keys())
+            for room_id in remaining_jobs:
+                try:
+                    logger.info(f"🧹 Force stopping remaining job for room {room_id}")
+                    self.agent_jobs[room_id].stop()
+                    del self.agent_jobs[room_id]
+                except Exception as e:
+                    logger.error(f"❌ Failed to force stop job for room {room_id}: {e}")
+            
+            # Force cleanup any remaining job contexts
+            remaining_contexts = list(self._job_contexts.keys())
+            for room_id in remaining_contexts:
+                try:
+                    logger.info(f"🧹 Force shutting down remaining job context for room {room_id}")
+                    await self._job_contexts[room_id].shutdown()
+                    del self._job_contexts[room_id]
+                except Exception as e:
+                    logger.error(f"❌ Failed to force shutdown job context for room {room_id}: {e}")
+            
+            logger.info("✅ Force cleanup completed")
+            return {
+                "status": "success",
+                "message": "All agents force cleaned up",
+                "cleanup_results": cleanup_results
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to force cleanup all agents: {e}")
             return {
                 "status": "error",
                 "error": str(e)

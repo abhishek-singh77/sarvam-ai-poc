@@ -34,11 +34,14 @@ export class FrameCaptureHandler implements StepHandler {
 
     start(step: WorkflowStep): Observable<StepHandlerResult> {
         this.currentStep = step
-        const captureType = step.data?.captureType
+        // Check both possible field names for capture type
+        const captureType = step.data?.captureType || step.data?.frame_capture_type
 
         console.log(
             '🎯 FRAME-CAPTURE-HANDLER: Starting frame capture:',
-            captureType
+            captureType,
+            'step.data:',
+            step.data
         )
 
         if (captureType === 'FACE_CAPTURE') {
@@ -49,7 +52,7 @@ export class FrameCaptureHandler implements StepHandler {
 
         return of({
             success: false,
-            error: 'Unknown capture type',
+            error: `Unknown capture type: ${captureType}. Available: ${JSON.stringify(step.data)}`,
         })
     }
 
@@ -167,15 +170,16 @@ export class FrameCaptureHandler implements StepHandler {
             }
 
             // Submit artifact
+            const captureType = step.data?.captureType || step.data?.frame_capture_type
             const artifactPayload: ArtifactPayload = {
                 stepRef: step.id,
                 artifactType:
-                    step.data?.captureType === 'FACE_CAPTURE'
+                    captureType === 'FACE_CAPTURE'
                         ? 'selfie'
                         : 'document',
                 base64Data: base64Data,
                 metadata: {
-                    captureType: step.data?.captureType,
+                    captureType: captureType,
                     documentType: step.data?.documentType,
                     imageUploadMode: step.data?.imageUploadMode,
                     quality: detectionResult.quality,

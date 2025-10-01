@@ -16,9 +16,9 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from utils.config.settings import get_settings
-from utils.logging.logger import get_logger, setup_logging, log_banner, log_dict
-from utils.health.health_checker import health_checker
+from utils.settings import get_settings
+from utils.logger import get_logger, setup_logging, log_banner, log_dict
+from utils.health_checker import health_checker
 from core.exceptions import EnterpriseKYCError
 
 # Import API routers

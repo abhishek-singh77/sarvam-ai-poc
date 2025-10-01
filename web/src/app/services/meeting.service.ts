@@ -16,6 +16,7 @@ export class MeetingService {
     private localStreamSubject = new BehaviorSubject<any>(null)
     private remoteStreamSubject = new BehaviorSubject<any>(null)
     private hasActiveMeetingSubject = new BehaviorSubject<boolean>(false)
+    private micStateSubject = new BehaviorSubject<boolean>(true) // Default to unmuted
 
     public meeting$ = this.meetingSubject.asObservable()
     public participants$ = this.participantsSubject.asObservable()
@@ -23,6 +24,7 @@ export class MeetingService {
     public localStream$ = this.localStreamSubject.asObservable()
     public remoteStream$ = this.remoteStreamSubject.asObservable()
     public hasActiveMeeting$ = this.hasActiveMeetingSubject.asObservable()
+    public micState$ = this.micStateSubject.asObservable()
 
     private meeting: any = null
     private participants: any[] = []
@@ -30,12 +32,6 @@ export class MeetingService {
     async initializeMeeting(joinConfig: JoinConfig): Promise<void> {
         try {
             this.meetingStateSubject.next('joining')
-            console.log(
-                '🎯 MEETING-SERVICE: Initializing meeting with config:',
-                joinConfig
-            )
-            console.log('🎯 MEETING-SERVICE: Using token:', joinConfig.token)
-            debugger
             // Configure VideoSDK with token first (required for 0.3.1)
             VideoSDK.config(joinConfig.token)
 
@@ -154,14 +150,91 @@ export class MeetingService {
                 '🎯 MEETING-SERVICE: Local participant stream disabled:',
                 stream
             )
-            this.localStreamSubject.next(null)
+            console.log('🎯 MEETING-SERVICE: Stream kind:', stream.kind)
+
+            // Get the current combined stream
+            let combinedStream = this.localStreamSubject.value
+            if (!combinedStream) {
+                combinedStream = new MediaStream()
+            }
+
+            if (stream.kind === 'audio') {
+                console.log(
+                    '🎯 MEETING-SERVICE: Removing local audio track from combined stream'
+                )
+                // Remove audio track from the combined stream
+                const audioTracks = combinedStream.getAudioTracks()
+                audioTracks.forEach((track: MediaStreamTrack) => {
+                    combinedStream.removeTrack(track)
+                })
+            } else if (stream.kind === 'video') {
+                console.log(
+                    '🎯 MEETING-SERVICE: Removing local video track from combined stream'
+                )
+                // Remove video track from the combined stream
+                const videoTracks = combinedStream.getVideoTracks()
+                videoTracks.forEach((track: MediaStreamTrack) => {
+                    combinedStream.removeTrack(track)
+                })
+            }
+
+            // Only emit null if there are no tracks left
+            if (combinedStream.getTracks().length === 0) {
+                console.log(
+                    '🎯 MEETING-SERVICE: No tracks left, setting stream to null'
+                )
+                this.localStreamSubject.next(null)
+            } else {
+                // Emit the updated combined stream
+                this.localStreamSubject.next(combinedStream)
+                console.log(
+                    '🎯 MEETING-SERVICE: Combined local stream updated after removal:',
+                    {
+                        audioTracks: combinedStream.getAudioTracks().length,
+                        videoTracks: combinedStream.getVideoTracks().length,
+                        streamId: combinedStream.id,
+                    }
+                )
+            }
         })
+
+        // Media status changed event for mic/camera state
+        this.meeting.localParticipant.on(
+            'media-status-changed',
+            (data: any) => {
+                const { kind, newStatus } = data
+                console.log('🎯 MEETING-SERVICE: Media status changed:', {
+                    kind,
+                    newStatus,
+                })
+
+                if (kind === 'audio') {
+                    console.log(
+                        '🎯 MEETING-SERVICE: Audio status changed to:',
+                        newStatus
+                    )
+                    // Update mic state in the service
+                    // VideoSDK sends boolean true for enabled and false for disabled
+                    this.updateMicState(newStatus === true)
+                }
+            }
+        )
 
         // Meeting joined
         this.meeting.on('meeting-joined', () => {
             console.log('🎯 MEETING-SERVICE: Meeting joined successfully')
             this.meetingStateSubject.next('joined')
             this.hasActiveMeetingSubject.next(true)
+
+            // Initialize mic state based on actual VideoSDK state
+            if (this.meeting.localParticipant) {
+                const micEnabled = this.meeting.localParticipant.micEnabled
+                console.log(
+                    '🎯 MEETING-SERVICE: Initial mic state from VideoSDK:',
+                    micEnabled
+                )
+                this.updateMicState(micEnabled)
+            }
 
             // Add local participant to the list
             const localParticipant = this.meeting.localParticipant
@@ -195,18 +268,18 @@ export class MeetingService {
             this.participantsSubject.next([])
         })
 
-        // Speaker changed
-        this.meeting.on('speaker-changed', (activeSpeakerId: string) => {
-            console.log(
-                '🎯 MEETING-SERVICE: Speaker changed to:',
-                activeSpeakerId
-            )
-            const activeSpeaker =
-                this.meeting.localParticipant.id === activeSpeakerId
-                    ? this.meeting.localParticipant
-                    : this.meeting.participants.get(activeSpeakerId)
-            console.log('🎯 MEETING-SERVICE: Active speaker:', activeSpeaker)
-        })
+        // // Speaker changed
+        // this.meeting.on('speaker-changed', (activeSpeakerId: string) => {
+        //     console.log(
+        //         '🎯 MEETING-SERVICE: Speaker changed to:',
+        //         activeSpeakerId
+        //     )
+        //     const activeSpeaker =
+        //         this.meeting.localParticipant.id === activeSpeakerId
+        //             ? this.meeting.localParticipant
+        //             : this.meeting.participants.get(activeSpeakerId)
+        //     console.log('🎯 MEETING-SERVICE: Active speaker:', activeSpeaker)
+        // })
 
         // Participant joined
         this.meeting.on('participant-joined', (participant: any) => {
@@ -382,22 +455,19 @@ export class MeetingService {
 
     // Local participant media controls
     async toggleLocalMic(): Promise<boolean> {
-        if (!this.meeting || !this.meeting.localParticipant) {
-            console.log(
-                '🎯 MEETING-SERVICE: No meeting or local participant available'
-            )
+        if (!this.meeting) {
+            console.log('🎯 MEETING-SERVICE: No meeting available')
             return false
         }
 
         try {
-            const currentMicState = this.meeting.localParticipant.mic
+            const currentMicState = this.micStateSubject.value
             if (currentMicState) {
-                await this.meeting.localParticipant.disableMic()
-                console.log('🎯 MEETING-SERVICE: Local mic disabled')
+                this.meeting.muteMic()
+                console.log('🎯 MEETING-SERVICE: Local mic muted')
                 return false
             } else {
-                await this.meeting.localParticipant.enableMic()
-                console.log('🎯 MEETING-SERVICE: Local mic enabled')
+                this.meeting.unmuteMic()
                 return true
             }
         } catch (error) {
@@ -407,6 +477,17 @@ export class MeetingService {
             )
             return false
         }
+    }
+
+    // Update mic state and notify subscribers
+    private updateMicState(isEnabled: boolean): void {
+        console.log('🎯 MEETING-SERVICE: Updating mic state to:', isEnabled)
+        this.micStateSubject.next(isEnabled)
+    }
+
+    // Get current mic state
+    getMicState(): boolean {
+        return this.micStateSubject.value
     }
 
     async toggleLocalCamera(): Promise<boolean> {

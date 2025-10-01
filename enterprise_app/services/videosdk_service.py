@@ -10,8 +10,8 @@ import uuid
 import secrets
 import httpx
 from typing import Dict, Any
-from utils.config.settings import get_settings
-from utils.logging.logger import get_logger
+from utils.settings import get_settings
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 

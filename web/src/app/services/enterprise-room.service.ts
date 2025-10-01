@@ -105,6 +105,7 @@ export class EnterpriseRoomService {
 
             // Step 1: Create enterprise session
             this.appendLog('📝 Creating enterprise session...')
+            console.log('🎯 ROOM-SERVICE: Making API call to /sessions/create')
             const session = await this.enterpriseApi
                 .createSession({
                     workflow_type: 'kyc',
@@ -143,17 +144,7 @@ export class EnterpriseRoomService {
 
             // Step 4: Load workflow
             this.appendLog('📋 Loading KYC workflow...')
-            const workflowProgress = await this.enterpriseApi
-                .getWorkflowProgress(session.session_id)
-                .toPromise()
-            if (workflowProgress) {
-                this.appendLog(
-                    `📋 Workflow loaded: ${workflowProgress.total_steps} steps`
-                )
-                this.appendLog(
-                    `📋 Current step: ${workflowProgress.current_step}/${workflowProgress.total_steps}`
-                )
-            }
+            // Workflow progress loading removed - not used in main flow
 
             this.appendLog('🎯 Enterprise KYC session ready for conversation!')
             this.setStatus('KYC session active')
@@ -211,21 +202,30 @@ export class EnterpriseRoomService {
             this.appendLog('🛑 Ending KYC session...')
             this.setStatus('Ending session...')
 
-            // Get current session ID for backend cleanup
-            const currentSession = this.sessionDataSubject.value
-            const sessionId = currentSession?.session_id
+            // Get current room ID for backend cleanup (agent service uses room_id as key)
+            const sessionData = this.sessionStorage.getSessionData()
+            const roomId = sessionData?.roomId
 
             // Leave meeting
             await this.meetingService.leaveMeeting()
             this.appendLog('✅ Left VideoSDK meeting')
 
-            // Call backend API to end session
-            if (sessionId) {
+            // Call backend API to end session (this will also stop the agent)
+            if (roomId) {
                 try {
-                    await this.enterpriseApi
-                        .deleteSession(sessionId)
+                    const deleteResult = await this.enterpriseApi
+                        .deleteSession(roomId)
                         .toPromise()
                     this.appendLog('✅ Session ended on backend')
+
+                    // Check if agent was stopped successfully
+                    if (deleteResult?.agent_stopped) {
+                        this.appendLog('✅ Agent session stopped successfully')
+                    } else {
+                        this.appendLog(
+                            '⚠️ Agent session may not have stopped properly'
+                        )
+                    }
                 } catch (apiError) {
                     console.warn(
                         '🎯 ROOM-SERVICE: Failed to end session on backend:',
@@ -307,20 +307,10 @@ export class EnterpriseRoomService {
 
     async loadWorkflow(sessionId: string): Promise<void> {
         try {
-            const workflowProgress = await this.enterpriseApi
-                .getWorkflowProgress(sessionId)
-                .toPromise()
-            if (workflowProgress) {
-                this.appendLog('📋 Workflow loaded successfully')
-                this.appendLog(
-                    `📋 ${workflowProgress.total_steps} steps configured`
-                )
-                this.appendLog(
-                    `📋 Progress: ${workflowProgress.progress_percentage}%`
-                )
-            } else {
-                this.appendLog('❌ Failed to load workflow')
-            }
+            // Workflow progress loading removed - not used in main flow
+            this.appendLog(
+                '📋 Workflow loading skipped - using frontend workflow runner'
+            )
         } catch (error) {
             console.error('Failed to load workflow:', error)
             this.appendLog('❌ Error loading workflow')
@@ -404,56 +394,6 @@ export class EnterpriseRoomService {
         return this.logsSubject.value
     }
 
-    // Workflow management methods
-    async getWorkflowProgress(): Promise<WorkflowProgressResponse | null> {
-        const session = this.sessionDataSubject.value
-        if (!session) return null
-
-        try {
-            const result = await this.enterpriseApi
-                .getWorkflowProgress(session.session_id)
-                .toPromise()
-            return result || null
-        } catch (error) {
-            console.error('Failed to get workflow progress:', error)
-            return null
-        }
-    }
-
-    async startWorkflowStep(stepId: string): Promise<boolean> {
-        const session = this.sessionDataSubject.value
-        if (!session) return false
-
-        try {
-            await this.enterpriseApi
-                .startWorkflowStep(session.session_id, stepId)
-                .toPromise()
-            this.appendLog(`📋 Started workflow step: ${stepId}`)
-            return true
-        } catch (error) {
-            console.error('Failed to start workflow step:', error)
-            this.appendLog(`❌ Failed to start step: ${stepId}`)
-            return false
-        }
-    }
-
-    async completeWorkflowStep(stepId: string, data?: any): Promise<boolean> {
-        const session = this.sessionDataSubject.value
-        if (!session) return false
-
-        try {
-            await this.enterpriseApi
-                .completeWorkflowStep(session.session_id, stepId, data)
-                .toPromise()
-            this.appendLog(`✅ Completed workflow step: ${stepId}`)
-            return true
-        } catch (error) {
-            console.error('Failed to complete workflow step:', error)
-            this.appendLog(`❌ Failed to complete step: ${stepId}`)
-            return false
-        }
-    }
-
     // Agent management methods
     async getAgentStatus(): Promise<AgentStatusResponse | null> {
         const session = this.sessionDataSubject.value
@@ -466,73 +406,6 @@ export class EnterpriseRoomService {
         } catch (error) {
             console.error('Failed to get agent status:', error)
             return null
-        }
-    }
-
-    async pauseAgent(): Promise<boolean> {
-        const agent = this.agentStatusSubject.value
-        if (!agent) return false
-
-        try {
-            await this.enterpriseApi.pauseAgent(agent.agent_id).toPromise()
-            this.appendLog('⏸️ Agent paused')
-            return true
-        } catch (error) {
-            console.error('Failed to pause agent:', error)
-            this.appendLog('❌ Failed to pause agent')
-            return false
-        }
-    }
-
-    async resumeAgent(): Promise<boolean> {
-        const agent = this.agentStatusSubject.value
-        if (!agent) return false
-
-        try {
-            await this.enterpriseApi.resumeAgent(agent.agent_id).toPromise()
-            this.appendLog('▶️ Agent resumed')
-            return true
-        } catch (error) {
-            console.error('Failed to resume agent:', error)
-            this.appendLog('❌ Failed to resume agent')
-            return false
-        }
-    }
-
-    // Session management methods
-    async pauseSession(): Promise<boolean> {
-        const session = this.sessionDataSubject.value
-        if (!session) return false
-
-        try {
-            await this.enterpriseApi
-                .pauseSession(session.session_id)
-                .toPromise()
-            this.appendLog('⏸️ Session paused')
-            this.setStatus('Session paused')
-            return true
-        } catch (error) {
-            console.error('Failed to pause session:', error)
-            this.appendLog('❌ Failed to pause session')
-            return false
-        }
-    }
-
-    async resumeSession(): Promise<boolean> {
-        const session = this.sessionDataSubject.value
-        if (!session) return false
-
-        try {
-            await this.enterpriseApi
-                .resumeSession(session.session_id)
-                .toPromise()
-            this.appendLog('▶️ Session resumed')
-            this.setStatus('Session active')
-            return true
-        } catch (error) {
-            console.error('Failed to resume session:', error)
-            this.appendLog('❌ Failed to resume session')
-            return false
         }
     }
 
@@ -568,10 +441,10 @@ export class EnterpriseRoomService {
     cleanup(): void {
         console.log('🎯 ENTERPRISE-ROOM-SERVICE: Cleaning up session...')
 
-        const session = this.sessionDataSubject.value
-        if (session) {
+        const sessionData = this.sessionStorage.getSessionData()
+        if (sessionData?.roomId) {
             // Clean up session on backend
-            this.enterpriseApi.deleteSession(session.session_id).subscribe({
+            this.enterpriseApi.deleteSession(sessionData.roomId).subscribe({
                 next: () => this.appendLog('🧹 Session cleaned up on backend'),
                 error: (error) =>
                     console.error('Failed to cleanup session:', error),

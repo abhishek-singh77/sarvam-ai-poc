@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from ..logging.logger import get_logger
+from .logger import get_logger
 
 
 class HealthStatus(Enum):

@@ -18,7 +18,7 @@ export class VkycWorkflowFacadeService {
 
         console.log('🎯 WORKFLOW-FACADE: Initializing workflow')
         this.isInitialized = true
-        
+
         await this.runner.loadWorkflow()
         this.subs.add(
             this.runner.state$.subscribe((s) => {
@@ -28,11 +28,11 @@ export class VkycWorkflowFacadeService {
         await this.runner.startWorkflow()
     }
 
-    completeCurrentStep(): void {
+    async completeCurrentStep(): Promise<void> {
         console.log('🎯 WORKFLOW-FACADE: Completing current step')
         const currentState = this.state$.value
         if (currentState?.currentStep) {
-            this.runner.completeCurrentStep()
+            await this.runner.completeCurrentStep()
         }
     }
 

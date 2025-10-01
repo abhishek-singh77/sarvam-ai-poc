@@ -3,7 +3,6 @@ httpx
 sqlalchemy
 pymysql
 aiomysql
-alembic
 pydantic
 pydantic-settings
 python-dotenv
@@ -23,7 +22,7 @@ PyJWT
 # httpx==0.28.1
 # SQLAlchemy==2.0.43
 # PyMySQL==1.1.2
-# alembic==1.16.5
+# ==1.16.5
 # pydantic==2.11.9
 # pydantic-settings==2.10.1
 # python-dotenv==1.1.1
