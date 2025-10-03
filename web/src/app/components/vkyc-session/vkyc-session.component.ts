@@ -10,6 +10,7 @@ import {
 } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
+import { Router } from '@angular/router'
 import {
     VkycSessionLayoutComponent,
     VkycLayoutState,
@@ -25,6 +26,12 @@ import { SessionStorageService } from '../../services/session-storage.service'
 import { EnterpriseRoomService } from '../../services/enterprise-room.service'
 import { MeetingService } from '../../services/meeting.service'
 import { AgentWorkflowService } from '../../services/agent-workflow.service'
+import {
+    ImageUploadService,
+    ImageUploadRequest,
+} from '../../services/image-upload.service'
+import { NotificationService } from '../../services/notification.service'
+import { VkycJourneyService } from '../../services/vkyc-journey.service'
 
 @Component({
     selector: 'app-vkyc-session',
@@ -62,6 +69,12 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     capturedImageBlob: Blob | null = null
     capturedImageBase64: string = ''
 
+    // Auto-capture timeout management
+    private autoCaptureTimeout: number | null = null
+    private autoCaptureStartTime: number | null = null
+    private readonly AUTO_CAPTURE_TIMEOUT_MS = 30000 // 30 seconds
+    private readonly MANUAL_CAPTURE_NOTIFICATION_DELAY = 15000 // 15 seconds
+
     // Agent loading (managed by layout component)
     canStartCall = false
 
@@ -97,16 +110,25 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         private sessionStorage: SessionStorageService,
         private roomService: EnterpriseRoomService,
         private meetingService: MeetingService,
-        private agentWorkflowService: AgentWorkflowService
+        private agentWorkflowService: AgentWorkflowService,
+        private imageUploadService: ImageUploadService,
+        private router: Router,
+        private notificationService: NotificationService,
+        private journeyService: VkycJourneyService
     ) {
         console.log('🎯 VKYC-SESSION: Component initialized')
     }
 
     ngOnInit(): void {
+        console.log('🎯 VKYC-SESSION: ngOnInit called')
+
         // Get room ID from session storage
         const sessionData = this.sessionStorage.getSessionData()
         if (sessionData) {
             this.roomId = sessionData.roomId
+            console.log('🎯 VKYC-SESSION: Found session data:', sessionData)
+        } else {
+            console.log('🎯 VKYC-SESSION: No session data found')
         }
 
         this.initializePreCallFlow()
@@ -115,28 +137,45 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     }
 
     ngOnDestroy(): void {
-        this.subscriptions.unsubscribe()
-        this.meetingFacade.cleanup()
-        this.workflowFacade.cleanup()
-        this.captureFacade.stopDetection()
+        console.log('🎯 VKYC-SESSION: Component destroying, cleaning up...')
 
-        // Reset initialization flags
-        this.workflowInitialized = false
-        this.agentLoadingInitialized = false
-        this.startCallInProgress = false
+        // Unsubscribe from all subscriptions
+        this.subscriptions.unsubscribe()
+
+        // Use the comprehensive cleanup method
+        this.cleanupSession().catch((error) => {
+            console.error(
+                '🎯 VKYC-SESSION: Error during component destruction cleanup:',
+                error
+            )
+        })
     }
 
     // Initialization methods
     private initializePreCallFlow(): void {
+        console.log('🎯 VKYC-SESSION: Initializing pre-call flow')
         this.subscriptions.add(
             this.preCallFlowService.flowState$.subscribe((state) => {
+                console.log(
+                    '🎯 VKYC-SESSION: Pre-call flow state changed:',
+                    state
+                )
                 const isComplete = state?.currentStep === 'complete'
                 this.canStartCall = isComplete
 
                 this.updateLayoutState({
                     showPreCallFlow: !isComplete,
                     preCallStep: isComplete ? undefined : state?.currentStep,
+                    canStartCall: isComplete,
                 })
+                console.log(
+                    '🎯 VKYC-SESSION: Updated layout state - showPreCallFlow:',
+                    !isComplete,
+                    'preCallStep:',
+                    state?.currentStep,
+                    'canStartCall:',
+                    isComplete
+                )
             })
         )
         // PreCallFlowService doesn't have startFlow method, it auto-starts
@@ -177,22 +216,66 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     }
 
     private initializeFaceDetection(): void {
-        // Subscribe to face detection results
+        // Subscribe to multiple face detection results
         this.subscriptions.add(
-            this.captureFacade.faceDetection$.subscribe((result) => {
+            this.captureFacade.multipleFaceDetection$.subscribe((result) => {
+                console.log(
+                    '🎯 VKYC-SESSION: Multiple face detection result received:',
+                    result
+                )
                 this.updateLayoutState({
-                    detectionResult: result,
+                    multipleFaceDetectionResult: result,
                 })
 
-                // Auto-capture if face is detected and auto-capture is enabled
+                // Auto-capture if primary face is detected and auto-capture is enabled
                 if (
-                    result &&
-                    result.confidence > 0.8 &&
-                    result.steady &&
+                    result?.primaryFace &&
+                    result.primaryFace.confidence > 0.7 && // Lowered threshold
+                    result.primaryFace.steady &&
                     this.captureFacade.isAutoCaptureEnabled$.value &&
                     this.layoutState?.currentStep?.type === 'FRAME_CAPTURE'
                 ) {
+                    console.log(
+                        '🎯 VKYC-SESSION: Auto-capture conditions met, triggering capture'
+                    )
                     this.performAutoCapture()
+                } else {
+                    console.log(
+                        '🎯 VKYC-SESSION: Auto-capture conditions not met:',
+                        {
+                            hasResult: !!result,
+                            hasPrimaryFace: !!result?.primaryFace,
+                            confidence: result?.primaryFace?.confidence,
+                            steady: result?.primaryFace?.steady,
+                            autoCaptureEnabled:
+                                this.captureFacade.isAutoCaptureEnabled$.value,
+                            currentStepType:
+                                this.layoutState?.currentStep?.type,
+                            totalFaces: result?.totalFaces,
+                        }
+                    )
+                }
+            })
+        )
+
+        // Subscribe to detection errors
+        this.subscriptions.add(
+            this.captureFacade.detectionError$.subscribe((error) => {
+                if (error) {
+                    console.error('🎯 VKYC-SESSION: Detection error:', error)
+                    this.showErrorNotification(`Face detection error: ${error}`)
+                }
+            })
+        )
+
+        // Subscribe to detection status
+        this.subscriptions.add(
+            this.captureFacade.detectionStatus$.subscribe((status) => {
+                console.log('🎯 VKYC-SESSION: Detection status:', status)
+                if (status === 'error') {
+                    this.showErrorNotification(
+                        'Face detection failed to initialize'
+                    )
                 }
             })
         )
@@ -220,11 +303,39 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     private performAutoCapture(): void {
         console.log('🎯 VKYC-SESSION: Performing auto-capture')
+
+        // Prevent multiple auto-captures
+        if (this.captureFacade.isCapturing$.value) {
+            console.log(
+                '🎯 VKYC-SESSION: Already capturing, skipping auto-capture'
+            )
+            return
+        }
+
+        // Check if we're on a FRAME_CAPTURE step
+        const currentStep = this.layoutState?.currentStep
+        if (
+            currentStep?.type !== 'FRAME_CAPTURE' ||
+            currentStep?.status !== 'active'
+        ) {
+            console.log(
+                '🎯 VKYC-SESSION: Not on active FRAME_CAPTURE step, skipping auto-capture'
+            )
+            return
+        }
+
+        // Clear auto-capture timeout since we're capturing
+        this.clearAutoCaptureTimeout()
+
         this.captureFacade.setCapturing(true)
 
         // Get the video element from the meeting panel
         const videoElement = document.querySelector('video') as HTMLVideoElement
-        if (videoElement) {
+        if (
+            videoElement &&
+            videoElement.videoWidth > 0 &&
+            videoElement.videoHeight > 0
+        ) {
             // Create canvas to capture frame
             const canvas = document.createElement('canvas')
             const ctx = canvas.getContext('2d')
@@ -238,18 +349,23 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                 canvas.toBlob(
                     (blob) => {
                         if (blob) {
+                            console.log(
+                                '🎯 VKYC-SESSION: Auto-capture successful, submitting image'
+                            )
                             this.submitCapture(blob)
                         }
+                        this.captureFacade.setCapturing(false)
                     },
                     'image/jpeg',
                     0.9
                 )
+            } else {
+                this.captureFacade.setCapturing(false)
             }
-        }
-
-        setTimeout(() => {
+        } else {
+            console.log('🎯 VKYC-SESSION: Video element not ready for capture')
             this.captureFacade.setCapturing(false)
-        }, 1000)
+        }
     }
 
     private submitCapture(blob: Blob): void {
@@ -270,17 +386,13 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     }
 
     private startFaceDetectionOnVideo(videoElement: HTMLVideoElement): void {
-        console.log('🎯 VKYC-SESSION: Starting face detection on video element')
+        console.log(
+            '🎯 VKYC-SESSION: Starting continuous face detection on video element'
+        )
 
-        // Start face detection based on current step
-        if (this.layoutState?.currentStep?.type === 'FRAME_CAPTURE') {
-            const captureType = this.layoutState.currentStep?.data?.captureType
-            if (captureType === 'FACE_CAPTURE') {
-                this.captureFacade.startFaceDetection(videoElement)
-            } else if (captureType === 'DOCUMENT_CAPTURE') {
-                this.captureFacade.startDocumentDetection(videoElement)
-            }
-        }
+        // Start continuous face detection regardless of current step
+        // This allows users to see face detection throughout the call
+        this.captureFacade.startFaceDetection(videoElement)
     }
 
     private initializeAgentLoading(healthCheckData?: {
@@ -334,6 +446,9 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     // Pre-call flow event handlers
     onInstructionsProceed(): void {
+        // Update journey service with instructions completion
+        this.journeyService.updateInstructionsStatus(true)
+
         this.preCallFlowService.proceedToConsent()
         this.updateLayoutState({ preCallStep: 'consent' })
     }
@@ -344,15 +459,20 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     onInstructionsCancel(): void {
         console.log('🎯 VKYC-SESSION: User cancelled from instructions')
+        this.cancelSession('Session cancelled from instructions')
     }
 
     onConsentProceed(): void {
+        // Update journey service with consent completion
+        this.journeyService.updateConsentStatus(true)
+
         this.preCallFlowService.proceedToHealthCheck()
         this.updateLayoutState({ preCallStep: 'health-check' })
     }
 
     onConsentCancel(): void {
         console.log('🎯 VKYC-SESSION: User cancelled from consent')
+        this.cancelSession('Session cancelled from consent')
     }
 
     onHealthCheckProceed(healthCheckData: {
@@ -370,12 +490,22 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             vpnDetected: healthCheckData.isVpnDetected,
         })
 
+        // Update journey service with health check completion
+        this.journeyService.updateHealthCheckData(healthCheckData)
+
         this.preCallFlowService.completeFlow()
         // Don't automatically join call, wait for user to click "Start Call"
     }
 
     onHealthCheckCancel(): void {
         console.log('🎯 VKYC-SESSION: User cancelled from health check')
+        this.cancelSession('Session cancelled from health check')
+    }
+
+    onQuestionnaireRetry(): void {
+        console.log('🎯 VKYC-SESSION: User requested questionnaire retry')
+        // For now, treat retry as a cancel - could be enhanced later
+        this.cancelSession('Session cancelled from questionnaire retry')
     }
 
     // Agent join is now handled automatically when stream is ready
@@ -444,6 +574,9 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     private handleStepChange(step: any): void {
         console.log('🎯 VKYC-SESSION: Handling step change:', step.type)
 
+        // Clear any existing auto-capture timeout when step changes
+        this.clearAutoCaptureTimeout()
+
         switch (step.type) {
             case 'FRAME_CAPTURE':
                 this.handleFrameCaptureStep(step)
@@ -466,11 +599,97 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         } else if (captureType === 'DOCUMENT_CAPTURE') {
             this.captureFacade.startDocumentDetection(video)
         }
+
+        // Start auto-capture timeout for FRAME_CAPTURE steps
+        this.startAutoCaptureTimeout(step)
     }
 
     private handleQuestionnaireStep(step: any): void {
-        // Questionnaire is handled by the layout component
-        console.log('🎯 VKYC-SESSION: Questionnaire step active')
+        console.log('🎯 VKYC-SESSION: Handling questionnaire step:', step.id)
+
+        // Update layout state to show questionnaire step
+        if (this.layoutState) {
+            this.layoutState.currentStep = step
+            this.layoutState.captureType = 'QUESTIONNAIRE'
+        }
+
+        // Questionnaire steps are handled by the agent
+        // The agent will ask questions one by one and handle responses
+        // No UI interaction needed - agent manages the conversation
+    }
+
+    private startAutoCaptureTimeout(step: any): void {
+        // Clear any existing timeout
+        this.clearAutoCaptureTimeout()
+
+        console.log(
+            '🎯 VKYC-SESSION: Starting auto-capture timeout for step:',
+            step.id
+        )
+
+        this.autoCaptureStartTime = Date.now()
+
+        // Set timeout for manual capture notification (15 seconds)
+        setTimeout(() => {
+            if (
+                this.layoutState?.currentStep?.id === step.id &&
+                this.layoutState?.currentStep?.status === 'active'
+            ) {
+                this.showManualCaptureNotification()
+            }
+        }, this.MANUAL_CAPTURE_NOTIFICATION_DELAY)
+
+        // Set timeout for complete failure (30 seconds)
+        this.autoCaptureTimeout = window.setTimeout(() => {
+            if (
+                this.layoutState?.currentStep?.id === step.id &&
+                this.layoutState?.currentStep?.status === 'active'
+            ) {
+                this.handleAutoCaptureTimeout(step)
+            }
+        }, this.AUTO_CAPTURE_TIMEOUT_MS)
+    }
+
+    private clearAutoCaptureTimeout(): void {
+        if (this.autoCaptureTimeout) {
+            clearTimeout(this.autoCaptureTimeout)
+            this.autoCaptureTimeout = null
+        }
+        this.autoCaptureStartTime = null
+    }
+
+    private showManualCaptureNotification(): void {
+        console.log('🎯 VKYC-SESSION: Showing manual capture notification')
+        this.showErrorNotification(
+            'Auto-capture is taking longer than expected. You can capture manually using the camera button below.',
+            'info'
+        )
+    }
+
+    private handleAutoCaptureTimeout(step: any): void {
+        console.log(
+            '🎯 VKYC-SESSION: Auto-capture timeout reached for step:',
+            step.id
+        )
+
+        this.showErrorNotification(
+            'Auto-capture timed out. Please use the camera button to capture manually.',
+            'warning'
+        )
+
+        // Clear the timeout
+        this.clearAutoCaptureTimeout()
+    }
+
+    submitQuestionnaire(): void {
+        console.log('🎯 VKYC-SESSION: Questionnaire submitted')
+
+        // Get answers from the layout component (they're stored there)
+        // For now, we'll proceed with the step completion
+        // The actual answers handling can be improved later
+
+        // Complete the questionnaire step
+        this.proceedWithNextStep()
     }
 
     private joinCall(): void {
@@ -490,23 +709,137 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         this.questionnaireFacade.startVoiceRecognition(question)
     }
 
-    submitQuestionnaire(): void {
-        const answers = this.questionnaireFacade.submitAnswers()
-        this.questionnaireAnswers = answers
-        this.workflowFacade.completeCurrentStep()
-        console.log('🎯 VKYC-SESSION: Questionnaire submitted:', answers)
-    }
-
     async endSession(): Promise<void> {
         try {
-            // End the session and clear all data
-            await this.roomService.endSession()
-            this.meetingFacade.leaveCall()
-            this.sessionEnded.emit()
+            console.log('🎯 VKYC-SESSION: Ending session normally')
+
+            // Show notification to user
+            this.notificationService.showInfo(
+                'Session Ended',
+                'Your KYC session has been completed and you will be redirected to the home page.',
+                5000
+            )
+
+            // Clean up all services and data
+            await this.cleanupSession()
+
+            // Navigate to home page after a short delay to show the notification
+            setTimeout(() => {
+                this.router.navigate(['/home'])
+            }, 1000)
         } catch (error) {
             console.error('🎯 VKYC-SESSION: Error ending session:', error)
-            // Still emit the event to navigate away
-            this.sessionEnded.emit()
+            // Still navigate to home even if cleanup fails
+            this.router.navigate(['/home'])
+        }
+    }
+
+    async cancelSession(
+        reason: string = 'Session cancelled by user'
+    ): Promise<void> {
+        try {
+            console.log('🎯 VKYC-SESSION: Cancelling session:', reason)
+
+            // Show notification to user
+            this.notificationService.showInfo(
+                'Session Cancelled',
+                'Your KYC session has been cancelled and you will be redirected to the home page.',
+                5000
+            )
+
+            // Clean up all services and data
+            await this.cleanupSession()
+
+            // Navigate to home page after a short delay to show the notification
+            setTimeout(() => {
+                this.router.navigate(['/home'])
+            }, 1000)
+        } catch (error) {
+            console.error('🎯 VKYC-SESSION: Error cancelling session:', error)
+            // Still navigate to home even if cleanup fails
+            this.router.navigate(['/home'])
+        }
+    }
+
+    private async cleanupSession(): Promise<void> {
+        try {
+            console.log('🎯 VKYC-SESSION: Starting session cleanup...')
+
+            // Stop all detection services
+            this.captureFacade.stopDetection()
+
+            // Clear auto-capture timeout
+            this.clearAutoCaptureTimeout()
+
+            // End the meeting if it's active
+            try {
+                await this.roomService.endSession()
+                console.log('🎯 VKYC-SESSION: Room service cleaned up')
+            } catch (error) {
+                console.warn(
+                    '🎯 VKYC-SESSION: Error ending room service:',
+                    error
+                )
+            }
+
+            // Leave the meeting
+            try {
+                this.meetingFacade.leaveCall()
+                console.log('🎯 VKYC-SESSION: Meeting facade cleaned up')
+            } catch (error) {
+                console.warn('🎯 VKYC-SESSION: Error leaving meeting:', error)
+            }
+
+            // Clean up workflow facade
+            try {
+                this.workflowFacade.cleanup()
+                console.log('🎯 VKYC-SESSION: Workflow facade cleaned up')
+            } catch (error) {
+                console.warn(
+                    '🎯 VKYC-SESSION: Error cleaning up workflow facade:',
+                    error
+                )
+            }
+
+            // Reset pre-call flow
+            try {
+                this.preCallFlowService.resetFlow()
+                console.log('🎯 VKYC-SESSION: Pre-call flow reset')
+            } catch (error) {
+                console.warn(
+                    '🎯 VKYC-SESSION: Error resetting pre-call flow:',
+                    error
+                )
+            }
+
+            // Clear session storage
+            try {
+                this.sessionStorage.clearAll()
+                console.log('🎯 VKYC-SESSION: Session storage cleared')
+            } catch (error) {
+                console.warn(
+                    '🎯 VKYC-SESSION: Error clearing session storage:',
+                    error
+                )
+            }
+
+            // Reset component state
+            this.workflowInitialized = false
+            this.agentLoadingInitialized = false
+            this.startCallInProgress = false
+            this.healthCheckData = null
+            this.questionnaireAnswers = {}
+            this.roomId = ''
+
+            console.log(
+                '🎯 VKYC-SESSION: Session cleanup completed successfully'
+            )
+        } catch (error) {
+            console.error(
+                '🎯 VKYC-SESSION: Error during session cleanup:',
+                error
+            )
+            throw error
         }
     }
 
@@ -528,38 +861,416 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     // Image manipulator event handlers
     async onImageProcessed(response: any): Promise<void> {
-        console.log('🎯 VKYC-SESSION: Image processed successfully:', response)
+        console.log('🎯 VKYC-SESSION: Image processed:', response)
+
+        // Check if this is a retake (showSyncResponse: false)
+        if (!response.showSyncResponse) {
+            console.log(
+                '🎯 VKYC-SESSION: Retake requested - clearing image and closing popup'
+            )
+            this.onImageManipulatorRetake()
+            return
+        }
+
+        // This is a successful submission
+        console.log('🎯 VKYC-SESSION: Image submitted successfully')
+
+        // Clean up image manipulator first
         this.showImageManipulator = false
         this.capturedImageBlob = null
         this.capturedImageBase64 = ''
 
-        // Complete the current step after image processing
+        // Upload the selfie to backend and wait for completion
         try {
-            await this.workflowFacade.completeCurrentStep()
+            await this.uploadSelfieToBackendAndProceed(response)
             console.log(
-                '🎯 VKYC-SESSION: Step completed after image processing'
+                '🎯 VKYC-SESSION: Selfie upload and step progression completed'
+            )
+        } catch (error) {
+            console.error(
+                '🎯 VKYC-SESSION: Failed to upload selfie and proceed:',
+                error
+            )
+            this.showErrorNotification(
+                'Failed to upload selfie. Please try again.'
+            )
+        }
+    }
+
+    private async uploadSelfieToBackendAndProceed(
+        imageData: any
+    ): Promise<void> {
+        const sessionData = this.sessionStorage.getSessionData()
+        if (!sessionData?.roomId) {
+            throw new Error('No session data available')
+        }
+
+        const currentStep = this.layoutState?.currentStep
+        const stepId =
+            currentStep?.id || currentStep?.sub_action_ref || 'selfie_capture'
+
+        // Determine capture type from current step
+        const captureType =
+            currentStep?.frame_capture_type ||
+            currentStep?.data?.captureType ||
+            'FACE_CAPTURE'
+
+        const uploadData: ImageUploadRequest = {
+            image_data: imageData.base64 || imageData,
+            step_id: stepId,
+            capture_type: captureType,
+            timestamp: new Date().toISOString(),
+        }
+
+        console.log('🎯 VKYC-SESSION: Uploading image to backend')
+
+        // Upload image and wait for completion
+        const uploadResult = await this.imageUploadService
+            .uploadImage(sessionData.roomId, uploadData)
+            .toPromise()
+
+        console.log('🎯 VKYC-SESSION: Image upload result:', uploadResult)
+
+        // Handle analysis results
+        if (uploadResult?.analysis_result) {
+            await this.handleImageAnalysisResult(
+                uploadResult.analysis_result,
+                captureType
             )
 
-            // Notify the agent about step completion
-            if (this.layoutState?.currentStep) {
-                const currentStep = this.layoutState.currentStep
-                const stepId =
-                    currentStep.id || currentStep.sub_action_ref || 'unknown'
-
-                // Call the agent workflow service to notify about step completion
-                this.agentWorkflowService.handleStepCompletion(
-                    currentStep,
-                    null
-                )
-
-                console.log(
-                    `🎯 VKYC-SESSION: Notified agent about step completion: ${stepId}`
-                )
-            }
-        } catch (error) {
-            console.error('🎯 VKYC-SESSION: Failed to complete step:', error)
-            this.showErrorNotification('Failed to complete step')
+            // Agent notification is now handled automatically by the backend in upload-selfie endpoint
         }
+
+        // Now proceed with step completion
+        await this.proceedWithNextStep()
+    }
+
+    private uploadSelfieToBackend(imageData: any): void {
+        const sessionData = this.sessionStorage.getSessionData()
+        if (!sessionData?.roomId) {
+            console.error('🎯 VKYC-SESSION: No session data available')
+            return
+        }
+
+        const currentStep = this.layoutState?.currentStep
+        const stepId =
+            currentStep?.id || currentStep?.sub_action_ref || 'selfie_capture'
+
+        // Determine capture type from current step
+        const captureType =
+            currentStep?.frame_capture_type ||
+            currentStep?.data?.captureType ||
+            'FACE_CAPTURE'
+
+        const uploadData: ImageUploadRequest = {
+            image_data: imageData.base64 || imageData,
+            step_id: stepId,
+            capture_type: captureType,
+            timestamp: new Date().toISOString(),
+        }
+
+        console.log('🎯 VKYC-SESSION: Uploading image to backend')
+
+        // Use service to upload image
+        this.imageUploadService
+            .uploadImage(sessionData.roomId, uploadData)
+            .subscribe({
+                next: (result) => {
+                    console.log('🎯 VKYC-SESSION: Image upload result:', result)
+
+                    // Check if the upload was successful
+                    if (result.status === 'error') {
+                        console.error(
+                            '🎯 VKYC-SESSION: Image processing failed:',
+                            result.error
+                        )
+                        this.showErrorNotification(
+                            `Image processing failed: ${result.error}`
+                        )
+
+                        // Update journey service with failed status
+                        const currentStep = this.layoutState?.currentStep
+                        if (currentStep) {
+                            this.journeyService.updateFrameCaptureStatus(
+                                currentStep.id ||
+                                    currentStep.sub_action_ref ||
+                                    'frame_capture',
+                                'failed',
+                                {
+                                    captureType,
+                                    error: result.error,
+                                    analysisResult: result.analysis_result,
+                                }
+                            )
+                        }
+                        return
+                    }
+
+                    // Only proceed if status is success
+                    if (result.status === 'success') {
+                        // Update journey service with frame capture completion
+                        const currentStep = this.layoutState?.currentStep
+                        if (currentStep) {
+                            this.journeyService.updateFrameCaptureStatus(
+                                currentStep.id ||
+                                    currentStep.sub_action_ref ||
+                                    'frame_capture',
+                                'completed',
+                                {
+                                    captureType,
+                                    analysisResult: result.analysis_result,
+                                    qualityScore:
+                                        result.analysis_result?.quality_score,
+                                }
+                            )
+                        }
+
+                        // Handle analysis results
+                        if (result.analysis_result) {
+                            this.handleImageAnalysisResult(
+                                result.analysis_result,
+                                captureType
+                            )
+
+                            // Agent notification is now handled automatically by the backend in upload-selfie endpoint
+                        }
+                    } else {
+                        console.warn(
+                            '🎯 VKYC-SESSION: Unknown response status:',
+                            result.status
+                        )
+                        this.showErrorNotification(
+                            'Unknown response from server'
+                        )
+                    }
+                },
+                error: (error) => {
+                    console.error(
+                        '🎯 VKYC-SESSION: Image upload failed:',
+                        error
+                    )
+                    this.showErrorNotification('Failed to upload image')
+
+                    // Update journey service with failed status
+                    const currentStep = this.layoutState?.currentStep
+                    if (currentStep) {
+                        this.journeyService.updateFrameCaptureStatus(
+                            currentStep.id ||
+                                currentStep.sub_action_ref ||
+                                'frame_capture',
+                            'failed',
+                            {
+                                captureType,
+                                error: error.message || 'Upload failed',
+                            }
+                        )
+                    }
+                },
+            })
+    }
+
+    private async handleImageAnalysisResult(
+        analysisResult: any,
+        captureType: string
+    ): Promise<void> {
+        console.log(
+            '🎯 VKYC-SESSION: Handling image analysis result:',
+            analysisResult
+        )
+
+        if (captureType === 'FACE_CAPTURE') {
+            await this.handleFaceAnalysisResult(analysisResult)
+        } else if (captureType === 'DOCUMENT_CAPTURE') {
+            await this.handleDocumentAnalysisResult(analysisResult)
+        }
+    }
+
+    private async handleFaceAnalysisResult(analysisResult: any): Promise<void> {
+        console.log('🎯 VKYC-SESSION: Face analysis result:', analysisResult)
+
+        // Check for API errors first
+        if (analysisResult.error) {
+            console.error(
+                '🎯 VKYC-SESSION: Face analysis error:',
+                analysisResult.error
+            )
+            this.showErrorNotification(
+                'Image processing failed. Please try again.'
+            )
+            return
+        }
+
+        // Be more lenient with face detection - if we have any analysis result, proceed
+        if (
+            analysisResult.face_detected === false &&
+            !analysisResult.verification_ready
+        ) {
+            // Only show error if explicitly detected as no face AND not verification ready
+            const recommendations = analysisResult.recommendations || [
+                'Please ensure your face is clearly visible',
+            ]
+            this.showErrorNotification(
+                `Face detection issue: ${recommendations.join(', ')}`
+            )
+            return
+        }
+
+        // Show quality warnings but don't block the process
+        if (
+            analysisResult.quality_score &&
+            analysisResult.quality_score < 0.5
+        ) {
+            console.warn('🎯 VKYC-SESSION: Low quality image detected')
+            // Don't show error notification for low quality, just log it
+        }
+
+        // Store face analysis results for future use
+        this.layoutState.currentStep = {
+            ...this.layoutState.currentStep,
+            analysisResult: analysisResult,
+        }
+    }
+
+    private async handleDocumentAnalysisResult(
+        analysisResult: any
+    ): Promise<void> {
+        console.log(
+            '🎯 VKYC-SESSION: Document analysis result:',
+            analysisResult
+        )
+
+        if (!analysisResult.is_valid) {
+            // Show error and allow retake
+            this.showErrorNotification(
+                'Document not recognized. Please ensure the document is clearly visible.'
+            )
+            return
+        }
+
+        // Store document analysis results
+        this.layoutState.currentStep = {
+            ...this.layoutState.currentStep,
+            analysisResult: analysisResult,
+        }
+
+        // Show extracted information to user
+        if (analysisResult.extracted_fields) {
+            this.showDocumentExtractedInfo(analysisResult.extracted_fields)
+        }
+    }
+
+    private showDocumentExtractedInfo(extractedFields: any): void {
+        console.log(
+            '🎯 VKYC-SESSION: Document extracted fields:',
+            extractedFields
+        )
+
+        // TODO: Show extracted information in a modal or notification
+        // For now, just log it
+        const message =
+            `Document processed successfully!\n` +
+            `Type: ${extractedFields.document_type || 'Unknown'}\n` +
+            `Number: ${extractedFields.pan_number || 'N/A'}\n` +
+            `Name: ${extractedFields.name || 'N/A'}`
+
+        // You could show this in a modal or notification
+        console.log('🎯 VKYC-SESSION: Extracted info:', message)
+    }
+
+    // Removed notifyAgentAboutAnalysis method - agent notification is now handled automatically by backend
+
+    /**
+     * Handle questionnaire completion
+     */
+    async handleQuestionnaireCompletion(
+        stepId: string,
+        answers: any
+    ): Promise<void> {
+        console.log(
+            '🎯 VKYC-SESSION: Handling questionnaire completion:',
+            stepId
+        )
+
+        try {
+            // Update journey service with questionnaire completion
+            this.journeyService.updateQuestionnaireStatus(stepId, 'completed', {
+                answers,
+                questionsAnswered: Object.keys(answers).length,
+                totalQuestions: Object.keys(answers).length,
+            })
+
+            // Complete the current step in workflow
+            await this.workflowFacade.completeCurrentStep()
+
+            // Proceed with next step
+            await this.proceedWithNextStep()
+        } catch (error) {
+            console.error(
+                '🎯 VKYC-SESSION: Failed to complete questionnaire step:',
+                error
+            )
+        }
+    }
+
+    private async proceedWithNextStep(): Promise<void> {
+        console.log('🎯 VKYC-SESSION: Proceeding with next step')
+
+        try {
+            // Complete the current step in workflow
+            await this.workflowFacade.completeCurrentStep()
+            console.log('🎯 VKYC-SESSION: Current step completed in workflow')
+
+            // Notify the agent about step completion
+            await this.notifyAgentStepCompletion()
+
+            // The workflow state subscription will automatically update the UI
+            // No need to manually update layout state here
+            console.log(
+                '🎯 VKYC-SESSION: Step completion handled by workflow state subscription'
+            )
+        } catch (error) {
+            console.error(
+                '🎯 VKYC-SESSION: Failed to proceed with next step:',
+                error
+            )
+            this.showErrorNotification('Failed to proceed with next step')
+        }
+    }
+
+    private async notifyAgentStepCompletion(): Promise<void> {
+        if (!this.layoutState?.currentStep) return
+
+        const currentStep = this.layoutState.currentStep
+        const stepId = currentStep.id || currentStep.sub_action_ref || 'unknown'
+
+        console.log('🎯 VKYC-SESSION: Notifying agent about step completion')
+
+        try {
+            // Only notify the agent workflow service - don't call any API
+            // The actual step completion is handled by workflowFacade.completeCurrentStep()
+            this.agentWorkflowService.handleStepCompletion(currentStep, null)
+
+            console.log(
+                `🎯 VKYC-SESSION: Notified agent about step completion: ${stepId}`
+            )
+        } catch (error) {
+            console.error('🎯 VKYC-SESSION: Failed to notify agent:', error)
+        }
+    }
+
+    private async handleWorkflowCompletion(): Promise<void> {
+        console.log('🎯 VKYC-SESSION: Workflow completed, ending session')
+
+        // Update UI to show completion
+        this.updateLayoutState({
+            phase: 'post',
+            showPreCallFlow: false,
+        })
+
+        // End the session after a short delay
+        setTimeout(() => {
+            this.endSession()
+        }, 3000)
     }
 
     onImageManipulatorError(error: string): void {
@@ -573,6 +1284,21 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         this.showImageManipulator = false
         this.capturedImageBlob = null
         this.capturedImageBase64 = ''
+    }
+
+    onImageManipulatorRetake(): void {
+        console.log(
+            '🎯 VKYC-SESSION: Retake requested - clearing image and closing popup'
+        )
+        // Clear the captured image data
+        this.capturedImageBlob = null
+        this.capturedImageBase64 = ''
+
+        // Close the image manipulator popup
+        this.showImageManipulator = false
+
+        // The user can now capture a new image by clicking the capture button again
+        console.log('🎯 VKYC-SESSION: Ready for new capture')
     }
 
     getImageManipulatorConfig(): any {
@@ -623,14 +1349,27 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     onCapturePhoto(): void {
         console.log('🎯 VKYC-SESSION: Capture photo requested')
+
+        // Check if we're on a frame capture step
+        const currentStep = this.layoutState?.currentStep
+        if (!currentStep || currentStep.type !== 'FRAME_CAPTURE') {
+            console.warn(
+                '🎯 VKYC-SESSION: Not on a frame capture step, ignoring capture request'
+            )
+            this.showErrorNotification(
+                'Please wait for the capture step to begin'
+            )
+            return
+        }
+
         // Use the captureImage method from meeting service
         this.meetingService
             .captureImage()
             .then((imageData: string | null) => {
                 if (imageData) {
                     console.log('🎯 VKYC-SESSION: Photo captured successfully')
-                    // TODO: Handle the captured image data
-                    // This could trigger the auto-capture flow or show the image manipulator
+                    // Convert base64 to blob and show image manipulator
+                    this.showImageManipulatorFromBase64(imageData)
                 } else {
                     console.warn('🎯 VKYC-SESSION: Failed to capture photo')
                     this.showErrorNotification('Failed to capture photo')
@@ -642,12 +1381,46 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             })
     }
 
-    private showErrorNotification(message: string): void {
+    private showImageManipulatorFromBase64(base64Data: string): void {
+        console.log(
+            '🎯 VKYC-SESSION: Showing image manipulator from base64 data'
+        )
+
+        // Store the base64 data
+        this.capturedImageBase64 = base64Data
+
+        // Convert base64 to blob for storage
+        const byteCharacters = atob(base64Data.split(',')[1])
+        const byteNumbers = new Array(byteCharacters.length)
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i)
+        }
+        const byteArray = new Uint8Array(byteNumbers)
+        this.capturedImageBlob = new Blob([byteArray], { type: 'image/jpeg' })
+
+        // Show the image manipulator
+        this.showImageManipulator = true
+        console.log(
+            '🎯 VKYC-SESSION: Image manipulator opened from capture button'
+        )
+    }
+
+    private showErrorNotification(
+        message: string,
+        type: 'error' | 'warning' | 'info' = 'error'
+    ): void {
         // TODO: Implement proper notification system
         // For now, we'll use the existing error modal
         this.showErrorModal = true
         this.errorMessage = message
-        console.error('🎯 VKYC-SESSION: Error notification:', message)
+
+        if (type === 'error') {
+            console.error('🎯 VKYC-SESSION: Error notification:', message)
+        } else if (type === 'warning') {
+            console.warn('🎯 VKYC-SESSION: Warning notification:', message)
+        } else {
+            console.log('🎯 VKYC-SESSION: Info notification:', message)
+        }
     }
 
     private initializeAgentWorkflow(): void {
@@ -662,8 +1435,17 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                         state.steps
                     )
 
-                    // Update layout state with workflow steps
-                    this.updateLayoutState({ workflowSteps: state.steps })
+                    // Update layout state with workflow steps and current step
+                    this.updateLayoutState({
+                        workflowSteps: state.steps,
+                        currentStep: state.currentStep,
+                        captureType: state.currentStep?.data?.captureType,
+                    })
+
+                    console.log(
+                        '🎯 VKYC-SESSION: Updated layout state with current step:',
+                        state.currentStep
+                    )
                 }
             })
         )
@@ -718,5 +1500,27 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             event.questionId,
             event.response
         )
+    }
+
+    onAgentProceed(): void {
+        console.log('🎯 VKYC-SESSION: Agent proceed button clicked')
+
+        // Check if we're on a FRAME_CAPTURE step and trigger manual capture
+        const currentStep = this.layoutState?.currentStep
+        if (
+            currentStep?.type === 'FRAME_CAPTURE' &&
+            currentStep?.status === 'active'
+        ) {
+            console.log(
+                '🎯 VKYC-SESSION: Triggering manual capture from agent proceed button'
+            )
+            this.onCapturePhoto()
+        } else {
+            console.log(
+                '🎯 VKYC-SESSION: Not on FRAME_CAPTURE step, proceeding with next step'
+            )
+            // For other step types, just proceed to next step
+            this.workflowFacade.completeCurrentStep()
+        }
     }
 }

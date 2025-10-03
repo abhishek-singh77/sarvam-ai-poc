@@ -1,48 +1,201 @@
 <div class="absolute inset-0 pointer-events-none">
-    <!-- Face Detection -->
+    <!-- Face Detection Square -->
     <div
-        *ngIf="detectionResult && captureType === 'FACE_CAPTURE'"
-        class="absolute border-2 rounded-lg transition-all duration-200"
+        *ngIf="
+            (multipleFaceDetectionResult?.primaryFace || detectionResult) &&
+            captureType === 'FACE_CAPTURE'
+        "
+        class="absolute border-4 rounded-lg transition-all duration-300 shadow-2xl"
         [ngClass]="{
-            'border-green-500': detectionResult.steady,
-            'border-yellow-500': !detectionResult.steady
+            'border-green-500 bg-green-500 bg-opacity-20 shadow-green-500/50': (
+                multipleFaceDetectionResult?.primaryFace || detectionResult
+            )?.steady,
+            'border-yellow-500 bg-yellow-500 bg-opacity-20 shadow-yellow-500/50':
+                !(multipleFaceDetectionResult?.primaryFace || detectionResult)
+                    ?.steady
         }"
-        [style.left.px]="detectionResult.boundingBox.x"
-        [style.top.px]="detectionResult.boundingBox.y"
-        [style.width.px]="detectionResult.boundingBox.width"
-        [style.height.px]="detectionResult.boundingBox.height"></div>
+        [style.left.px]="
+            (multipleFaceDetectionResult?.primaryFace || detectionResult)
+                ?.boundingBox?.x || 0
+        "
+        [style.top.px]="
+            (multipleFaceDetectionResult?.primaryFace || detectionResult)
+                ?.boundingBox?.y || 0
+        "
+        [style.width.px]="
+            (multipleFaceDetectionResult?.primaryFace || detectionResult)
+                ?.boundingBox?.width || 0
+        "
+        [style.height.px]="
+            (multipleFaceDetectionResult?.primaryFace || detectionResult)
+                ?.boundingBox?.height || 0
+        ">
+        <!-- Enhanced corner indicators -->
+        <div
+            class="absolute -top-2 -left-2 w-4 h-4 border-t-3 border-l-3 border-white rounded-tl shadow-lg"
+            [ngClass]="{
+                'border-green-300': (
+                    multipleFaceDetectionResult?.primaryFace || detectionResult
+                )?.steady,
+                'border-yellow-300': !(
+                    multipleFaceDetectionResult?.primaryFace || detectionResult
+                )?.steady
+            }"></div>
+        <div
+            class="absolute -top-2 -right-2 w-4 h-4 border-t-3 border-r-3 border-white rounded-tr shadow-lg"
+            [ngClass]="{
+                'border-green-300': (
+                    multipleFaceDetectionResult?.primaryFace || detectionResult
+                )?.steady,
+                'border-yellow-300': !(
+                    multipleFaceDetectionResult?.primaryFace || detectionResult
+                )?.steady
+            }"></div>
+        <div
+            class="absolute -bottom-2 -left-2 w-4 h-4 border-b-3 border-l-3 border-white rounded-bl shadow-lg"
+            [ngClass]="{
+                'border-green-300': (
+                    multipleFaceDetectionResult?.primaryFace || detectionResult
+                )?.steady,
+                'border-yellow-300': !(
+                    multipleFaceDetectionResult?.primaryFace || detectionResult
+                )?.steady
+            }"></div>
+        <div
+            class="absolute -bottom-2 -right-2 w-4 h-4 border-b-3 border-r-3 border-white rounded-br shadow-lg"
+            [ngClass]="{
+                'border-green-300': (
+                    multipleFaceDetectionResult?.primaryFace || detectionResult
+                )?.steady,
+                'border-yellow-300': !(
+                    multipleFaceDetectionResult?.primaryFace || detectionResult
+                )?.steady
+            }"></div>
+
+        <!-- Face detection indicator in center -->
+        <div
+            class="absolute inset-0 flex items-center justify-center"
+            *ngIf="
+                (multipleFaceDetectionResult?.primaryFace || detectionResult)
+                    ?.steady
+            ">
+            <div
+                class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg animate-pulse">
+                <svg
+                    class="w-5 h-5 text-white"
+                    fill="currentColor"
+                    viewBox="0 0 20 20">
+                    <path
+                        fill-rule="evenodd"
+                        d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                        clip-rule="evenodd"></path>
+                </svg>
+            </div>
+        </div>
+    </div>
 
     <!-- Document Detection -->
     <div
         *ngIf="documentDetectionResult && captureType === 'DOCUMENT_CAPTURE'"
-        class="absolute border-2 rounded-lg transition-all duration-200"
+        class="absolute border-3 rounded-lg transition-all duration-300 shadow-lg"
         [ngClass]="{
-            'border-green-500': documentDetectionResult.steady,
-            'border-yellow-500': !documentDetectionResult.steady
+            'border-green-400 bg-green-400 bg-opacity-10':
+                documentDetectionResult.steady,
+            'border-yellow-400 bg-yellow-400 bg-opacity-10':
+                !documentDetectionResult.steady
         }"
         [style.left.px]="documentDetectionResult.boundingBox.x"
         [style.top.px]="documentDetectionResult.boundingBox.y"
         [style.width.px]="documentDetectionResult.boundingBox.width"
-        [style.height.px]="documentDetectionResult.boundingBox.height"></div>
+        [style.height.px]="documentDetectionResult.boundingBox.height">
+        <!-- Corner indicators -->
+        <div
+            class="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-white rounded-tl"></div>
+        <div
+            class="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-white rounded-tr"></div>
+        <div
+            class="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-white rounded-bl"></div>
+        <div
+            class="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-white rounded-br"></div>
+    </div>
 
     <!-- Status Message -->
     <div
-        *ngIf="detectionResult || documentDetectionResult"
+        *ngIf="
+            detectionResult ||
+            documentDetectionResult ||
+            multipleFaceDetectionResult
+        "
         class="absolute top-4 left-4 right-4">
         <div
-            class="bg-black bg-opacity-75 text-white px-4 py-2 rounded-lg text-center">
-            <p class="text-sm">
-                {{
-                    detectionResult?.message ||
-                        documentDetectionResult?.message ||
-                        'Object detected'
-                }}
+            class="bg-black bg-opacity-80 text-white px-4 py-3 rounded-lg text-center backdrop-blur-sm">
+            <p class="text-sm font-medium">
+                <span
+                    *ngIf="
+                        multipleFaceDetectionResult?.primaryFace ||
+                        detectionResult
+                    ">
+                    <span
+                        *ngIf="
+                            (
+                                multipleFaceDetectionResult?.primaryFace ||
+                                detectionResult
+                            )?.steady
+                        "
+                        class="text-green-300">
+                        ✅ Face detected - Auto-capturing now!
+                    </span>
+                    <span
+                        *ngIf="
+                            !(
+                                multipleFaceDetectionResult?.primaryFace ||
+                                detectionResult
+                            )?.steady
+                        "
+                        class="text-yellow-300">
+                        📷 Face detected - Hold steady...
+                    </span>
+                </span>
+                <span *ngIf="documentDetectionResult">
+                    <span
+                        *ngIf="documentDetectionResult.steady"
+                        class="text-green-300">
+                        ✅ Document detected - Auto-capturing now!
+                    </span>
+                    <span
+                        *ngIf="!documentDetectionResult.steady"
+                        class="text-yellow-300">
+                        📄 Document detected - Hold steady...
+                    </span>
+                </span>
             </p>
-            <p
-                *ngIf="(detectionResult || documentDetectionResult)?.steady"
-                class="text-xs mt-1 text-green-300">
-                Auto-capturing in 2 seconds...
-            </p>
+
+            <!-- Auto-capture countdown -->
+            <div
+                *ngIf="countdown !== null"
+                class="mt-2 flex items-center justify-center space-x-2">
+                <div class="text-2xl font-bold text-green-300 animate-pulse">
+                    {{ countdown }}
+                </div>
+                <span class="text-xs text-green-300 font-medium">
+                    Auto-capturing in...
+                </span>
+            </div>
+
+            <!-- Steady detection indicator (when not counting down) -->
+            <div
+                *ngIf="
+                    ((detectionResult || documentDetectionResult)?.steady ||
+                        multipleFaceDetectionResult?.primaryFace?.steady) &&
+                    countdown === null
+                "
+                class="mt-2 flex items-center justify-center space-x-2">
+                <div
+                    class="animate-spin w-4 h-4 border-2 border-green-300 border-t-transparent rounded-full"></div>
+                <span class="text-xs text-green-300 font-medium"
+                    >Hold steady for auto-capture...</span
+                >
+            </div>
         </div>
     </div>
 </div>

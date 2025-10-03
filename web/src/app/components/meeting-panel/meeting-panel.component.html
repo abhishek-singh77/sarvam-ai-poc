@@ -1,7 +1,9 @@
-<!-- Mobile Video Layout -->
-<div class="w-full h-full relative min-h-[400px]">
+<!-- Responsive Video Layout -->
+<div
+    class="w-full h-full relative min-h-[300px] sm:min-h-[400px] md:min-h-[500px]">
     <!-- Customer Video (Full Screen Background) -->
-    <div class="absolute inset-0 w-full h-full min-h-[400px]">
+    <div
+        class="absolute inset-0 w-full h-full min-h-[300px] sm:min-h-[400px] md:min-h-[500px]">
         <div
             *ngIf="!isCustomerVideoPlaying"
             class="h-full w-full flex items-center justify-center text-white bg-gray-900">
@@ -16,12 +18,12 @@
             [muted]="true"
             #customerTrack
             [stream]="customerStream"
-            class="w-full h-full object-cover"></app-audio-video-track>
+            class="w-full h-full object-contain"></app-audio-video-track>
     </div>
 
     <!-- Agent Video Overlay (Bottom Right) - Responsive Size -->
     <div
-        class="absolute bottom-4 right-4 bg-gray-800 rounded-xl overflow-hidden shadow-lg border-2 border-white w-32 h-40 sm:w-40 sm:h-48 md:w-48 md:h-56 lg:w-56 lg:h-64 xl:w-64 xl:h-72">
+        class="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 bg-gray-800 rounded-xl overflow-hidden shadow-lg border-2 border-white w-24 h-32 sm:w-32 sm:h-40 md:w-40 md:h-48 lg:w-48 lg:h-56 xl:w-56 xl:h-64">
         <div
             *ngIf="!isAgentVideoPlaying"
             class="h-full w-full flex items-center justify-center text-white">
@@ -37,6 +39,6 @@
             #agentTrack
             [stream]="agentStream"
             [mirrorVideoStream]="true"
-            class="w-full h-full object-cover"></app-audio-video-track>
+            class="w-full h-full object-contain"></app-audio-video-track>
     </div>
 </div>

@@ -1,1 +1,154 @@
-/* Minimal Image Manipulator Styles - rely on Tailwind utilities */
+/* Image Manipulator Styles */
+.image-manipulator-container {
+    @apply bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col;
+}
+
+.image-manipulator-header {
+    @apply flex items-center justify-between p-4 border-b border-gray-200;
+}
+
+.image-manipulator-title {
+    @apply text-lg font-semibold text-gray-900;
+}
+
+.close-button {
+    @apply p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors;
+}
+
+.image-manipulator-main {
+    @apply flex-1 relative p-4;
+}
+
+.cropper-container {
+    @apply w-full h-96 bg-gray-50 rounded-lg overflow-hidden;
+}
+
+.floating-controls {
+    @apply absolute top-6 right-6 flex flex-col space-y-2;
+}
+
+.zoom-button {
+    @apply w-10 h-10 bg-white bg-opacity-90 hover:bg-opacity-100 rounded-full shadow-md flex items-center justify-center text-gray-700 hover:text-gray-900 transition-all;
+}
+
+.controls-section {
+    @apply p-4 border-t border-gray-200 bg-gray-50;
+}
+
+.manipulation-controls {
+    @apply space-y-4;
+}
+
+.rotation-controls {
+    @apply flex items-center justify-center space-x-4;
+}
+
+.control-button {
+    @apply w-10 h-10 bg-white hover:bg-gray-50 rounded-full shadow-sm flex items-center justify-center text-gray-700 hover:text-gray-900 transition-colors;
+}
+
+.rotation-slider-container {
+    @apply flex items-center space-x-3;
+}
+
+.slider-label {
+    @apply text-sm font-medium text-gray-700 flex items-center space-x-2;
+}
+
+.rotation-slider {
+    @apply flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer;
+}
+
+.rotation-slider::-webkit-slider-thumb {
+    @apply appearance-none w-4 h-4 bg-blue-500 rounded-full cursor-pointer;
+}
+
+.rotation-slider::-moz-range-thumb {
+    @apply w-4 h-4 bg-blue-500 rounded-full cursor-pointer border-0;
+}
+
+.action-buttons {
+    @apply flex items-center justify-center space-x-4 mt-6;
+}
+
+.primary-button {
+    @apply bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.secondary-button {
+    @apply bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-3 rounded-lg font-medium transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.button-content {
+    @apply flex items-center space-x-2;
+}
+
+.button-text {
+    @apply font-medium;
+}
+
+.button-spinner {
+    @apply ml-2;
+}
+
+.status-message {
+    @apply flex items-center space-x-2 p-3 rounded-lg font-medium;
+}
+
+.status-message.uploading {
+    @apply bg-blue-50 text-blue-700;
+}
+
+.status-message.success {
+    @apply bg-green-50 text-green-700;
+}
+
+.error-container {
+    @apply bg-red-50 border border-red-200 rounded-lg p-4 mb-4;
+}
+
+.error-icon {
+    @apply text-red-500 mb-2;
+}
+
+.error-content h3 {
+    @apply text-red-800 font-semibold mb-2;
+}
+
+.error-content ul {
+    @apply text-red-700 space-y-1;
+}
+
+.loading-overlay {
+    @apply absolute inset-0 bg-white bg-opacity-90 flex flex-col items-center justify-center space-y-4;
+}
+
+/* Material Icons */
+.material-symbols-outlined {
+    @apply text-xl;
+}
+
+/* Image Cropper Styles */
+.image-cropper {
+    @apply w-full h-full;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .image-manipulator-container {
+        @apply max-w-full mx-2;
+    }
+    
+    .cropper-container {
+        @apply h-64;
+    }
+    
+    .action-buttons {
+        @apply flex-col space-x-0 space-y-3;
+    }
+    
+    .primary-button,
+    .secondary-button {
+        @apply w-full justify-center;
+    }
+}

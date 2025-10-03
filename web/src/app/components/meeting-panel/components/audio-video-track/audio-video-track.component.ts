@@ -46,6 +46,11 @@ export class AudioVideoTrackComponent implements OnChanges, AfterViewInit {
                 this.setStream(this.stream!)
             }, 100)
         }
+
+        if (changes['muted']) {
+            // Update muted state for both video and audio elements
+            this.updateMutedState()
+        }
     }
 
     setStream(stream: MediaStream): void {
@@ -92,10 +97,11 @@ export class AudioVideoTrackComponent implements OnChanges, AfterViewInit {
             // Ensure video element is visible and has proper dimensions
             videoElement.style.width = '100%'
             videoElement.style.height = '100%'
-            videoElement.style.objectFit = 'cover'
+            videoElement.style.objectFit = 'contain'
             videoElement.style.display = 'block'
             videoElement.style.visibility = 'visible'
             videoElement.style.backgroundColor = '#000000'
+            videoElement.style.aspectRatio = '16/9'
 
             // Force video to be visible
             videoElement.style.opacity = '1'
@@ -183,10 +189,29 @@ export class AudioVideoTrackComponent implements OnChanges, AfterViewInit {
                 '🎯 AUDIO-VIDEO-TRACK: No audio track or audio element available'
             )
         }
+
+        // Apply muted state after setting stream
+        this.updateMutedState()
     }
 
     getVideoElement(): HTMLVideoElement | null {
         return this._videoTrack?.nativeElement || null
+    }
+
+    private updateMutedState(): void {
+        console.log('🎯 AUDIO-VIDEO-TRACK: Updating muted state:', this.muted)
+
+        // Update video element muted state
+        if (this._videoTrack?.nativeElement) {
+            this._videoTrack.nativeElement.muted = this.muted
+            console.log('🎯 AUDIO-VIDEO-TRACK: Video muted set to:', this.muted)
+        }
+
+        // Update audio element muted state
+        if (this._audioTrack?.nativeElement) {
+            this._audioTrack.nativeElement.muted = this.muted
+            console.log('🎯 AUDIO-VIDEO-TRACK: Audio muted set to:', this.muted)
+        }
     }
 
     onVideoLoadedMetadata(event: Event): void {

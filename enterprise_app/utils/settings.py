@@ -90,6 +90,7 @@ class Settings(BaseSettings):
         extra="ignore",
         validate_default=True,
         env_ignore_empty=False,
+        env_nested_delimiter="__",
     )
     
     @validator("cors_origins", pre=True)

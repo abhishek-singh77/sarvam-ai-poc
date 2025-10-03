@@ -1,0 +1,100 @@
+/* Journey Progress Component Styles - Mobile First */
+
+.journey-step {
+    transition: all 0.2s ease-in-out;
+}
+
+.journey-step:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.progress-bar {
+    transition: width 0.3s ease-in-out;
+}
+
+/* Status indicator animations */
+@keyframes pulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.in-progress {
+    animation: pulse 2s infinite;
+}
+
+/* Mobile First Responsive Design */
+/* Base styles are mobile-first (320px+) */
+
+/* Small devices (landscape phones, 576px and up) */
+@media (min-width: 576px) {
+    .journey-step {
+        flex-direction: row;
+        align-items: center;
+    }
+}
+
+/* Medium devices (tablets, 768px and up) */
+@media (min-width: 768px) {
+    .journey-step {
+        padding: 0.875rem 1rem;
+    }
+
+    .journey-step .step-content {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+}
+
+/* Large devices (desktops, 992px and up) */
+@media (min-width: 992px) {
+    .journey-step {
+        padding: 1rem 1.25rem;
+    }
+}
+
+/* Extra large devices (large desktops, 1200px and up) */
+@media (min-width: 1200px) {
+    .journey-step {
+        padding: 1.25rem 1.5rem;
+    }
+}
+
+/* iPad specific optimizations */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .journey-step {
+        padding: 0.75rem 1rem;
+    }
+
+    .journey-step .step-title {
+        font-size: 0.875rem;
+    }
+
+    .journey-step .step-description {
+        font-size: 0.75rem;
+    }
+}
+
+/* Touch-friendly interactions for mobile */
+@media (hover: none) and (pointer: coarse) {
+    .journey-step {
+        min-height: 44px; /* iOS touch target minimum */
+    }
+
+    .journey-step:hover {
+        transform: none; /* Disable hover effects on touch devices */
+    }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .journey-step {
+        border-width: 0.5px;
+    }
+}

@@ -3,10 +3,10 @@ import { Observable, BehaviorSubject, of } from 'rxjs'
 import { WorkflowStep } from '../../services/workflow-runner.service'
 import { StepHandler, StepHandlerResult } from './step-handler.interface'
 import {
-    DetectionService,
+    EnhancedDetectionService,
     DetectionResult,
     DocumentDetectionResult,
-} from '../detection.service'
+} from '../enhanced-detection.service'
 import {
     SubmissionService,
     ArtifactPayload,
@@ -24,7 +24,7 @@ export class FrameCaptureHandler implements StepHandler {
     private isCapturing = false
 
     constructor(
-        private detectionService: DetectionService,
+        private detectionService: EnhancedDetectionService,
         private submissionService: SubmissionService
     ) {}
 
@@ -35,7 +35,8 @@ export class FrameCaptureHandler implements StepHandler {
     start(step: WorkflowStep): Observable<StepHandlerResult> {
         this.currentStep = step
         // Check both possible field names for capture type
-        const captureType = step.data?.captureType || step.data?.frame_capture_type
+        const captureType =
+            step.data?.captureType || step.data?.frame_capture_type
 
         console.log(
             '🎯 FRAME-CAPTURE-HANDLER: Starting frame capture:',
@@ -52,7 +53,9 @@ export class FrameCaptureHandler implements StepHandler {
 
         return of({
             success: false,
-            error: `Unknown capture type: ${captureType}. Available: ${JSON.stringify(step.data)}`,
+            error: `Unknown capture type: ${captureType}. Available: ${JSON.stringify(
+                step.data
+            )}`,
         })
     }
 
@@ -64,26 +67,32 @@ export class FrameCaptureHandler implements StepHandler {
             this.detectionService
                 .startFaceDetection(this.getVideoElement())
                 .then(() => {
-                    // Subscribe to detection results
+                    console.log(
+                        '🎯 FRAME-CAPTURE-HANDLER: Face detection started, waiting for capture'
+                    )
+
+                    // Subscribe to detection results and forward them to the main detection stream
                     const subscription =
                         this.detectionService.faceDetection$.subscribe(
                             (result) => {
+                                console.log(
+                                    '🎯 FRAME-CAPTURE-HANDLER: Face detection result:',
+                                    result
+                                )
                                 this.detectionResult.next(result)
 
-                                if (
-                                    result?.steady &&
-                                    result.confidence >= 0.95
-                                ) {
-                                    // Auto-capture when face is steady and confident
-                                    this.performCapture(step, result).then(
-                                        (captureResult) => {
-                                            observer.next(captureResult)
-                                            observer.complete()
-                                        }
-                                    )
-                                }
+                                // Don't auto-capture here - let the UI handle capture
+                                // The step will be completed when the user captures or auto-capture is triggered
                             }
                         )
+
+                    // Return success immediately - the step is now active and waiting for capture
+                    observer.next({
+                        success: true,
+                        data: { stepStarted: true },
+                        shouldProceed: false, // Don't auto-proceed, wait for capture
+                    })
+                    observer.complete()
 
                     // Cleanup subscription when observable completes
                     observer.add(() => subscription.unsubscribe())
@@ -102,37 +111,37 @@ export class FrameCaptureHandler implements StepHandler {
         step: WorkflowStep
     ): Observable<StepHandlerResult> {
         return new Observable((observer) => {
-            const documentType = step.data?.documentType
-            const constraints = documentType
-                ? this.detectionService.getConstraintsForDocumentType(
-                      documentType as 'pan' | 'aadhaar'
-                  )
-                : this.detectionService.getDefaultDocumentConstraints()
+            // Use default document constraints for now
+            // TODO: Implement document type specific constraints if needed
+            const constraints =
+                this.detectionService.getDefaultDocumentConstraints()
 
             // Start document detection
             this.detectionService
                 .startDocumentDetection(this.getVideoElement())
                 .then(() => {
+                    console.log(
+                        '🎯 FRAME-CAPTURE-HANDLER: Document detection started, waiting for capture'
+                    )
+
                     // Subscribe to detection results
                     const subscription =
                         this.detectionService.documentDetection$.subscribe(
                             (result) => {
                                 this.detectionResult.next(result)
 
-                                if (
-                                    result?.steady &&
-                                    result.confidence >= 0.8
-                                ) {
-                                    // Auto-capture when document is steady and confident
-                                    this.performCapture(step, result).then(
-                                        (captureResult) => {
-                                            observer.next(captureResult)
-                                            observer.complete()
-                                        }
-                                    )
-                                }
+                                // Don't auto-capture here - let the UI handle capture
+                                // The step will be completed when the user captures or auto-capture is triggered
                             }
                         )
+
+                    // Return success immediately - the step is now active and waiting for capture
+                    observer.next({
+                        success: true,
+                        data: { stepStarted: true },
+                        shouldProceed: false, // Don't auto-proceed, wait for capture
+                    })
+                    observer.complete()
 
                     // Cleanup subscription when observable completes
                     observer.add(() => subscription.unsubscribe())
@@ -170,13 +179,12 @@ export class FrameCaptureHandler implements StepHandler {
             }
 
             // Submit artifact
-            const captureType = step.data?.captureType || step.data?.frame_capture_type
+            const captureType =
+                step.data?.captureType || step.data?.frame_capture_type
             const artifactPayload: ArtifactPayload = {
                 stepRef: step.id,
                 artifactType:
-                    captureType === 'FACE_CAPTURE'
-                        ? 'selfie'
-                        : 'document',
+                    captureType === 'FACE_CAPTURE' ? 'selfie' : 'document',
                 base64Data: base64Data,
                 metadata: {
                     captureType: captureType,

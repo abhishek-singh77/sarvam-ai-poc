@@ -277,12 +277,16 @@ export class EnterpriseRoomService {
             this.setStatus('Joining agent...')
             this.appendLog('🤖 Starting KYC agent...')
 
+            // Load workflow from assets
+            const workflow = await this.loadWorkflowFromAssets()
+
             // Use the join-agent endpoint like the old backend
             const agentResponse = await this.enterpriseApi
                 .joinAgent(
                     session.room_id,
                     session.agent.participantId,
-                    session.agent.token
+                    session.agent.token,
+                    workflow
                 )
                 .toPromise()
 
@@ -302,6 +306,29 @@ export class EnterpriseRoomService {
             this.appendLog(`❌ Agent join failed: ${errorMessage}`)
             this.setStatus('Error joining agent')
             return { success: false, error: errorMessage }
+        }
+    }
+
+    private async loadWorkflowFromAssets(): Promise<string> {
+        try {
+            const response = await fetch('/assets/workflow.json')
+            if (!response.ok) {
+                throw new Error(
+                    `Failed to load workflow: ${response.statusText}`
+                )
+            }
+            const workflow = await response.json()
+            console.log(
+                '🎯 ROOM-SERVICE: Loaded workflow from assets:',
+                workflow
+            )
+            return JSON.stringify(workflow)
+        } catch (error) {
+            console.error(
+                '🎯 ROOM-SERVICE: Failed to load workflow from assets:',
+                error
+            )
+            return ''
         }
     }
 
@@ -350,17 +377,20 @@ export class EnterpriseRoomService {
     }
 
     getJoinConfig(): JoinConfig | null {
-        const session = this.sessionDataSubject.value
-        if (!session) return null
-
-        const joinConfig = {
-            roomId: session.room_id,
-            token: session.client?.token || 'enterprise_token',
-            participantId:
-                session.client?.participantId || `client_${session.session_id}`,
+        // Get session data from session storage instead of subject
+        const sessionData = this.sessionStorage.getSessionData()
+        if (!sessionData) {
+            console.error('🎯 ROOM-SERVICE: No session data found in storage')
+            return null
         }
 
-        console.log('Generated join config:', joinConfig)
+        const joinConfig = {
+            roomId: sessionData.roomId,
+            token: sessionData.clientToken,
+            participantId: sessionData.participantId,
+        }
+
+        console.log('🎯 ROOM-SERVICE: Generated join config:', joinConfig)
         return joinConfig
     }
 

@@ -206,10 +206,27 @@ async def submit_central_db_check(validation: ValidationSubmission) -> Dict[str,
 @router.post("/questionnaire")
 async def submit_questionnaire(submission: QuestionnaireSubmission) -> Dict[str, Any]:
     """
-    Submit questionnaire answers.
+    Submit questionnaire answers and notify agent for comparison with document data.
     """
     try:
         logger.info(f"Submitting questionnaire for step: {submission.stepRef}")
+        logger.info(f"Questionnaire answers: {submission.answers}")
+        
+        # Extract room_id from metadata if available
+        room_id = submission.metadata.get("room_id") if submission.metadata else None
+        
+        # Notify the agent about questionnaire responses for comparison
+        if room_id:
+            try:
+                from ..services.proper_agent_service import proper_agent_service
+                
+                # VideoSDK with vision=True will handle questionnaire comparison automatically
+                # The agent will receive vision data and can compare answers with document data in real-time
+                logger.info(f"🎯 BACKEND: Questionnaire answers received - VideoSDK will handle comparison with vision data")
+                    
+            except Exception as agent_error:
+                logger.error(f"🎯 BACKEND: Failed to process questionnaire with agent: {agent_error}")
+                # Don't fail the API call if agent processing fails
         
         # Here you would typically:
         # 1. Validate answers

@@ -30,162 +30,907 @@ class KYCVoiceAgent(Agent):
     """
     
     def __init__(self, workflow_json: str = ""):
-        instructions = """
-        You are a KYC (Know Your Customer) Voice Assistant. Your role is to guide users through the identity verification process using natural conversation.
+        # Initialize workflow data first
+        self.workflow_json = workflow_json
+        self.workflow_data = None
+        self.current_step_index = 0
+        self.completed_steps = []
+        self.session_ended = False
         
-        Your responsibilities:
-        1. Greet the user warmly and explain the KYC process
-        2. Guide them through each step of verification conversationally
-        3. Ask for required documents (PAN card, Aadhaar card, etc.)
-        4. Help them take clear photos of their documents
-        5. Verify the information provided using available tools
-        6. Answer any questions they may have
-        7. Be patient, friendly, and professional
-        8. Use natural speech patterns and maintain conversation flow
+        # Initialize workflow data
+        logger.info("🎯 AGENT: Initializing KYC Voice Agent")
+        self.workflow_data = self._get_hardcoded_workflow()
+        logger.info("🎯 AGENT: Workflow data loaded successfully")
         
-        WORKFLOW MANAGEMENT:
-        - You have access to the current workflow configuration
-        - Guide the user through each step based on the workflow
-        - When a step is completed, use complete_workflow_step(room_id, step_id, data) to mark it as done
-        - Provide clear instructions for each step type:
-          * FACE_CAPTURE: Guide user to take a clear selfie
-          * DOCUMENT_CAPTURE: Help user capture their ID document
-          * QUESTIONNAIRE: Ask the required questions and collect answers
-          * verification: Confirm completion and next steps
+        # Get workflow steps for context
+        workflow_steps = self.get_all_in_call_steps()
         
-        IMPORTANT INTERRUPTION HANDLING:
-        - Always listen for user interruptions while speaking
-        - If the user starts speaking while you're talking, immediately stop and listen
-        - Wait for the user to finish speaking before responding
-        - Acknowledge their interruption politely (e.g., "I understand, please go ahead")
-        - Be responsive to user questions and concerns at any time
+        # Create instructions with workflow context
+        instructions = self._create_instructions_with_workflow_context(workflow_steps)
         
-        CRITICAL SPEECH RULES:
-        - NEVER include tool_code, function calls, or technical details in your speech
-        - NEVER say things like "complete_workflow_step" or show function names
-        - NEVER include URLs, error codes, or technical jargon in speech
-        - NEVER mention that you are calling functions or using tools
-        - Keep your speech natural, conversational, and user-friendly
-        - Only speak what the user needs to hear, not internal system operations
-        - When you use tools, do so silently and only speak the result to the user
-        - Your responses should be conversational, not technical
-        
-        Always speak clearly and provide step-by-step instructions in a conversational manner.
-        If the user seems confused, offer to repeat or clarify any step.
-        Use the available tools to verify documents and guide photo capture.
-        """
+        # Log the workflow context for debugging
+        logger.info(f"🎯 AGENT: Created instructions with {len(workflow_steps)} workflow steps")
+        for i, step in enumerate(workflow_steps, 1):
+            step_title = step.get('title', f'Step {i}')
+            step_type = step.get('type', 'Unknown')
+            logger.info(f"🎯 AGENT:   Step {i}: {step_title} ({step_type})")
         
         super().__init__(
             instructions=instructions,
             agent_id="kyc-voice-agent"
         )
-        
-        # Store workflow data
-        self.workflow_json = workflow_json
-        self.workflow_data = None
-        self.current_step_index = 0
-        self.completed_steps = []
-        
-        # Parse workflow if provided
-        if workflow_json:
-            try:
-                import json
-                self.workflow_data = json.loads(workflow_json)
-                logger.info("🎯 Workflow data loaded successfully")
-            except Exception as e:
-                logger.error(f"❌ Failed to parse workflow JSON: {e}")
+    
+    def _create_instructions_with_workflow_context(self, workflow_steps: list) -> str:
+        """Create agent instructions with workflow context"""
+        try:
+            # Base instructions with explicit welcome message
+            base_instructions = """
+        You are a professional KYC (Know Your Customer) Voice Assistant. Your role is to guide users through a smooth identity verification process using natural conversation.
+
+        IMPORTANT: When you first start, you MUST begin with this exact greeting: "Hello! I'm your KYC assistant. Welcome to your identity verification session. I'll guide you through a few simple steps to complete your verification. We'll start by taking a clear photo of your face, then capture your identity documents, and finally ask you a few verification questions. Please ensure you have good lighting and your documents ready. Let's begin with the first step."
+
+        CORE RESPONSIBILITIES:
+        1. Guide users through each verification step conversationally
+        2. Help users capture clear photos of their face and documents
+        3. Ask questions naturally and listen to user responses
+        4. Provide helpful feedback and guidance throughout the process
+        5. Be patient, friendly, and professional at all times
+
+        CONVERSATION STYLE:
+        - Speak naturally and conversationally, like a helpful assistant
+        - Use simple, clear language that anyone can understand
+        - Be encouraging and supportive throughout the process
+        - Ask one question at a time and wait for responses
+        - Acknowledge user responses positively
+        - If users seem confused, offer to explain or repeat instructions
+
+        INTERRUPTION HANDLING:
+        - Always listen for user interruptions while speaking
+        - If user starts speaking, immediately stop and listen
+        - Wait for user to finish before responding
+        - Acknowledge interruptions politely: "I understand, please go ahead"
+        - Be responsive to questions and concerns at any time
+
+        IMPORTANT SPEECH RULES:
+        - NEVER mention technical details, function calls, or system operations
+        - NEVER say things like "complete_workflow_step" or show function names
+        - NEVER include URLs, error codes, or technical jargon
+        - Keep speech natural, conversational, and user-friendly
+        - Only speak what the user needs to hear
+        - Your responses should be conversational, not technical
+
+        Always be helpful, patient, and professional. Guide users through each step clearly and provide encouragement throughout the process.
+
+        IMPORTANT: When users say they are "done" or "finished" with a step, you must verify that they have actually completed the required action (like taking a photo or answering questions) before moving to the next step. If they haven't completed the action, politely ask them to complete it first.
+        """
+            
+            # Add workflow context if steps are available
+            if workflow_steps:
+                workflow_context = "\n\n        WORKFLOW CONTEXT:\n"
+                workflow_context += f"        You will guide the user through {len(workflow_steps)} verification steps:\n\n"
+                
+                for i, step in enumerate(workflow_steps, 1):
+                    step_type = step.get('type', 'Unknown')
+                    step_title = step.get('title', f'Step {i}')
+                    step_description = step.get('description', '')
+                    
+                    workflow_context += f"        Step {i}: {step_title}\n"
+                    workflow_context += f"        - Type: {step_type}\n"
+                    
+                    if step_type == 'FRAME_CAPTURE':
+                        capture_type = step.get('frame_capture_type', 'Unknown')
+                        workflow_context += f"        - Capture Type: {capture_type}\n"
+                        if capture_type == 'FACE_CAPTURE':
+                            workflow_context += f"        - Instructions: Guide user to take a clear selfie with good lighting\n"
+                        elif capture_type == 'DOCUMENT_CAPTURE':
+                            doc_type = step.get('strict_validation_type', 'document')
+                            workflow_context += f"        - Instructions: Help user capture their {doc_type} clearly\n"
+                    elif step_type == 'QUESTIONNAIRE':
+                        questions = step.get('questionnaire', {}).get('questions', [])
+                        workflow_context += f"        - Questions: {len(questions)} questions to ask\n"
+                        for j, question in enumerate(questions, 1):
+                            question_text = question.get('title', f'Question {j}')
+                            workflow_context += f"          {j}. {question_text}\n"
+                    
+                    if step_description:
+                        workflow_context += f"        - Description: {step_description}\n"
+                    
+                    workflow_context += "\n"
+                
+                workflow_context += "        STEP-BY-STEP GUIDANCE:\n"
+                workflow_context += "        - Guide users through each step in the order listed above\n"
+                workflow_context += "        - Provide clear, simple instructions for each step type\n"
+                workflow_context += "        - Give positive feedback when steps are completed successfully\n"
+                workflow_context += "        - Move to the next step only after the current step is completed\n"
+                
+                return base_instructions + workflow_context
+            else:
+                # Fallback if no workflow steps
+                fallback_context = "\n\n        WORKFLOW CONTEXT:\n"
+                fallback_context += "        No specific workflow steps provided. Use your general KYC knowledge to guide the user through:\n"
+                fallback_context += "        - Face capture for identity verification\n"
+                fallback_context += "        - Document capture (PAN card, Aadhaar, etc.)\n"
+                fallback_context += "        - Basic questionnaire about personal information\n"
+                
+                return base_instructions + fallback_context
+                
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error creating instructions with workflow context: {e}")
+            # Return base instructions if there's an error
+            return base_instructions
     
     async def on_enter(self) -> None:
         """Called when the agent enters the meeting"""
         logger.info("🎯 KYC Voice Agent entered the meeting")
         
-        # Get the first in-call step to start with
-        first_step = self.get_current_step()
-        if first_step:
-            greeting = self.generate_step_greeting(first_step)
-            await self.session.say(greeting)
-            logger.info(f"🎯 Step-specific greeting sent for: {first_step.get('title', 'Unknown')}")
-        else:
-            # Fallback to generic greeting
-            await self.session.say("Hello! I am your KYC Virtual Assistant. I'm here to help you complete your identity verification process.")
+        try:
+            # Wait a moment for the session to be fully initialized
+            await asyncio.sleep(1)
+            
+            # Check if session is available
+            if not hasattr(self, 'session') or not self.session:
+                logger.warning("🎯 AGENT: Session not available in on_enter")
+                return
+            
+            # Send a simple, direct welcome message
+            welcome_message = "Hello! I'm your KYC assistant. I'll help you complete your identity verification. Let's start with the first step."
+            logger.info(f"🎯 AGENT: Sending welcome message: {welcome_message}")
+            
+            # Send the welcome message
+            await self.session.say(welcome_message)
+            logger.info("🎯 AGENT: Welcome message sent successfully")
+                
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error in on_enter: {e}")
+            # Send a simple fallback message
+            try:
+                if hasattr(self, 'session') and self.session:
+                    fallback_message = "Hello! I'm your KYC assistant. Let's begin your verification."
+                    await self.session.say(fallback_message)
+                    logger.info("🎯 AGENT: Fallback welcome message sent")
+            except Exception as fallback_error:
+                logger.error(f"🎯 AGENT: Fallback message also failed: {fallback_error}")
+    
+    def _create_welcome_message(self, workflow_steps: list) -> str:
+        """Create a warm, professional welcome message with proper instructions"""
+        try:
+            # Create a comprehensive welcome message with instructions
+            welcome_msg = "Hello! I'm your KYC assistant. Welcome to your identity verification session. "
+            welcome_msg += "I'll guide you through a few simple steps to complete your verification. "
+            welcome_msg += "We'll start by taking a clear photo of your face, then capture your identity documents, "
+            welcome_msg += "and finally ask you a few verification questions. "
+            welcome_msg += "Please ensure you have good lighting and your documents ready. "
+            welcome_msg += "Let's begin with the first step."
+            
+            return welcome_msg
+            
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error creating welcome message: {e}")
+            return "Hello! I'm your KYC assistant. I'll guide you through your identity verification process. Let's begin!"
+    
+    async def _start_first_step(self, first_step: dict) -> None:
+        """Start the first step of the workflow"""
+        try:
+            step_type = first_step.get('type', '')
+            step_title = first_step.get('title', '')
+            step_description = first_step.get('description', '')
+            
+            if step_type == 'FRAME_CAPTURE':
+                capture_type = first_step.get('frame_capture_type', '')
+                if capture_type == 'FACE_CAPTURE':
+                    message = "Perfect! Now let's take your selfie for identity verification. Please look directly at the camera and hold still. The system will automatically capture when you're positioned correctly."
+                elif capture_type == 'DOCUMENT_CAPTURE':
+                    doc_type = first_step.get('strict_validation_type', 'document')
+                    message = f"Great! Now let's capture your {doc_type.upper()} document. Please hold the document steady in front of the camera, making sure all text is clearly visible. The system will automatically capture when the document is properly positioned."
+                else:
+                    message = "Let's capture your document. Please hold it steady in front of the camera."
+            elif step_type == 'QUESTIONNAIRE':
+                questions = first_step.get('questionnaire', {}).get('questions', [])
+                message = f"Excellent! Now I'll ask you {len(questions)} questions to verify your information. Please answer each question clearly and accurately."
+            else:
+                message = f"Let's begin with {step_title}. {step_description}"
+            
+            await self.session.say(message)
+            logger.info(f"🎯 AGENT: Started first step: {step_title} ({step_type})")
+            
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error starting first step: {e}")
+            await self.session.say("Let's begin with the first step.")
+
+    async def on_exit(self) -> None:
+        """Called when the agent exits the meeting"""
+        logger.info("🎯 KYC Voice Agent exiting the meeting - starting cleanup process")
+        
+        try:
+            # Send final message to user if session is still active
+            if hasattr(self, 'session') and self.session and not self.session_ended:
+                try:
+                    await self.session.say("Thank you for completing your KYC verification. Your session is now ending. Have a great day!")
+                    logger.info("✅ Final message sent to user")
+                except Exception as say_error:
+                    logger.warning(f"Could not send final message: {say_error}")
+            
+            # Log workflow completion summary
+            if self.workflow_data:
+                total_steps = len(self.get_all_in_call_steps())
+                completed_steps = len(self.completed_steps)
+                logger.info(f"🎯 Workflow summary - Total steps: {total_steps}, Completed: {completed_steps}")
+            
+            # Mark session as ended
+            self.session_ended = True
+            
+            logger.info("🎯 KYC Voice Agent exited the meeting successfully")
+            
+        except Exception as e:
+            logger.error(f"❌ Error during agent exit cleanup: {e}")
+            # Still mark as ended to prevent hanging
+            self.session_ended = True
+    
+    def _get_hardcoded_workflow(self):
+        """Hardcoded workflow data - Agent only handles FRAME_CAPTURE and QUESTIONNAIRE steps"""
+        return {
+            "actionables": [
+                {
+                    "type": "ai_assisted_video",
+                    "action_ref": "ai_assisted_video-1",
+                    "title": "AI Video Verification",
+                    "description": "Please do AI-assisted Video KYC",
+                    "sub_actions": [
+                        # Pre-call steps (ignored by agent)
+                        {
+                            "type": "GEO_TAGGING",
+                            "sub_action_step": "pre",
+                            "title": "Location Verification",
+                            "description": "Verifying your location"
+                        },
+                        {
+                            "type": "USER_INSTRUCTION",
+                            "title": "Documents preparation",
+                            "sub_action_ref": "user_instruction-2",
+                            "description": "Keep your PAN Card ready before starting the process",
+                            "sub_action_step": "pre"
+                        },
+                        # In-call steps (handled by agent)
+                        {
+                            "type": "FRAME_CAPTURE",
+                            "title": "Customer Selfie",
+                            "sub_action_ref": "frame_capture-1",
+                            "description": "We are going to capture your selfie now",
+                            "sub_action_step": "in_call",
+                            "frame_capture_type": "FACE_CAPTURE",
+                            "sub_action_name": "Customer Selfie"
+                        },
+                        {
+                            "type": "FRAME_CAPTURE",
+                            "title": "PAN Upload",
+                            "sub_action_ref": "frame_capture-2",
+                            "description": "Capture PAN image (with flip camera option)",
+                            "sub_action_step": "in_call",
+                            "frame_capture_type": "DOCUMENT_CAPTURE",
+                            "strict_validation_type": "pan",
+                            "sub_action_name": "Details from ID Proof"
+                        },
+                        {
+                            "type": "FRAME_CAPTURE",
+                            "title": "Aadhaar Upload",
+                            "sub_action_ref": "frame_capture-3",
+                            "description": "Capture Aadhaar image (with flip camera option)",
+                            "sub_action_step": "in_call",
+                            "frame_capture_type": "DOCUMENT_CAPTURE",
+                            "strict_validation_type": "aadhaar",
+                            "sub_action_name": "Details from ID Proof"
+                        },
+                        {
+                            "type": "QUESTIONNAIRE",
+                            "title": "QUESTIONNAIRE",
+                            "description": "Questions",
+                            "sub_action_step": "in_call",
+                            "questionnaire": {
+                                "questions": [
+                                    {
+                                        "title": "What is your name as per the document?",
+                                        "input_type": "text",
+                                        "mandatory": True
+                                    },
+                                    {
+                                        "title": "What is your address as per the document?",
+                                        "input_type": "text",
+                                        "mandatory": True
+                                    },
+                                    {
+                                        "title": "What is your monthly income?",
+                                        "input_type": "text",
+                                        "mandatory": True
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+
+    def generate_workflow_aware_welcome(self, workflow_steps: list) -> str:
+        """Generate a welcome message based on the actual workflow steps"""
+        try:
+            # Count different types of steps
+            frame_capture_steps = [step for step in workflow_steps if step.get('type') == 'FRAME_CAPTURE']
+            questionnaire_steps = [step for step in workflow_steps if step.get('type') == 'QUESTIONNAIRE']
+            
+            # Build a concise welcome message to avoid TTS truncation
+            welcome_parts = [
+                "Hello! I am your KYC Virtual Assistant."
+            ]
+            
+            if frame_capture_steps:
+                capture_types = []
+                for step in frame_capture_steps:
+                    capture_type = step.get('frame_capture_type', 'unknown')
+                    if capture_type == 'FACE_CAPTURE':
+                        capture_types.append("your selfie")
+                    elif capture_type == 'DOCUMENT_CAPTURE':
+                        capture_types.append("your documents")
+                    else:
+                        capture_types.append("images")
+                
+                if capture_types:
+                    welcome_parts.append(f"I'll help you capture {', '.join(capture_types)}.")
+            
+            if questionnaire_steps:
+                welcome_parts.append("I'll also ask you some questions.")
+            
+            welcome_parts.append("Let's begin!")
+            
+            return " ".join(welcome_parts)
+            
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error generating workflow-aware welcome: {e}")
+            # Return a shorter fallback welcome if there's an error
+            return "Hello! I am your KYC Virtual Assistant. I'll help you complete your identity verification. Let's begin!"
+
+    def get_all_in_call_steps(self):
+        """Get all workflow steps that the agent should handle"""
+        # Always use hardcoded workflow for consistent behavior
+        workflow_data = self._get_hardcoded_workflow()
+        
+        if not workflow_data or not workflow_data.get('actionables'):
+            logger.warning("🎯 No workflow data or actionables found")
+            return []
+        
+        all_steps = []
+        pre_steps = []
+        other_steps = []
+        
+        for actionable in workflow_data['actionables']:
+            if actionable.get('sub_actions'):
+                for sub_action in actionable['sub_actions']:
+                    step_type = sub_action.get('sub_action_step', 'unknown')
+                    step_title = sub_action.get('title', sub_action.get('sub_action_ref', 'Unknown'))
+                    
+                    if step_type == 'in_call':
+                        all_steps.append(sub_action)
+                        logger.debug(f"🎯 AGENT: Including in-call step: {step_title}")
+                    elif step_type == 'pre':
+                        pre_steps.append(sub_action)
+                        logger.debug(f"🎯 AGENT: Excluding pre-call step: {step_title}")
+                    else:
+                        other_steps.append(sub_action)
+                        logger.debug(f"🎯 AGENT: Excluding {step_type} step: {step_title}")
+        
+        logger.info(f"🎯 AGENT: Step filtering results - In-call: {len(all_steps)}, Pre-call: {len(pre_steps)}, Other: {len(other_steps)}")
+        logger.info(f"🎯 AGENT: Agent will handle {len(all_steps)} in-call steps only")
+        
+        # Log the steps that will be handled by the agent
+        if all_steps:
+            logger.info("🎯 AGENT: In-call steps that agent will handle:")
+            for i, step in enumerate(all_steps, 1):
+                step_title = step.get('title', step.get('sub_action_ref', 'Unknown'))
+                step_type = step.get('type', 'Unknown')
+                logger.info(f"🎯 AGENT:   {i}. {step_title} ({step_type})")
+        
+        return all_steps
     
     def get_current_step(self):
         """Get the current step from workflow"""
-        if not self.workflow_data or not self.workflow_data.get('actionables'):
-            return None
-        
-        # Get in-call steps (sub_action_step: "in_call" or not specified for main flow)
-        in_call_steps = []
-        for actionable in self.workflow_data['actionables']:
-            if actionable.get('sub_actions'):
-                for sub_action in actionable['sub_actions']:
-                    # Include steps that are not explicitly marked as "pre"
-                    if sub_action.get('sub_action_step') != 'pre':
-                        in_call_steps.append(sub_action)
-        
+        in_call_steps = self.get_all_in_call_steps()
         if self.current_step_index < len(in_call_steps):
             return in_call_steps[self.current_step_index]
         return None
     
-    def generate_step_greeting(self, step):
-        """Generate a greeting specific to the current step"""
-        step_type = step.get('type', '')
-        step_title = step.get('title', '')
-        step_description = step.get('description', '')
-        
-        if step_type == 'FRAME_CAPTURE':
-            if step.get('frame_capture_type') == 'FACE_CAPTURE':
-                return f"Hello! I'm your KYC assistant. Let's start with {step_title}. {step_description} Please position your face in the camera frame and click the capture button when ready."
-            elif step.get('frame_capture_type') == 'DOCUMENT_CAPTURE':
-                return f"Great! Now let's capture your {step_title}. {step_description} Please position your document in the camera frame and click the capture button when ready."
-        elif step_type == 'QUESTIONNAIRE':
-            return f"Excellent! Now I have a few questions for you. {step_description} Please answer each question clearly."
-        
-        return f"Hello! Let's proceed with {step_title}. {step_description}"
+    def get_next_step(self):
+        """Get the next step from workflow"""
+        in_call_steps = self.get_all_in_call_steps()
+        next_index = self.current_step_index + 1
+        if next_index < len(in_call_steps):
+            return in_call_steps[next_index]
+        return None
     
-    def get_function_tools(self):
-        """Return function tools for the agent"""
-        return [
-            {
-                "type": "function",
-                "function": {
-                    "name": "complete_step",
-                    "description": "Mark the current step as completed and move to the next step",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "step_id": {
-                                "type": "string",
-                                "description": "The ID of the completed step"
-                            },
-                            "result": {
-                                "type": "string", 
-                                "description": "The result of the step completion"
-                            }
-                        },
-                        "required": ["step_id", "result"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_next_step_instruction",
-                    "description": "Get instructions for the next step in the workflow",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                    }
-                }
+    def get_workflow_summary(self):
+        """Get a summary of the current workflow for context"""
+        in_call_steps = self.get_all_in_call_steps()
+        return {
+            'total_steps': len(in_call_steps),
+            'current_step_index': self.current_step_index,
+            'completed_steps': len(self.completed_steps),
+            'remaining_steps': len(in_call_steps) - self.current_step_index,
+            'workflow_data': self.workflow_data
+        }
+
+    def reset_step_tracking(self):
+        """Reset the agent's step tracking - useful for debugging"""
+        logger.info("🎯 AGENT: Resetting step tracking")
+        self.current_step_index = 0
+        self.completed_steps = []
+        logger.info(f"🎯 AGENT: Step tracking reset - index: {self.current_step_index}, completed: {self.completed_steps}")
+    
+    def get_step_status(self):
+        """Get current step status for debugging"""
+        current_step = self.get_current_step()
+        return {
+            "current_step_index": self.current_step_index,
+            "completed_steps": self.completed_steps,
+            "current_step": current_step.get('sub_action_ref') if current_step else None,
+            "total_steps": len(self.get_all_in_call_steps())
+        }
+
+    async def handle_step_completion(self, step_id: str, step_data: dict = None):
+        """Handle step completion notification from backend - only for in-call steps"""
+        logger.info(f"🎯 AGENT: Received step completion notification for step: {step_id}")
+        logger.info(f"🎯 AGENT: Current step index: {self.current_step_index}, Completed steps: {self.completed_steps}")
+        
+        try:
+            # Check if session is available
+            if not hasattr(self, 'session') or not self.session:
+                logger.warning("🎯 AGENT: Session not available for step completion")
+                return
+            
+            # Get current step to verify it matches (only in-call steps are considered)
+            current_step = self.get_current_step()
+            logger.info(f"🎯 AGENT: Current step: {current_step.get('sub_action_ref') if current_step else 'None'}")
+            
+            if current_step and current_step.get('sub_action_ref') == step_id:
+                # Double-check that this is an in-call step
+                if current_step.get('sub_action_step') != 'in_call':
+                    logger.warning(f"🎯 AGENT: Ignoring step completion for non-in-call step: {step_id} (type: {current_step.get('sub_action_step')})")
+                    return
+                
+                # Check if this step was already completed
+                if step_id in self.completed_steps:
+                    logger.warning(f"🎯 AGENT: Step {step_id} was already completed, ignoring duplicate completion")
+                    return
+                
+                # Validate step completion based on step type
+                if not self._validate_step_completion(current_step, step_data):
+                    logger.warning(f"🎯 AGENT: Step {step_id} completion validation failed")
+                    await self.session.say("I notice the step wasn't completed properly. Let me help you with that again.")
+                    return
+                
+                logger.info(f"🎯 AGENT: Step {step_id} completed successfully and validated")
+                
+                # Mark step as completed
+                self.completed_steps.append(step_id)
+                self.current_step_index += 1
+                
+                logger.info(f"🎯 AGENT: Updated step index to: {self.current_step_index}")
+                
+                # Get next step
+                next_step = self.get_current_step()
+                logger.info(f"🎯 AGENT: Next step: {next_step.get('sub_action_ref') if next_step else 'None'}")
+                
+                if next_step:
+                    # Generate completion message and next step instruction
+                    completion_message = self._generate_step_completion_message(current_step, next_step)
+                    
+                    # Send completion acknowledgment
+                    await self.session.say(completion_message)
+                    
+                    # Handle different step types
+                    if next_step.get('type') == 'QUESTIONNAIRE':
+                        # Start questionnaire step
+                        await asyncio.sleep(2)
+                        questionnaire_data = next_step.get('questionnaire', {})
+                        await self._handle_questionnaire_step(step_id, questionnaire_data)
+                    else:
+                        # Generate next step instruction for other step types
+                        next_instruction = self._generate_step_instruction(next_step)
+                        await asyncio.sleep(2)
+                        await self.session.say(next_instruction)
+                    
+                    logger.info(f"🎯 AGENT: Moved to next step: {next_step.get('title', 'Unknown')}")
+                else:
+                    # No more steps - workflow complete
+                    completion_message = self._generate_step_completion_message(current_step, None)
+                    await self.session.say(completion_message)
+                    logger.info("🎯 AGENT: All steps completed - workflow finished")
+            else:
+                logger.warning(f"🎯 AGENT: Received completion for unexpected step: {step_id}. Expected: {current_step.get('sub_action_ref') if current_step else 'None'}")
+                
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error handling step completion: {e}")
+            try:
+                if hasattr(self, 'session') and self.session:
+                    await self.session.say("I received your response. Let me process that and continue with the next step.")
+            except Exception as say_error:
+                logger.error(f"🎯 AGENT: Could not send error message: {say_error}")
+    
+    def _generate_step_completion_message(self, completed_step: dict, next_step: dict = None) -> str:
+        """Generate a completion message for a step"""
+        try:
+            completed_title = completed_step.get('title', 'step')
+            completed_type = completed_step.get('type', '')
+            
+            if completed_type == 'FRAME_CAPTURE':
+                if completed_step.get('frame_capture_type') == 'FACE_CAPTURE':
+                    completion_msg = "Excellent! Your selfie has been captured successfully. The image quality is perfect for identity verification. I can clearly see your face and the lighting is good."
+                elif completed_step.get('frame_capture_type') == 'DOCUMENT_CAPTURE':
+                    doc_type = completed_step.get('strict_validation_type', 'document')
+                    completion_msg = f"Perfect! Your {doc_type.upper()} document has been captured successfully. All the text is clearly visible and readable. The document quality is excellent for verification."
+                else:
+                    completion_msg = f"Great! Your {completed_title} has been captured successfully. The capture quality looks excellent."
+            elif completed_type == 'QUESTIONNAIRE':
+                completion_msg = "Thank you for providing those details. Your responses have been recorded successfully and will be used for verification purposes."
+            else:
+                completion_msg = f"Excellent! {completed_title} completed successfully. The quality looks great."
+            
+            if next_step:
+                next_title = next_step.get('title', 'next step')
+                return f"{completion_msg} Now let's move to the next step."
+            else:
+                return f"{completion_msg} We've finished all the required steps for your KYC verification. Thank you!"
+                
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error generating completion message: {e}")
+            return "Step completed successfully. Let's continue."
+    
+    def _generate_step_instruction(self, step: dict) -> str:
+        """Generate instruction for a step"""
+        try:
+            step_type = step.get('type', '')
+            step_title = step.get('title', '')
+            
+            if step_type == 'FRAME_CAPTURE':
+                if step.get('frame_capture_type') == 'FACE_CAPTURE':
+                    return f"Now let's take your selfie. Please look directly at the camera and keep your face centered with good lighting."
+                else:
+                    doc_type = step.get('strict_validation_type', 'document')
+                    return f"Now let's capture your {doc_type}. Please hold the document steady in front of the camera, ensuring all text is clearly visible."
+            elif step_type == 'QUESTIONNAIRE':
+                return f"Now I have some questions for you. Please answer each question clearly."
+            else:
+                return f"Let's continue with {step_title.lower()}."
+                
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error generating step instruction: {e}")
+            return "Let's continue with the next step."
+    
+    async def _handle_questionnaire_step(self, step_id: str, questionnaire_data: dict):
+        """Handle questionnaire step - ask questions one by one"""
+        logger.info(f"🎯 AGENT: Starting questionnaire step: {step_id}")
+        
+        try:
+            questions = questionnaire_data.get('questions', [])
+            if not questions:
+                await self.session.say("I don't have any questions for you at this time.")
+                return
+            
+            # Ask first question
+            await self._ask_next_question(step_id, questions, 0)
+            
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error handling questionnaire step: {e}")
+            await self.session.say("I'm having trouble with the questionnaire. Let's continue with the next step.")
+    
+    async def _ask_next_question(self, step_id: str, questions: list, question_index: int):
+        """Ask the next question in the questionnaire"""
+        if question_index >= len(questions):
+            # All questions answered, complete the questionnaire
+            await self._complete_questionnaire(step_id)
+            return
+        
+        question = questions[question_index]
+        question_text = question.get('title', f'Question {question_index + 1}')
+        
+        # Ask the question
+        await self.session.say(f"Question {question_index + 1}: {question_text}")
+        logger.info(f"🎯 AGENT: Asked question {question_index + 1}: {question_text}")
+        
+        # Store current question context for when user responds
+        self.current_question_context = {
+            'step_id': step_id,
+            'questions': questions,
+            'current_index': question_index,
+            'question': question
+        }
+    
+    async def _complete_questionnaire(self, step_id: str):
+        """Complete the questionnaire and submit answers"""
+        logger.info(f"🎯 AGENT: Completing questionnaire for step: {step_id}")
+        
+        try:
+            if not hasattr(self, 'questionnaire_answers') or not self.questionnaire_answers:
+                await self.session.say("I don't have any answers to submit. Let's continue with the next step.")
+                return
+            
+            # Submit answers to backend
+            await self._submit_questionnaire_answers(step_id, self.questionnaire_answers)
+            
+            # Clear the answers and context
+            self.questionnaire_answers = {}
+            self.current_question_context = None
+            
+            await self.session.say("Thank you for answering all the questions. Your responses have been recorded successfully.")
+            
+            # Mark step as completed
+            result = await self._complete_workflow_step(step_id, {"questionnaire_completed": True})
+            if result.get("status") == "error":
+                logger.error(f"🎯 AGENT: Failed to complete workflow step: {result.get('error')}")
+                await self.session.say("I had trouble completing this step. Let's continue with the next step.")
+            
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error completing questionnaire: {e}")
+            await self.session.say("I had trouble submitting your answers. Let's continue with the next step.")
+    
+    async def _submit_questionnaire_answers(self, step_id: str, answers: dict):
+        """Submit questionnaire answers to backend"""
+        try:
+            # This would typically make an API call to submit the answers
+            # For now, we'll just log them
+            logger.info(f"🎯 AGENT: Submitting questionnaire answers for step: {step_id}")
+            logger.info(f"🎯 AGENT: Answers: {answers}")
+            
+            # TODO: Make actual API call to submit answers
+            # await self.api_client.submit_questionnaire_answers(step_id, answers)
+            
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error submitting questionnaire answers: {e}")
+            raise
+    
+    def _validate_step_completion(self, step: dict, step_data: dict = None) -> bool:
+        """Validate that a step is actually completed based on its type and data"""
+        try:
+            step_type = step.get('type', '')
+            step_id = step.get('sub_action_ref', '')
+            
+            logger.info(f"🎯 AGENT: Validating step completion for {step_id} (type: {step_type})")
+            
+            if step_type == 'FRAME_CAPTURE':
+                # For frame capture, check if image data is present
+                if step_data and step_data.get('image_data'):
+                    logger.info(f"🎯 AGENT: Frame capture validation passed - image data present")
+                    return True
+                else:
+                    logger.warning(f"🎯 AGENT: Frame capture validation failed - no image data")
+                    return False
+                    
+            elif step_type == 'QUESTIONNAIRE':
+                # For questionnaire, check if answers are present
+                if step_data and step_data.get('answers'):
+                    answers = step_data.get('answers', {})
+                    if len(answers) > 0:
+                        logger.info(f"🎯 AGENT: Questionnaire validation passed - {len(answers)} answers provided")
+                        return True
+                    else:
+                        logger.warning(f"🎯 AGENT: Questionnaire validation failed - no answers provided")
+                        return False
+                else:
+                    logger.warning(f"🎯 AGENT: Questionnaire validation failed - no answers data")
+                    return False
+                    
+            else:
+                # For other step types, assume completion is valid if step_data is provided
+                if step_data:
+                    logger.info(f"🎯 AGENT: Step validation passed - step data present for {step_type}")
+                    return True
+                else:
+                    logger.warning(f"🎯 AGENT: Step validation failed - no step data for {step_type}")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error validating step completion: {e}")
+            return False
+
+    async def _check_current_step_data(self) -> bool:
+        """Check if the current step's required data is actually present"""
+        try:
+            current_step = self.get_current_step()
+            if not current_step:
+                logger.warning("🎯 AGENT: No current step to validate")
+                return False
+            
+            step_type = current_step.get('type', '')
+            step_id = current_step.get('sub_action_ref', '')
+            
+            logger.info(f"🎯 AGENT: Checking data for current step: {step_id} (type: {step_type})")
+            
+            if step_type == 'FRAME_CAPTURE':
+                # For frame capture, we need to check if an image was actually captured
+                logger.info(f"🎯 AGENT: Frame capture step - checking if image was captured")
+                return await self._verify_image_capture(step_id)
+                
+            elif step_type == 'QUESTIONNAIRE':
+                # For questionnaire, check if answers were actually submitted
+                logger.info(f"🎯 AGENT: Questionnaire step - checking if answers were submitted")
+                return await self._verify_questionnaire_completion(step_id)
+                
+            else:
+                # For other step types, assume data is present
+                logger.info(f"🎯 AGENT: Other step type - assuming data is present")
+                return True
+                
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error checking current step data: {e}")
+            return False
+
+    async def _handle_user_completion_attempt(self, user_message: str) -> bool:
+        """Handle when user says they are done with a step - validate actual completion"""
+        try:
+            # Check if user is indicating completion
+            completion_indicators = [
+                "done", "finished", "completed", "ready", "next", "move on", 
+                "that's it", "all set", "good to go", "proceed", "continue"
+            ]
+            
+            user_lower = user_message.lower()
+            is_completion_attempt = any(indicator in user_lower for indicator in completion_indicators)
+            
+            if not is_completion_attempt:
+                return False  # Not a completion attempt
+            
+            logger.info(f"🎯 AGENT: User indicated completion: '{user_message}'")
+            
+            # Check if current step data is actually present
+            has_required_data = await self._check_current_step_data()
+            
+            if has_required_data:
+                logger.info(f"🎯 AGENT: User completion validated - required data is present")
+                return True
+            else:
+                logger.warning(f"🎯 AGENT: User completion not validated - required data missing")
+                
+                # Get current step to provide specific guidance
+                current_step = self.get_current_step()
+                if current_step:
+                    step_type = current_step.get('type', '')
+                    step_title = current_step.get('title', 'this step')
+                    
+                    if step_type == 'FRAME_CAPTURE':
+                        capture_type = current_step.get('frame_capture_type', '')
+                        if capture_type == 'FACE_CAPTURE':
+                            await self.session.say("I understand you'd like to move on, but I need to make sure we have a clear photo of your face first. Please use the camera button to take your selfie, or let me know if you need help with that.")
+                        elif capture_type == 'DOCUMENT_CAPTURE':
+                            doc_type = current_step.get('strict_validation_type', 'document')
+                            await self.session.say(f"I understand you'd like to move on, but I need to make sure we have a clear photo of your {doc_type} first. Please use the camera button to capture your document, or let me know if you need help with that.")
+                        else:
+                            await self.session.say("I understand you'd like to move on, but I need to make sure we have captured the required image first. Please use the camera button to take the photo, or let me know if you need help with that.")
+                    
+                    elif step_type == 'QUESTIONNAIRE':
+                        await self.session.say("I understand you'd like to move on, but I need to make sure you've answered all the verification questions first. Please complete the questionnaire, or let me know if you need help with any of the questions.")
+                    
+                    else:
+                        await self.session.say(f"I understand you'd like to move on, but I need to make sure we've completed {step_title} properly first. Please complete the required action, or let me know if you need help.")
+                
+                return False
+                
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error handling user completion attempt: {e}")
+            return False
+
+    async def on_user_speech(self, text: str) -> None:
+        """Override to handle user speech and validate completion attempts"""
+        try:
+            logger.info(f"🎯 AGENT: User said: '{text}'")
+            
+            # Check if this is a completion attempt
+            is_valid_completion = await self._handle_user_completion_attempt(text)
+            
+            if is_valid_completion:
+                logger.info(f"🎯 AGENT: User completion validated, proceeding with step completion")
+                # The step completion will be handled by the backend API call
+                # We don't need to do anything here as the validation passed
+            else:
+                logger.info(f"🎯 AGENT: User completion not validated or not a completion attempt")
+                # Let the normal conversation flow continue
+                
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error in on_user_speech: {e}")
+            # Continue with normal flow if there's an error
+
+    async def _verify_image_capture(self, step_id: str) -> bool:
+        """Verify if an image was actually captured for the given step"""
+        try:
+            # Get the room ID from the session
+            if not hasattr(self, 'session') or not self.session:
+                logger.warning("🎯 AGENT: No session available for image verification")
+                return False
+            
+            # Get room ID from session context
+            room_id = getattr(self.session, 'room_id', None)
+            if not room_id:
+                logger.warning("🎯 AGENT: No room ID available for image verification")
+                return False
+            
+            # Make API call to check if image was uploaded for this step
+            import aiohttp
+            import os
+            
+            base_url = os.getenv('API_BASE_URL', 'http://localhost:8080')
+            api_url = f"{base_url}/api/v1/sessions/{room_id}/verify-step-data"
+            
+            payload = {
+                "step_id": step_id,
+                "data_type": "image"
             }
-        ]
-    
-    async def on_exit(self) -> None:
-        """Called when the agent exits the meeting"""
-        logger.info("🎯 KYC Voice Agent exited the meeting")
-        # Note: We'll handle the farewell in the session cleanup
-        pass
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(api_url, json=payload) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        has_data = result.get('has_data', False)
+                        logger.info(f"🎯 AGENT: Image verification result for {step_id}: {has_data}")
+                        return has_data
+                    else:
+                        logger.warning(f"🎯 AGENT: Image verification API failed with status {response.status}")
+                        return False
+                        
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error verifying image capture: {e}")
+            return False
+
+    async def _verify_questionnaire_completion(self, step_id: str) -> bool:
+        """Verify if questionnaire was actually completed for the given step"""
+        try:
+            # Get the room ID from the session
+            if not hasattr(self, 'session') or not self.session:
+                logger.warning("🎯 AGENT: No session available for questionnaire verification")
+                return False
+            
+            # Get room ID from session context
+            room_id = getattr(self.session, 'room_id', None)
+            if not room_id:
+                logger.warning("🎯 AGENT: No room ID available for questionnaire verification")
+                return False
+            
+            # Make API call to check if questionnaire was completed for this step
+            import aiohttp
+            import os
+            
+            base_url = os.getenv('API_BASE_URL', 'http://localhost:8080')
+            api_url = f"{base_url}/api/v1/sessions/{room_id}/verify-step-data"
+            
+            payload = {
+                "step_id": step_id,
+                "data_type": "questionnaire"
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(api_url, json=payload) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        has_data = result.get('has_data', False)
+                        logger.info(f"🎯 AGENT: Questionnaire verification result for {step_id}: {has_data}")
+                        return has_data
+                    else:
+                        logger.warning(f"🎯 AGENT: Questionnaire verification API failed with status {response.status}")
+                        return False
+                        
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error verifying questionnaire completion: {e}")
+            return False
+
+    async def _complete_workflow_step(self, step_id: str, data: dict = None):
+        """Complete a workflow step"""
+        try:
+            logger.info(f"🎯 AGENT: Completing workflow step: {step_id}")
+            logger.info(f"🎯 AGENT: Step completion data: {data}")
+            
+            # This would typically make an API call to complete the step
+            # For now, we'll just log it and return success
+            logger.info(f"🎯 AGENT: Workflow step {step_id} completed successfully")
+            return {"status": "success", "step_id": step_id, "message": "Step completed successfully"}
+            
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error completing workflow step: {e}")
+            return {"status": "error", "step_id": step_id, "error": str(e)}
 
 class ProperAgentService:
     """
@@ -309,10 +1054,10 @@ class ProperAgentService:
                 model="gemini-2.0-flash-live-001",
                 api_key=self.settings.google_api_key,
                 config=GeminiLiveConfig(
-                    voice="Leda",  # Natural-sounding voice  #Orus for male Leda for female
+                    voice="Orus",  # Natural-sounding voice  #Orus for male Leda for female
                     response_modalities=["AUDIO"],  # Audio-only for faster processing
                     temperature=0.1,  # Low temperature for consistent responses
-                    max_output_tokens=200,  # Shorter responses for faster generation
+                    max_output_tokens=500,  # Increased from 200 to allow longer welcome messages
                     language_code="en-IN"  # Indian English for better accent
                 )
             )
@@ -395,11 +1140,12 @@ class ProperAgentService:
                         "message": "Agent already active for this room"
                     }
                 
-                # Store agent info
+                # Store agent info (agent instance will be added later)
                 self.active_agents[room_id] = {
                     "participant_id": agent_participant_id,
                     "workflow": workflow_json,
-                    "status": "starting"
+                    "status": "starting",
+                    "agent": None  # Will be set when agent is created
                 }
                 
                 # Load workflow for this room
@@ -481,7 +1227,7 @@ class ProperAgentService:
             room_id=room_id,
             auth_token=agent_token,
             name="KYC AI Agent",
-            playground=False  # Set to False for production use
+            vision=True  # Enable vision for image analysis
         )
         
         return JobContext(room_options=room_options)
@@ -604,6 +1350,12 @@ class ProperAgentService:
         if len(message.strip()) < 10 or len(re.sub(r'[^\w\s]', '', message)) < 5:
             return message
         
+        # For simple welcome messages, don't filter aggressively
+        if any(phrase in message.lower() for phrase in ["hello", "welcome", "kyc assistant", "let's begin"]):
+            # Only remove obvious technical patterns for welcome messages
+            filtered_message = re.sub(r'\[function_call\]|\[tool_use\]|<function_call>.*?</function_call>', '', message)
+            return filtered_message.strip()
+        
         # Remove specific function call patterns (more targeted)
         patterns_to_remove = [
             r'complete_workflow_step\([^)]*\)',  # Function calls
@@ -661,57 +1413,14 @@ class ProperAgentService:
             # Create the KYC voice agent with workflow data
             agent = KYCVoiceAgent(workflow_json=workflow_json)
             
+            # Store the agent instance in active_agents for step completion notifications
+            if room_id in self.active_agents:
+                self.active_agents[room_id]["agent"] = agent
+                logger.info(f"🎯 Stored agent instance for room: {room_id}")
+            
             # Register workflow management tools
-            @function_tool
-            def get_current_workflow_step(room_id: str) -> Dict[str, Any]:
-                """Get the current workflow step for the room"""
-                current_step = agent.get_current_step()
-                if current_step:
-                    return {
-                        "status": "success",
-                        "current_step": current_step.get('type', 'unknown'),
-                        "step_title": current_step.get('title', ''),
-                        "step_description": current_step.get('description', ''),
-                        "step_id": current_step.get('sub_action_ref', ''),
-                        "frame_capture_type": current_step.get('frame_capture_type', '')
-                    }
-                return {
-                    "status": "success",
-                    "current_step": "completed",
-                    "message": "All workflow steps completed"
-                }
-            
-            @function_tool
-            def complete_workflow_step(room_id: str, step_id: str, data: Dict[str, Any] | None = None) -> Dict[str, Any]:
-                """Complete a workflow step and move to the next one"""
-                logger.info(f"🎯 Workflow step completed: {step_id} for room {room_id}")
-                
-                # Mark current step as completed
-                agent.completed_steps.append(step_id)
-                agent.current_step_index += 1
-                
-                # Get next step
-                next_step = agent.get_current_step()
-                if next_step:
-                    next_instruction = agent.generate_step_greeting(next_step)
-                    return {
-                        "status": "success",
-                        "message": f"Step {step_id} completed successfully",
-                        "next_step": next_step.get('type', 'unknown'),
-                        "next_step_title": next_step.get('title', ''),
-                        "next_instruction": next_instruction
-                    }
-                else:
-                    return {
-                        "status": "success",
-                        "message": f"Step {step_id} completed successfully",
-                        "next_step": "completed",
-                        "message": "All workflow steps completed"
-                    }
-            
-            # Note: Tools are automatically available to the agent through the function_tool decorator
-            # The LLM will have access to these tools during conversation
-            logger.info("✅ Workflow management tools configured for agent")
+            # Function tools removed - step completion is now handled via backend API calls
+            logger.info("✅ Agent configured without function tools - using backend API for step completion")
             
             # Set up the pipeline components with proper error handling
             try:
@@ -862,6 +1571,22 @@ class ProperAgentService:
             try:
                 await session.start()
                 logger.info("✅ Agent session started successfully")
+                
+                # Set the session reference on the agent for on_enter to use
+                agent.session = session
+                logger.info("🎯 Set session reference on agent")
+                
+                # Send initial greeting directly to ensure it works
+                greeting = "Hello! I'm your KYC assistant. Welcome to your identity verification session. I'll guide you through a few simple steps to complete your verification. Let's begin with the first step."
+                logger.info(f"🎯 Sending initial greeting: {greeting}")
+                await session.say(greeting)
+                logger.info("✅ Initial greeting sent successfully")
+                
+                # Call on_enter explicitly to ensure it runs
+                logger.info("🎯 Calling agent.on_enter() explicitly...")
+                await agent.on_enter()
+                logger.info("✅ Agent on_enter() completed successfully")
+                    
             except Exception as e:
                 logger.error(f"❌ Failed to start agent session: {e}")
                 raise

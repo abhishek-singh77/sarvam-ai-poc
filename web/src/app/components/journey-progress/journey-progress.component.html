@@ -1,0 +1,122 @@
+<div class="bg-white border border-gray-200 rounded-lg shadow-sm">
+    <!-- Header - Mobile First -->
+    <div
+        class="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+        <div
+            class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+            <div class="flex items-center space-x-3">
+                <div
+                    class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                    <span class="text-white text-sm font-bold">KYC</span>
+                </div>
+                <h3 class="text-base sm:text-lg font-semibold text-gray-900">
+                    KYC Journey Progress
+                </h3>
+            </div>
+            <div
+                class="flex items-center justify-between sm:justify-end space-x-2"
+                *ngIf="showProgressBar">
+                <span class="text-xs sm:text-sm text-gray-500">
+                    {{ getCompletedStepsCount() }}/{{ getTotalStepsCount() }}
+                    completed
+                </span>
+                <div class="flex items-center space-x-2">
+                    <div class="w-12 sm:w-16 bg-gray-200 rounded-full h-2">
+                        <div
+                            class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            [style.width.%]="getOverallProgress()"></div>
+                    </div>
+                    <span class="text-xs sm:text-sm font-medium text-gray-700"
+                        >{{ getOverallProgress() }}%</span
+                    >
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Content - Mobile First -->
+    <div class="p-3 sm:p-6 space-y-4 sm:space-y-6" *ngIf="journeyData">
+        <!-- Pre-call Steps -->
+        <div *ngIf="journeyData.preCallSteps.length > 0">
+            <h4
+                class="text-sm sm:text-md font-medium text-gray-800 mb-2 sm:mb-3 flex items-center">
+                <span
+                    class="w-3 h-3 bg-blue-500 rounded-full mr-2 animate-pulse"></span>
+                <span class="flex items-center space-x-2">
+                    <span>Pre-call Setup</span>
+                    <span
+                        class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                        {{ getCompletedPreCallStepsCount() }}/{{
+                            journeyData.preCallSteps.length
+                        }}
+                    </span>
+                </span>
+            </h4>
+            <app-accordion 
+                [items]="getPreCallAccordionItems()"
+                [allowMultiple]="true"
+                [showIcons]="true"
+                (itemToggled)="onAccordionItemToggled($event)">
+            </app-accordion>
+        </div>
+
+        <!-- In-call Steps -->
+        <div *ngIf="journeyData.inCallSteps.length > 0">
+            <h4
+                class="text-sm sm:text-md font-medium text-gray-800 mb-2 sm:mb-3 flex items-center">
+                <span
+                    class="w-3 h-3 bg-green-500 rounded-full mr-2 animate-pulse"></span>
+                <span class="flex items-center space-x-2">
+                    <span>Verification Process</span>
+                    <span
+                        class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                        {{ getCompletedInCallStepsCount() }}/{{
+                            journeyData.inCallSteps.length
+                        }}
+                    </span>
+                </span>
+            </h4>
+            <app-accordion 
+                [items]="getInCallAccordionItems()"
+                [allowMultiple]="true"
+                [showIcons]="true"
+                (itemToggled)="onAccordionItemToggled($event)">
+            </app-accordion>
+        </div>
+
+        <!-- Post-call Steps -->
+        <div *ngIf="journeyData.postCallSteps.length > 0">
+            <h4
+                class="text-sm sm:text-md font-medium text-gray-800 mb-2 sm:mb-3 flex items-center">
+                <span class="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
+                Finalization
+            </h4>
+            <app-accordion 
+                [items]="getPostCallAccordionItems()"
+                [allowMultiple]="true"
+                [showIcons]="true"
+                (itemToggled)="onAccordionItemToggled($event)">
+            </app-accordion>
+        </div>
+
+        <!-- No steps message -->
+        <div
+            *ngIf="
+                journeyData.preCallSteps.length === 0 &&
+                journeyData.inCallSteps.length === 0 &&
+                journeyData.postCallSteps.length === 0
+            "
+            class="text-center py-8 text-gray-500">
+            <div class="text-lg mb-2">📋</div>
+            <div>No steps available yet</div>
+            <div class="text-sm">Journey will be populated as you progress</div>
+        </div>
+    </div>
+
+    <!-- Loading state -->
+    <div *ngIf="!journeyData" class="p-6 text-center text-gray-500">
+        <div
+            class="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+        <div>Loading journey data...</div>
+    </div>
+</div>

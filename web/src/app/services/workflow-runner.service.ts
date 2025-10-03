@@ -8,6 +8,7 @@ import {
     WorkflowConfig as SessionWorkflowConfig,
 } from './session-storage.service'
 import { AgentWorkflowService } from './agent-workflow.service'
+import { environment } from '../../environments/environment'
 
 export interface SubAction {
     type:
@@ -206,6 +207,13 @@ export class WorkflowRunnerService {
                     status: 'pending',
                     phase: subAction.sub_action_step,
                     subAction: subAction,
+                    data: {
+                        // Copy relevant data from subAction to step.data
+                        frame_capture_type: (subAction as any)
+                            .frame_capture_type,
+                        captureType: (subAction as any).frame_capture_type,
+                        ...subAction,
+                    },
                 }
                 steps.push(step)
             }
@@ -253,6 +261,18 @@ export class WorkflowRunnerService {
         }
 
         const step = this.currentState.steps[this.stepIndex]
+
+        // Skip if step is already completed
+        if (step.status === 'completed') {
+            console.log(
+                '🎯 WORKFLOW-RUNNER: Step already completed, skipping:',
+                step.id
+            )
+            this.stepIndex++
+            this.executeNextStep()
+            return
+        }
+
         this.currentState.currentStep = step
         step.status = 'active'
         this.updateState()
@@ -265,6 +285,20 @@ export class WorkflowRunnerService {
 
         try {
             await this.executeStep(step)
+
+            // For FRAME_CAPTURE and QUESTIONNAIRE steps, don't auto-complete - wait for manual completion
+            if (
+                step.type === 'FRAME_CAPTURE' ||
+                step.type === 'QUESTIONNAIRE'
+            ) {
+                console.log(
+                    `🎯 WORKFLOW-RUNNER: ${step.type} step started, waiting for completion`
+                )
+                // Don't mark as completed or advance - wait for completeCurrentStep() to be called
+                return
+            }
+
+            // For other step types, mark as completed and move to next step
             step.status = 'completed'
             this.stepIndex++
 
@@ -438,6 +472,19 @@ export class WorkflowRunnerService {
         return this.currentState.currentStep
     }
 
+    private moveToNextStep(): void {
+        const nextStep = this.getNextStep()
+        if (nextStep) {
+            console.log('🎯 WORKFLOW-RUNNER: Moving to next step:', nextStep.id)
+            this.currentState.currentStep = nextStep
+            this.stepIndex++
+        } else {
+            console.log('🎯 WORKFLOW-RUNNER: No more steps, workflow complete')
+            this.currentState.currentStep = null
+            this.currentState.isComplete = true
+        }
+    }
+
     async completeCurrentStep(): Promise<void> {
         if (this.currentState.currentStep) {
             const step = this.currentState.currentStep
@@ -453,8 +500,28 @@ export class WorkflowRunnerService {
                 const nextStep = this.getNextStep()
                 this.agentWorkflowService.handleStepCompletion(step, nextStep)
 
+                // Move to next step and continue execution
+                this.moveToNextStep()
                 this.updateState()
-                this.executeNextStep()
+
+                // Continue with next step if there is one
+                if (this.currentState.currentStep) {
+                    console.log(
+                        '🎯 WORKFLOW-RUNNER: Continuing to next step:',
+                        this.currentState.currentStep.id
+                    )
+                    // Use setTimeout to avoid blocking the current execution
+                    setTimeout(() => {
+                        if (this.isExecuting) {
+                            this.executeNextStep()
+                        }
+                    }, 1000)
+                } else {
+                    console.log(
+                        '🎯 WORKFLOW-RUNNER: No more steps, workflow complete'
+                    )
+                    this.completeWorkflow()
+                }
             } catch (error) {
                 console.error(
                     '🎯 WORKFLOW-RUNNER: Failed to complete step on backend:',
@@ -480,7 +547,7 @@ export class WorkflowRunnerService {
 
         // Call the correct step completion API endpoint
         const response = await fetch(
-            `/api/v1/kyc/workflow-submissions/steps/${sessionId}/${step.id}/complete`,
+            `${environment.apiUrl}/kyc/workflow-submissions/steps/${sessionId}/${step.id}/complete`,
             {
                 method: 'POST',
                 headers: {

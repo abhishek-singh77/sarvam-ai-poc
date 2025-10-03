@@ -24,6 +24,7 @@ export class PreCallFlowService {
     public flowState$ = this.flowState.asObservable()
 
     constructor(private sessionStorage: SessionStorageService) {
+        console.log('🎯 PRE-CALL-FLOW: Service initialized')
         // Initialize with saved state if available
         this.initializeFromSession()
     }
@@ -32,7 +33,20 @@ export class PreCallFlowService {
         const currentStep = this.sessionStorage.getCurrentStep()
         const isComplete = currentStep === 'complete'
 
+        console.log(
+            '🎯 PRE-CALL-FLOW: Initializing from session - currentStep:',
+            currentStep,
+            'isComplete:',
+            isComplete
+        )
+
         this.flowState.next({
+            currentStep,
+            canProceed: isComplete,
+            isComplete,
+        })
+
+        console.log('🎯 PRE-CALL-FLOW: Flow state updated:', {
             currentStep,
             canProceed: isComplete,
             isComplete,

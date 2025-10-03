@@ -10,14 +10,15 @@
     (healthCheckProceed)="onHealthCheckProceed($event)"
     (healthCheckCancel)="onHealthCheckCancel()"
     (voiceRecognition)="startVoiceRecognition($event)"
-    (questionnaireRetry)="onHealthCheckCancel()"
+    (questionnaireRetry)="onQuestionnaireRetry()"
     (questionnaireSubmit)="submitQuestionnaire()"
     (startCall)="startCall()"
     (chatToggle)="onChatToggle()"
     (cameraToggle)="onCameraToggle()"
     (capturePhoto)="onCapturePhoto()"
     (agentResponseSubmitted)="onAgentResponseSubmitted($event)"
-    (agentResponseUpdated)="onAgentResponseUpdated($event)">
+    (agentResponseUpdated)="onAgentResponseUpdated($event)"
+    (agentProceed)="onAgentProceed()">
 </app-vkyc-session-layout>
 
 <!-- Image Manipulator Modal -->

@@ -6,9 +6,11 @@ export interface AgentPrompt {
     message: string
     stepType?: string
     stepTitle?: string
-    captureType?: 'FACE_CAPTURE' | 'DOCUMENT_CAPTURE'
+    captureType?: 'FACE_CAPTURE' | 'DOCUMENT_CAPTURE' | 'QUESTIONNAIRE'
     question?: string
     questionId?: string
+    showProceedButton?: boolean
+    proceedButtonText?: string
 }
 
 export interface AgentWorkflowState {
@@ -18,6 +20,9 @@ export interface AgentWorkflowState {
     isWaitingForResponse: boolean
     currentQuestion: any | null
     customerResponses: { [questionId: string]: string }
+    allWorkflowSteps: any[]
+    currentStepNumber: number
+    totalSteps: number
 }
 
 @Injectable({
@@ -31,6 +36,9 @@ export class AgentWorkflowService {
         isWaitingForResponse: false,
         currentQuestion: null,
         customerResponses: {},
+        allWorkflowSteps: [],
+        currentStepNumber: 0,
+        totalSteps: 0,
     })
 
     public workflowState$ = this.workflowStateSubject.asObservable()
@@ -41,29 +49,62 @@ export class AgentWorkflowService {
      * Initialize agent workflow when agent enters the meeting
      */
     initializeAgentWorkflow(workflowSteps: any[]): void {
-        console.log('🎯 AGENT-WORKFLOW: Initializing agent workflow')
+        console.log(
+            '🎯 AGENT-WORKFLOW: Initializing agent workflow with',
+            workflowSteps.length,
+            'steps'
+        )
+
+        // Store all workflow steps
+        const currentState = this.workflowStateSubject.value
+        this.workflowStateSubject.next({
+            ...currentState,
+            allWorkflowSteps: workflowSteps,
+            totalSteps: workflowSteps.length,
+        })
 
         // Find the first in-call step
         const firstInCallStep = workflowSteps.find(
-            (step) => step.subActionStep === 'in_call'
+            (step) => step.sub_action_step === 'in_call'
         )
 
         if (firstInCallStep) {
-            this.updateCurrentStep(firstInCallStep)
-            this.generateWelcomePrompt()
+            const stepNumber = workflowSteps.indexOf(firstInCallStep) + 1
+            this.updateCurrentStep(firstInCallStep, stepNumber)
+            this.generateWelcomePrompt(workflowSteps)
         }
     }
 
     /**
      * Update the current step
      */
-    updateCurrentStep(step: any): void {
+    updateCurrentStep(step: any, stepNumber?: number): void {
         const currentState = this.workflowStateSubject.value
+        const calculatedStepNumber =
+            stepNumber || this.calculateStepNumber(step)
+
         this.workflowStateSubject.next({
             ...currentState,
             currentStep: step,
+            currentStepNumber: calculatedStepNumber,
         })
-        console.log('🎯 AGENT-WORKFLOW: Updated current step:', step)
+        console.log(
+            '🎯 AGENT-WORKFLOW: Updated current step:',
+            step,
+            'Step number:',
+            calculatedStepNumber
+        )
+    }
+
+    /**
+     * Calculate step number from all workflow steps
+     */
+    private calculateStepNumber(step: any): number {
+        const currentState = this.workflowStateSubject.value
+        const index = currentState.allWorkflowSteps.findIndex(
+            (s) => s.id === step.id
+        )
+        return index >= 0 ? index + 1 : 0
     }
 
     /**
@@ -95,6 +136,18 @@ export class AgentWorkflowService {
             completedStep.id
         )
 
+        // Add completed step to completed steps list
+        const currentState = this.workflowStateSubject.value
+        const updatedCompletedSteps = [
+            ...currentState.completedSteps,
+            completedStep,
+        ]
+
+        this.workflowStateSubject.next({
+            ...currentState,
+            completedSteps: updatedCompletedSteps,
+        })
+
         // Generate completion prompt
         if (nextStep) {
             this.generateStepCompletionPrompt(completedStep, nextStep)
@@ -106,11 +159,40 @@ export class AgentWorkflowService {
     /**
      * Generate welcome prompt when agent enters
      */
-    private generateWelcomePrompt(): void {
+    private generateWelcomePrompt(workflowSteps: any[]): void {
+        const inCallSteps = workflowSteps.filter(
+            (step) => step.subActionStep === 'in_call'
+        )
+        const stepDescriptions = inCallSteps
+            .map((step, index) => {
+                const stepNumber = index + 1
+                let description = `${stepNumber}. ${step.title || step.type}`
+                if (step.type === 'FRAME_CAPTURE') {
+                    const captureType =
+                        step.frame_capture_type || step.data?.frame_capture_type
+                    if (captureType === 'FACE_CAPTURE') {
+                        description +=
+                            ' - We will capture your selfie for identity verification'
+                    } else if (captureType === 'DOCUMENT_CAPTURE') {
+                        description += ` - We will capture your ${
+                            step.strict_validation_type || 'document'
+                        } for verification`
+                    }
+                } else if (step.type === 'QUESTIONNAIRE') {
+                    description +=
+                        ' - I will ask you some questions to verify your information'
+                }
+                return description
+            })
+            .join('\n')
+
         const prompt: AgentPrompt = {
             type: 'welcome',
-            message:
-                "Hello! Welcome to the KYC verification process. I'm here to guide you through the steps. Let's get started with your verification.",
+            message: `Welcome! I am your AI assistant for the KYC verification process. I will guide you through ${inCallSteps.length} steps to complete your verification:
+
+${stepDescriptions}
+
+Please follow my instructions carefully, and I'll help you complete each step successfully. Let's begin with the first step!`,
         }
         this.updateCurrentPrompt(prompt)
     }
@@ -128,33 +210,53 @@ export class AgentWorkflowService {
 
         switch (step.type) {
             case 'FRAME_CAPTURE':
-                if (step.frame_capture_type === 'FACE_CAPTURE') {
+                const captureType =
+                    step.frame_capture_type ||
+                    step.data?.frame_capture_type ||
+                    step.data?.captureType
+                console.log(
+                    '🎯 AGENT-WORKFLOW: Frame capture type:',
+                    captureType,
+                    'for step:',
+                    step
+                )
+
+                if (captureType === 'FACE_CAPTURE') {
+                    const stepNumber = currentState.currentStepNumber
+                    const totalSteps = currentState.totalSteps
                     prompt = {
                         type: 'step_instruction',
-                        message:
-                            "Now I need to capture your selfie. Please look directly at the camera and make sure your face is clearly visible. I'll capture your photo automatically when you're ready.",
+                        message: `Step ${stepNumber} of ${totalSteps}: Now I need to capture your selfie for identity verification. Please look directly at the camera, ensure good lighting, and keep your face centered. You can use the camera button below to capture when you're ready.`,
                         stepType: 'FRAME_CAPTURE',
                         stepTitle: step.title || 'Selfie Capture',
                         captureType: 'FACE_CAPTURE',
+                        showProceedButton: true,
+                        proceedButtonText: 'Capture Photo',
                     }
-                } else if (step.frame_capture_type === 'DOCUMENT_CAPTURE') {
+                } else if (captureType === 'DOCUMENT_CAPTURE') {
+                    const stepNumber = currentState.currentStepNumber
+                    const totalSteps = currentState.totalSteps
                     prompt = {
                         type: 'step_instruction',
-                        message: `Now I need to capture your ${
+                        message: `Step ${stepNumber} of ${totalSteps}: Now I need to capture your ${
                             step.strict_validation_type || 'document'
-                        }. Please hold your document steady in front of the camera. Make sure all text is clearly visible and the document is well-lit.`,
+                        } for verification. Please hold the document steady in front of the camera, ensure all text is clearly visible and well-lit. You can use the camera button below to capture when ready.`,
                         stepType: 'FRAME_CAPTURE',
                         stepTitle: step.title || 'Document Capture',
                         captureType: 'DOCUMENT_CAPTURE',
+                        showProceedButton: true,
+                        proceedButtonText: 'Capture Document',
                     }
                 } else {
                     prompt = {
                         type: 'step_instruction',
                         message: `Let's proceed with ${
                             step.title || 'the next step'
-                        }. Please follow the instructions carefully.`,
+                        }. Please follow the instructions carefully and use the proceed button when ready.`,
                         stepType: step.type,
                         stepTitle: step.title,
+                        showProceedButton: true,
+                        proceedButtonText: 'Proceed',
                     }
                 }
                 break
@@ -190,22 +292,28 @@ export class AgentWorkflowService {
         completedStep: any,
         nextStep: any
     ): void {
+        const currentState = this.workflowStateSubject.value
+        const completedStepNumber = this.calculateStepNumber(completedStep)
+        const nextStepNumber = this.calculateStepNumber(nextStep)
+        const totalSteps = currentState.totalSteps
+
         let message = ''
 
         if (completedStep.type === 'FRAME_CAPTURE') {
             if (completedStep.frame_capture_type === 'FACE_CAPTURE') {
-                message = 'Great! Your selfie has been captured successfully. '
+                message = `✅ Excellent! Step ${completedStepNumber} completed - Your selfie has been captured successfully. `
             } else if (
                 completedStep.frame_capture_type === 'DOCUMENT_CAPTURE'
             ) {
-                message =
-                    'Perfect! Your document has been captured successfully. '
+                message = `✅ Perfect! Step ${completedStepNumber} completed - Your document has been captured successfully. `
             }
         } else if (completedStep.type === 'QUESTIONNAIRE') {
-            message = 'Thank you for answering the questions. '
+            message = `✅ Great! Step ${completedStepNumber} completed - Thank you for answering the questions. `
+        } else {
+            message = `✅ Step ${completedStepNumber} completed successfully. `
         }
 
-        message += `Now let's move to the next step: ${
+        message += `Now let's move to Step ${nextStepNumber} of ${totalSteps}: ${
             nextStep.title || 'Next Step'
         }.`
 
@@ -321,6 +429,9 @@ export class AgentWorkflowService {
             isWaitingForResponse: false,
             currentQuestion: null,
             customerResponses: {},
+            allWorkflowSteps: [],
+            currentStepNumber: 0,
+            totalSteps: 0,
         })
     }
 }

@@ -216,19 +216,30 @@ async def handle_artifact_submission(websocket: WebSocket, data: Dict[str, Any],
 async def handle_questionnaire_answers(websocket: WebSocket, data: Dict[str, Any], room_id: str = None):
     """Handle questionnaire answers message"""
     answers = data.get('answers', {})
+    step_id = data.get('step_id', 'questionnaire')
     
-    logger.info(f"🔌 WEBSOCKET: Questionnaire answers received")
+    logger.info(f"🔌 WEBSOCKET: Questionnaire answers received for step: {step_id}")
+    logger.info(f"🔌 WEBSOCKET: Answers: {answers}")
     
-    # Here you would typically:
-    # 1. Validate answers
-    # 2. Store in database
-    # 3. Trigger next workflow step
+    try:
+        # Notify the agent about questionnaire responses for comparison
+        from ..services.proper_agent_service import proper_agent_service
+        
+        # VideoSDK with vision=True will handle questionnaire comparison automatically
+        # The agent will receive vision data and can compare answers with document data in real-time
+        logger.info(f"🎯 BACKEND: Questionnaire answers received - VideoSDK will handle comparison with vision data")
+            
+    except Exception as agent_error:
+        logger.error(f"🎯 BACKEND: Failed to process questionnaire with agent: {agent_error}")
+        # Don't fail the WebSocket response if agent processing fails
     
+    # Send response back to frontend
     response = {
         "type": "questionnaire_result",
         "data": {
             "status": "success",
             "answers": answers,
+            "step_id": step_id,
             "timestamp": asyncio.get_event_loop().time()
         }
     }

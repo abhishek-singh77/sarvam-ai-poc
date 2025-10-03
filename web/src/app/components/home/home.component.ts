@@ -15,7 +15,7 @@ import { NotificationComponent } from '../notification/notification.component'
 export class HomeComponent implements OnInit, OnDestroy {
     // Component state
     isLoading: boolean = false
-    apiBase: string = 'http://localhost:8000'
+    apiBase: string = 'http://localhost:8080'
 
     private subscriptions: Subscription[] = []
 

@@ -22,7 +22,7 @@
                     "id_analysis_required": false,
                     "face_match_obj_type": "none",
                     "perform_enrichment": true,
-                    "sub_action_step": "pre",
+                    "sub_action_step": "in_call",
                     "check_distance_from_input_address": true,
                     "input_address": "request:request_details:Address"
                 },
@@ -35,7 +35,7 @@
                     "id_analysis_required": false,
                     "face_match_obj_type": "none",
                     "perform_enrichment": true,
-                    "sub_action_step": "pre",
+                    "sub_action_step": "in_call",
                     "allow_ocr_data_update": false,
                     "perform_liveness_check": false,
                     "perform_face_match_in_sync": false,
@@ -50,7 +50,7 @@
                     "id_analysis_required": false,
                     "face_match_obj_type": "source",
                     "perform_enrichment": true,
-                    "sub_action_step": "pre",
+                    "sub_action_step": "in_call",
                     "allow_ocr_data_update": false,
                     "frame_capture_type": "FACE_CAPTURE",
                     "perform_liveness_check": false,
@@ -69,7 +69,7 @@
                     "strict_validation_type": "pan",
                     "face_match_obj_type": "match_required",
                     "perform_enrichment": true,
-                    "sub_action_step": "pre",
+                    "sub_action_step": "in_call",
                     "allow_ocr_data_update": false,
                     "frame_capture_type": "DOCUMENT_CAPTURE",
                     "central_db_lookup_source": "OCR_DATA",
@@ -93,7 +93,7 @@
                     "strict_validation_type": "aadhaar",
                     "face_match_obj_type": "match_required",
                     "perform_enrichment": true,
-                    "sub_action_step": "pre",
+                    "sub_action_step": "in_call",
                     "allow_ocr_data_update": false,
                     "frame_capture_type": "DOCUMENT_CAPTURE",
                     "perform_liveness_check": false,
@@ -117,28 +117,21 @@
                     "questionnaire": {
                         "questions": [
                             {
-                                "title": "From how many years you are living in current residence?[In years]",
+                                "title": "What is your name as per the document?",
                                 "validated": false,
                                 "input_type": "text",
                                 "otp_check": false,
                                 "mandatory": true
                             },
                             {
-                                "title": "Whether your current address is same as your permanent address ?",
+                                "title": "What is your address as per the document?",
                                 "validated": false,
                                 "input_type": "text",
                                 "otp_check": false,
                                 "mandatory": true
                             },
                             {
-                                "title": "What is your Residence type? Owned What is your House Type?",
-                                "validated": false,
-                                "input_type": "text",
-                                "otp_check": false,
-                                "mandatory": true
-                            },
-                            {
-                                "title": "What is your Educational qualification?",
+                                "title": "What is your monthly income?",
                                 "validated": false,
                                 "input_type": "text",
                                 "otp_check": false,
@@ -146,8 +139,7 @@
                             }
                         ]
                     },
-                    "perform_enrichment": true,
-                    "sub_action_step": "pre"
+                    "perform_enrichment": true
                 }
             ],
             "action_config": {

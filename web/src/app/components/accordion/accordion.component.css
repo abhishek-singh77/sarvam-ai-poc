@@ -1,0 +1,110 @@
+/* Accordion Component Styles */
+.accordion-item {
+  transition: all 0.2s ease-in-out;
+}
+
+.accordion-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.accordion-header {
+  transition: background-color 0.2s ease-in-out;
+}
+
+.accordion-header:hover {
+  background-color: rgba(249, 250, 251, 0.8);
+}
+
+.accordion-content {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+    transform: translateY(0);
+  }
+}
+
+.accordion-icon {
+  transition: transform 0.2s ease-in-out;
+}
+
+.accordion-icon.rotated {
+  transform: rotate(180deg);
+}
+
+/* Status-specific styling */
+.status-completed {
+  border-left: 4px solid #10b981;
+}
+
+.status-in-progress {
+  border-left: 4px solid #3b82f6;
+  position: relative;
+}
+
+.status-in-progress::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 24px;
+  background: linear-gradient(45deg, #3b82f6, #1d4ed8);
+  border-radius: 0 2px 2px 0;
+  animation: pulse 2s infinite;
+}
+
+.status-error {
+  border-left: 4px solid #ef4444;
+}
+
+.status-pending {
+  border-left: 4px solid #f59e0b;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 640px) {
+  .accordion-header {
+    padding: 0.75rem;
+  }
+  
+  .accordion-content {
+    padding: 0.75rem;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .accordion-item {
+    background-color: #1f2937;
+    border-color: #374151;
+  }
+  
+  .accordion-header:hover {
+    background-color: rgba(31, 41, 55, 0.8);
+  }
+  
+  .accordion-content {
+    background-color: #111827;
+    border-top-color: #374151;
+  }
+}

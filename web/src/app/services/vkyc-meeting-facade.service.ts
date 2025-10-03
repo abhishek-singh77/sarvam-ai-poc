@@ -211,11 +211,14 @@ export class VkycMeetingFacadeService {
                 )
             }
 
+            // Load workflow from assets
+            const workflow = await this.loadWorkflowFromAssets()
+
             const request = this.joinAgentService.createJoinAgentRequest(
                 sessionData.roomId,
                 sessionData.agentParticipantId,
                 sessionData.agentToken,
-                '' // Empty workflow for now
+                workflow
             )
 
             console.log(
@@ -251,6 +254,29 @@ export class VkycMeetingFacadeService {
                 'Failed to initialize agent. Please try again.'
             )
             this.cleanup()
+        }
+    }
+
+    private async loadWorkflowFromAssets(): Promise<string> {
+        try {
+            const response = await fetch('/assets/workflow.json')
+            if (!response.ok) {
+                throw new Error(
+                    `Failed to load workflow: ${response.statusText}`
+                )
+            }
+            const workflow = await response.json()
+            console.log(
+                '🎯 MEETING-FACADE: Loaded workflow from assets:',
+                workflow
+            )
+            return JSON.stringify(workflow)
+        } catch (error) {
+            console.error(
+                '🎯 MEETING-FACADE: Failed to load workflow from assets:',
+                error
+            )
+            return ''
         }
     }
 

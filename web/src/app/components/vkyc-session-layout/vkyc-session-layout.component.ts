@@ -8,7 +8,7 @@ import {
 } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { Subscription } from 'rxjs'
-import { SessionHeaderComponent } from '../session-header/session-header.component'
+import { take } from 'rxjs/operators'
 import { UserInstructionComponent } from '../pre-call-flow/user-instruction.component'
 import { UserConsentComponent } from '../pre-call-flow/user-consent.component'
 import { HealthCheckComponent } from '../pre-call-flow/health-check.component'
@@ -17,7 +17,10 @@ import { QuestionnaireFormComponent } from '../questionnaire-form/questionnaire-
 import { AgentJoinPopupComponent } from '../agent-join-popup/agent-join-popup.component'
 import { MeetingPanelComponent } from '../meeting-panel/meeting-panel.component'
 import { AgentPromptDisplayComponent } from '../agent-prompt-display/agent-prompt-display.component'
+import { JourneyProgressComponent } from '../journey-progress/journey-progress.component'
 import { MeetingService } from '../../services/meeting.service'
+import { VkycJourneyService } from '../../services/vkyc-journey.service'
+import { JourneyData } from '../../models/journey.models'
 
 export interface VkycLayoutState {
     phase: 'pre' | 'in_call' | 'post'
@@ -26,8 +29,9 @@ export interface VkycLayoutState {
     preCallStep?: 'instructions' | 'consent' | 'health-check' | 'complete'
     canStartCall?: boolean
     detectionResult?: any
+    multipleFaceDetectionResult?: any
     documentDetectionResult?: any
-    captureType?: 'FACE_CAPTURE' | 'DOCUMENT_CAPTURE' | null
+    captureType?: 'FACE_CAPTURE' | 'DOCUMENT_CAPTURE' | 'QUESTIONNAIRE' | null
     questions?: any[]
     answers?: { [key: string]: any }
     showAgentJoinPopup?: boolean
@@ -47,6 +51,7 @@ export interface WorkflowStep {
     status: 'pending' | 'active' | 'completed' | 'skipped' | 'error'
     subActionStep?: 'pre' | 'in_call' | 'post'
     frame_capture_type?: 'FACE_CAPTURE' | 'DOCUMENT_CAPTURE'
+    sub_action_ref?: string
 }
 
 @Component({
@@ -54,7 +59,6 @@ export interface WorkflowStep {
     standalone: true,
     imports: [
         CommonModule,
-        SessionHeaderComponent,
         UserInstructionComponent,
         UserConsentComponent,
         HealthCheckComponent,
@@ -63,6 +67,7 @@ export interface WorkflowStep {
         AgentJoinPopupComponent,
         MeetingPanelComponent,
         AgentPromptDisplayComponent,
+        JourneyProgressComponent,
     ],
     templateUrl: './vkyc-session-layout.component.html',
     styleUrls: ['./vkyc-session-layout.component.css'],
@@ -88,9 +93,13 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
 
     // Local mic state management
     isMicMuted: boolean = false
+    questionnaireAnswers: { [key: string]: any } = {}
     private subscriptions = new Subscription()
 
-    constructor(private meetingService: MeetingService) {}
+    constructor(
+        private meetingService: MeetingService,
+        private journeyService: VkycJourneyService
+    ) {}
 
     ngOnInit(): void {
         // Subscribe to mic state changes from the meeting service
@@ -119,6 +128,7 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
         questionId: string
         response: string
     }>()
+    @Output() agentProceed = new EventEmitter<void>()
 
     // Meeting panel event handlers
     onStreamsActive(active: boolean): void {
@@ -159,6 +169,34 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
     onCapturePhoto(): void {
         console.log('🎯 LAYOUT: Capture photo requested')
         this.capturePhoto.emit()
+    }
+
+    isCaptureButtonEnabled(): boolean {
+        const currentStep = this.state?.currentStep
+        return (
+            currentStep?.type === 'FRAME_CAPTURE' &&
+            currentStep?.status === 'active'
+        )
+    }
+
+    onVoiceRecognition(question: any): void {
+        console.log(
+            '🎯 LAYOUT: Voice recognition requested for question:',
+            question
+        )
+        this.voiceRecognition.emit(question)
+    }
+
+    onQuestionnaireRetry(): void {
+        console.log('🎯 LAYOUT: Questionnaire retry requested')
+        this.questionnaireRetry.emit()
+    }
+
+    onQuestionnaireSubmit(answers: { [key: string]: any }): void {
+        console.log('🎯 LAYOUT: Questionnaire submitted with answers:', answers)
+        // Store answers in component state for access by parent
+        this.questionnaireAnswers = answers
+        this.questionnaireSubmit.emit()
     }
 
     // Workflow step helper methods
@@ -297,6 +335,11 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
         this.agentResponseUpdated.emit(event)
     }
 
+    onAgentProceed(): void {
+        console.log('🎯 LAYOUT: Agent proceed button clicked')
+        this.agentProceed.emit()
+    }
+
     getAgentWorkflowState(): any {
         // Convert VkycLayoutState to AgentWorkflowState format
         return {
@@ -307,5 +350,22 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
             currentQuestion: null, // This would need to be tracked separately
             customerResponses: {}, // This would need to be tracked separately
         }
+    }
+
+    getJourneyData(): JourneyData | null {
+        // Return the current journey data from the journey service
+        let currentData: JourneyData | null = null
+        this.journeyService.journeyData$
+            .pipe(take(1))
+            .subscribe((data) => (currentData = data))
+        return currentData
+    }
+
+    onAutoCaptureTriggered(): void {
+        console.log(
+            '🎯 VKYC-SESSION-LAYOUT: Auto-capture triggered from detection overlays'
+        )
+        // Emit the capture photo event to the parent component
+        this.capturePhoto.emit()
     }
 }

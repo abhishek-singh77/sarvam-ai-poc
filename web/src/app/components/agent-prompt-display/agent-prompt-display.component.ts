@@ -40,6 +40,20 @@ import {
                 </div>
             </div>
 
+            <!-- Proceed Button for Step Instructions -->
+            <div *ngIf="currentPrompt?.showProceedButton && currentPrompt?.type === 'step_instruction'" 
+                 class="proceed-button-container">
+                <button 
+                    (click)="onProceedClick()"
+                    class="proceed-button">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                    </svg>
+                    {{ currentPrompt?.proceedButtonText || 'Proceed' }}
+                </button>
+            </div>
+
             <!-- Customer Response Display -->
             <div
                 *ngIf="customerResponses && getCustomerResponses().length > 0"
@@ -280,6 +294,38 @@ import {
                 cursor: not-allowed;
             }
 
+            .proceed-button-container {
+                display: flex;
+                justify-content: center;
+                margin: 1rem 0;
+            }
+
+            .proceed-button {
+                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                color: white;
+                border: none;
+                border-radius: 0.75rem;
+                padding: 0.75rem 1.5rem;
+                font-size: 0.875rem;
+                font-weight: 600;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                transition: all 0.2s ease;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            }
+
+            .proceed-button:hover {
+                background: linear-gradient(135deg, #059669 0%, #047857 100%);
+                transform: translateY(-1px);
+                box-shadow: 0 6px 8px -1px rgba(0, 0, 0, 0.15);
+            }
+
+            .proceed-button:active {
+                transform: translateY(0);
+                box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+            }
+
             @keyframes slideIn {
                 from {
                     opacity: 0;
@@ -303,6 +349,7 @@ export class AgentPromptDisplayComponent implements OnInit, OnDestroy {
         questionId: string
         response: string
     }>()
+    @Output() proceed = new EventEmitter<void>()
 
     currentPrompt: AgentPrompt | null = null
     customerResponses: { [questionId: string]: string } = {}
@@ -381,6 +428,11 @@ export class AgentPromptDisplayComponent implements OnInit, OnDestroy {
     cancelEdit(response: any): void {
         response.isEditing = false
         response.editValue = response.answer
+    }
+
+    onProceedClick(): void {
+        console.log('🎯 AGENT-PROMPT: Proceed button clicked')
+        this.proceed.emit()
     }
 
     private updateCurrentTime(): void {

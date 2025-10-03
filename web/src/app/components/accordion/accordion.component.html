@@ -1,0 +1,79 @@
+<div class="space-y-2 sm:space-y-3">
+  <div
+    *ngFor="let item of items; let i = index"
+    [ngClass]="getItemStatusClass(item)">
+    
+    <!-- Item Header (Clickable for accordion) -->
+    <div
+      [ngClass]="getItemHeaderClass(item)"
+      (click)="toggleItem(item)">
+      
+      <!-- Custom Header Template -->
+      <ng-container *ngIf="customHeaderTemplate; else defaultHeader">
+        <ng-container *ngTemplateOutlet="customHeaderTemplate; context: { $implicit: item, index: i }"></ng-container>
+      </ng-container>
+      
+      <!-- Default Header Template -->
+      <ng-template #defaultHeader>
+        <div class="flex items-center space-x-2 sm:space-x-3 mb-2 sm:mb-0">
+          <span *ngIf="showIcons" class="text-base sm:text-lg">
+            {{ getItemIcon(item) }}
+          </span>
+          <div class="flex-1 min-w-0">
+            <div class="font-medium text-sm sm:text-base truncate">
+              {{ item.title }}
+            </div>
+            <div class="text-xs sm:text-sm opacity-75" *ngIf="item.description">
+              {{ item.description }}
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-between sm:flex-col sm:items-end sm:text-right">
+          <div class="text-xs sm:text-sm font-medium" *ngIf="item.status">
+            {{ item.status | titlecase }}
+          </div>
+          <div class="text-xs opacity-60" *ngIf="item.timestamp">
+            {{ formatTimestamp(item.timestamp) }}
+          </div>
+          <!-- Accordion Toggle Icon -->
+          <svg class="w-4 h-4 text-gray-500 transition-transform duration-200 ml-2"
+            [class.rotate-180]="item.expanded"
+            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </div>
+      </ng-template>
+    </div>
+    
+    <!-- Item Content (Accordion Content) -->
+    <div *ngIf="item.expanded" 
+      class="px-3 pb-3 border-t bg-gray-50">
+      <div class="pt-3">
+        <!-- Custom Content Template -->
+        <ng-container *ngIf="customContentTemplate; else defaultContent">
+          <ng-container *ngTemplateOutlet="customContentTemplate; context: { $implicit: item, index: i }"></ng-container>
+        </ng-container>
+        
+        <!-- Default Content Template -->
+        <ng-template #defaultContent>
+          <h6 class="text-xs font-semibold text-gray-700 mb-2">Details:</h6>
+          <div class="space-y-2 text-xs text-gray-600">
+            <div *ngIf="item.data">
+              <strong>Data:</strong> 
+              <pre class="mt-1 p-2 bg-gray-100 rounded text-xs overflow-auto max-h-32">{{ item.data | json }}</pre>
+            </div>
+            <div *ngIf="item.id">
+              <strong>ID:</strong> {{ item.id }}
+            </div>
+            <div *ngIf="item.status">
+              <strong>Status:</strong> {{ item.status }}
+            </div>
+            <div *ngIf="item.timestamp">
+              <strong>Timestamp:</strong> {{ formatTimestamp(item.timestamp) }}
+            </div>
+          </div>
+        </ng-template>
+      </div>
+    </div>
+  </div>
+</div>

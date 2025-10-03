@@ -1,4 +1,21 @@
-<app-session-header (end)="endSession.emit()"></app-session-header>
+<!-- Session Header -->
+<div
+    class="bg-white shadow-sm border-b border-gray-200 px-6 py-3 flex-shrink-0">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center">
+            <img
+                src="assets/logos/digio_logo.svg"
+                alt="Digio"
+                class="h-8 w-auto" />
+            <div class="ml-4">
+                <div class="text-sm font-medium text-gray-900">
+                    KYC Verification Session
+                </div>
+                <div class="text-xs text-gray-500">Powered by Digio</div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Main Content Area -->
 <div class="flex-1 flex flex-col bg-gray-50">
@@ -180,14 +197,57 @@
                 <app-agent-prompt-display
                     [workflowState]="getAgentWorkflowState()"
                     (responseSubmitted)="onAgentResponseSubmitted($event)"
-                    (responseUpdated)="onAgentResponseUpdated($event)">
+                    (responseUpdated)="onAgentResponseUpdated($event)"
+                    (proceed)="onAgentProceed()">
                 </app-agent-prompt-display>
             </div>
 
-            <!-- Horizontal Workflow Steps Progress Indicator -->
-            <div *ngIf="hasWorkflowSteps()" class="mt-6 mx-4">
-                <div class="bg-white rounded-2xl p-6 shadow-lg">
-                    <div class="flex items-center justify-center space-x-8">
+            <!-- Responsive Workflow Steps Progress Indicator -->
+            <div *ngIf="hasWorkflowSteps()" class="mt-4 mx-2 sm:mx-4">
+                <div class="bg-white rounded-xl p-3 sm:p-6 shadow-lg">
+                    <!-- Mobile: Vertical Stack -->
+                    <div class="block sm:hidden">
+                        <div class="space-y-3">
+                            <div
+                                *ngFor="
+                                    let step of getInCallSteps();
+                                    let i = index
+                                "
+                                class="flex items-center">
+                                <!-- Step Circle -->
+                                <div
+                                    class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0"
+                                    [ngClass]="getStepCircleClass(step)">
+                                    <svg
+                                        class="w-4 h-4 text-white"
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20">
+                                        <path
+                                            fill-rule="evenodd"
+                                            [attr.d]="getStepIcon(step)"
+                                            clip-rule="evenodd"></path>
+                                    </svg>
+                                </div>
+
+                                <!-- Step Info -->
+                                <div class="ml-3 flex-1">
+                                    <div
+                                        class="text-sm font-medium transition-colors duration-300"
+                                        [ngClass]="getStepTextClass(step)">
+                                        {{ getStepDisplayTitle(step) }}
+                                    </div>
+                                    <div class="text-xs text-gray-500">
+                                        Step {{ i + 1 }} of
+                                        {{ getInCallSteps().length }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Desktop: Horizontal Layout -->
+                    <div
+                        class="hidden sm:flex items-center justify-center space-x-4 lg:space-x-8">
                         <div
                             *ngFor="
                                 let step of getInCallSteps();
@@ -198,10 +258,10 @@
                             <!-- Step Circle -->
                             <div class="flex flex-col items-center">
                                 <div
-                                    class="w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300"
+                                    class="w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center transition-all duration-300"
                                     [ngClass]="getStepCircleClass(step)">
                                     <svg
-                                        class="w-6 h-6 text-white"
+                                        class="w-5 h-5 lg:w-6 lg:h-6 text-white"
                                         fill="currentColor"
                                         viewBox="0 0 20 20">
                                         <path
@@ -211,19 +271,21 @@
                                     </svg>
                                 </div>
                                 <div
-                                    class="mt-2 text-sm font-medium transition-colors duration-300"
+                                    class="mt-2 text-xs lg:text-sm font-medium transition-colors duration-300 text-center"
                                     [ngClass]="getStepTextClass(step)">
                                     {{ getStepDisplayTitle(step) }}
                                 </div>
                             </div>
 
                             <!-- Connector Line (not for last step) -->
-                            <div *ngIf="!isLast" class="flex items-center ml-8">
+                            <div
+                                *ngIf="!isLast"
+                                class="flex items-center ml-4 lg:ml-8">
                                 <div class="flex items-center">
                                     <div
                                         class="w-2 h-2 bg-blue-500 rounded-full"></div>
                                     <div
-                                        class="w-16 h-0.5 bg-gray-300 border-dashed border-t-2 border-gray-300"></div>
+                                        class="w-8 lg:w-16 h-0.5 bg-gray-300 border-dashed border-t-2 border-gray-300"></div>
                                     <div
                                         class="w-2 h-2 bg-blue-500 rounded-full"></div>
                                 </div>
@@ -234,11 +296,31 @@
             </div>
         </div>
 
-        <!-- Main Video Area -->
+        <!-- Main Video Area - Responsive Design -->
         <div
-            class="flex-1 relative mx-4 my-4 rounded-xl overflow-hidden min-h-0">
-            <!-- Customer Video (Main) -->
-            <div class="w-full h-full relative bg-gray-900 min-h-[400px]">
+            class="flex-1 relative mx-2 sm:mx-4 my-2 sm:my-4 rounded-xl overflow-hidden min-h-0">
+            <!-- Floating End Session Button -->
+            <button
+                (click)="endSession.emit()"
+                class="absolute top-2 right-2 sm:top-4 sm:right-4 z-10 bg-red-600 hover:bg-red-700 text-white font-medium py-1 px-2 sm:py-2 sm:px-4 rounded-lg transition-colors flex items-center shadow-lg text-xs sm:text-sm">
+                <svg
+                    class="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span class="hidden sm:inline">End Session</span>
+                <span class="sm:hidden">End</span>
+            </button>
+
+            <!-- Customer Video (Main) - Responsive -->
+            <div
+                class="w-full h-full relative bg-gray-900 min-h-[300px] sm:min-h-[400px] md:min-h-[500px] aspect-video">
                 <app-meeting-panel
                     (streamsActive)="onStreamsActive($event)"
                     (micToggle)="onMicToggle()"
@@ -250,20 +332,83 @@
                 <!-- Detection Overlays -->
                 <app-detection-overlays
                     [detectionResult]="state?.detectionResult"
+                    [multipleFaceDetectionResult]="
+                        state?.multipleFaceDetectionResult
+                    "
                     [documentDetectionResult]="state?.documentDetectionResult"
-                    [captureType]="state?.captureType || null">
+                    [captureType]="state?.captureType || null"
+                    [showMultipleFaces]="true"
+                    (autoCaptureTriggered)="onAutoCaptureTriggered()">
                 </app-detection-overlays>
             </div>
         </div>
 
-        <!-- Agent Message Bubble -->
-        <div class="mx-4 mb-4">
-            <div class="bg-white rounded-2xl p-4 shadow-lg">
+        <!-- Step Instructions & Agent Message - Responsive -->
+        <div class="mx-2 sm:mx-4 mb-2 sm:mb-4 space-y-2 sm:space-y-3">
+            <!-- Current Step Instructions -->
+            <div
+                *ngIf="state?.currentStep"
+                class="bg-blue-50 border border-blue-200 rounded-xl p-3 sm:p-4">
                 <div class="flex items-start">
                     <div
-                        class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                        class="w-6 h-6 sm:w-8 sm:h-8 bg-blue-500 rounded-full flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
                         <svg
-                            class="w-5 h-5 text-white"
+                            class="w-3 h-3 sm:w-4 sm:h-4 text-white"
+                            fill="currentColor"
+                            viewBox="0 0 20 20">
+                            <path
+                                fill-rule="evenodd"
+                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                                clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <h3
+                            class="text-sm sm:text-base font-semibold text-blue-900 mb-1">
+                            {{ state?.currentStep?.title || 'Current Step' }}
+                        </h3>
+                        <p
+                            class="text-xs sm:text-sm text-blue-800 leading-relaxed">
+                            {{
+                                state?.currentStep?.description ||
+                                    'Please follow the instructions below...'
+                            }}
+                        </p>
+                        <!-- Step-specific instructions -->
+                        <div
+                            *ngIf="state?.currentStep?.type === 'FRAME_CAPTURE'"
+                            class="mt-2 p-2 bg-blue-100 rounded-lg">
+                            <p
+                                class="text-xs sm:text-sm text-blue-900 font-medium">
+                                <span
+                                    *ngIf="
+                                        state?.currentStep?.data
+                                            ?.captureType === 'FACE_CAPTURE'
+                                    ">
+                                    📷 Look directly at the camera, ensure good
+                                    lighting, and keep your face centered.
+                                </span>
+                                <span
+                                    *ngIf="
+                                        state?.currentStep?.data
+                                            ?.captureType === 'DOCUMENT_CAPTURE'
+                                    ">
+                                    📄 Hold the document steady, ensure all text
+                                    is clearly visible and well-lit.
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Agent Message Bubble -->
+            <div class="bg-white rounded-2xl p-3 sm:p-4 shadow-lg">
+                <div class="flex items-start">
+                    <div
+                        class="w-6 h-6 sm:w-8 sm:h-8 bg-blue-500 rounded-full flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
+                        <svg
+                            class="w-3 h-3 sm:w-4 sm:h-4 text-white"
                             fill="currentColor"
                             viewBox="0 0 20 20">
                             <path
@@ -273,31 +418,33 @@
                         </svg>
                     </div>
                     <div class="flex-1">
-                        <p class="text-sm font-medium text-gray-900 mb-1">
-                            Agent:
+                        <p
+                            class="text-xs sm:text-sm font-medium text-gray-900 mb-1">
+                            AI Assistant:
                         </p>
-                        <p class="text-sm text-gray-700">
-                            {{
-                                state?.currentStep?.description ||
-                                    'Please capture your selfie...'
-                            }}
-                        </p>
+                        <app-agent-prompt-display
+                            [workflowState]="getAgentWorkflowState()"
+                            (responseSubmitted)="
+                                onAgentResponseSubmitted($event)
+                            "
+                            (responseUpdated)="onAgentResponseUpdated($event)"
+                            (proceed)="onAgentProceed()">
+                        </app-agent-prompt-display>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Control Buttons -->
-        <div class="mx-4 mb-6">
-            <div class="bg-gray-800 bg-opacity-90 rounded-2xl p-4">
-                <div class="flex items-center justify-center space-x-4">
+            <!-- Control Buttons - Responsive -->
+            <div class="bg-gray-800 bg-opacity-90 rounded-2xl p-3 sm:p-4">
+                <div
+                    class="flex items-center justify-center space-x-2 sm:space-x-4">
                     <!-- 1. Chat Button -->
                     <button
                         (click)="onChatToggle()"
-                        class="w-12 h-12 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors"
+                        class="w-10 h-10 sm:w-12 sm:h-12 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors"
                         title="Chat">
                         <svg
-                            class="w-6 h-6 text-white"
+                            class="w-5 h-5 sm:w-6 sm:h-6 text-white"
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -312,7 +459,7 @@
                     <!-- 2. Mic Mute/Unmute Button -->
                     <button
                         (click)="onMicToggle()"
-                        class="w-12 h-12 rounded-full flex items-center justify-center transition-colors"
+                        class="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-colors"
                         [ngClass]="
                             isMicMuted
                                 ? 'bg-gray-500 hover:bg-gray-400'
@@ -323,7 +470,7 @@
                         ">
                         <svg
                             *ngIf="!isMicMuted"
-                            class="w-6 h-6 text-white"
+                            class="w-5 h-5 sm:w-6 sm:h-6 text-white"
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -340,7 +487,7 @@
                         </svg>
                         <svg
                             *ngIf="isMicMuted"
-                            class="w-6 h-6 text-white"
+                            class="w-5 h-5 sm:w-6 sm:h-6 text-white"
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -365,10 +512,10 @@
                     <!-- 3. Camera Flip Button -->
                     <button
                         (click)="onCameraToggle()"
-                        class="w-12 h-12 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors"
+                        class="w-10 h-10 sm:w-12 sm:h-12 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors"
                         title="Flip Camera">
                         <svg
-                            class="w-6 h-6 text-white"
+                            class="w-5 h-5 sm:w-6 sm:h-6 text-white"
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -383,10 +530,20 @@
                     <!-- 4. Capture Photo Button -->
                     <button
                         (click)="onCapturePhoto()"
-                        class="w-12 h-12 bg-blue-500 hover:bg-blue-600 rounded-full flex items-center justify-center transition-colors"
-                        title="Capture Photo">
+                        [disabled]="!isCaptureButtonEnabled()"
+                        class="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-colors"
+                        [ngClass]="
+                            isCaptureButtonEnabled()
+                                ? 'bg-blue-500 hover:bg-blue-600'
+                                : 'bg-gray-400 cursor-not-allowed'
+                        "
+                        [title]="
+                            isCaptureButtonEnabled()
+                                ? 'Capture Photo'
+                                : 'Capture not available for current step'
+                        ">
                         <svg
-                            class="w-6 h-6 text-white"
+                            class="w-5 h-5 sm:w-6 sm:h-6 text-white"
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -406,10 +563,10 @@
                     <!-- 5. End Call Button -->
                     <button
                         (click)="onEndCall()"
-                        class="w-12 h-12 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center transition-colors"
+                        class="w-10 h-10 sm:w-12 sm:h-12 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center transition-colors"
                         title="End Call">
                         <svg
-                            class="w-6 h-6 text-white"
+                            class="w-5 h-5 sm:w-6 sm:h-6 text-white"
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -422,6 +579,16 @@
                     </button>
                 </div>
             </div>
+
+            <!-- Journey Progress Component -->
+            <div class="bg-white rounded-2xl p-3 sm:p-4 shadow-lg">
+                <app-journey-progress
+                    [showDetails]="true"
+                    [showProgressBar]="true"
+                    [showTimestamps]="true"
+                    [compactMode]="false">
+                </app-journey-progress>
+            </div>
         </div>
 
         <!-- Questionnaire UI -->
@@ -429,9 +596,9 @@
             *ngIf="state?.currentStep?.type === 'QUESTIONNAIRE'"
             [questions]="state?.questions || []"
             [answers]="state?.answers || {}"
-            (voice)="voiceRecognition.emit($event)"
-            (retry)="questionnaireRetry.emit()"
-            (submit)="questionnaireSubmit.emit()">
+            (voice)="onVoiceRecognition($event)"
+            (retry)="onQuestionnaireRetry()"
+            (submit)="onQuestionnaireSubmit($event)">
         </app-questionnaire-form>
     </div>
 

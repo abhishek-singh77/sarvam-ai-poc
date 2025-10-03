@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core'
 import { HttpClient, HttpErrorResponse } from '@angular/common/http'
 import { Observable, BehaviorSubject, throwError } from 'rxjs'
 import { catchError, map } from 'rxjs/operators'
+import { environment } from '../../environments/environment'
 
 // Enterprise API Interfaces
 export interface SessionCreateRequest {
@@ -84,7 +85,7 @@ export interface HealthResponse {
     providedIn: 'root',
 })
 export class EnterpriseApiService {
-    private readonly API_BASE = 'http://localhost:8000/api/v1'
+    private readonly API_BASE = environment.apiUrl
 
     // State management
     private currentSessionSubject = new BehaviorSubject<SessionResponse | null>(
