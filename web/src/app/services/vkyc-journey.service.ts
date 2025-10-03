@@ -228,4 +228,12 @@ export class VkycJourneyService extends BaseJourneyService {
         ).length
         return Math.round((completedSteps / steps.length) * 100)
     }
+
+    /**
+     * Manually mark a step as completed (for backend API completions)
+     */
+    markStepCompleted(stepId: string, data?: Record<string, any>): void {
+        console.log(`🎯 JOURNEY: Manually marking step ${stepId} as completed`)
+        this.updateStepStatus(stepId, 'completed', data)
+    }
 }

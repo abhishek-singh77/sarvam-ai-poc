@@ -12,6 +12,7 @@ import {
     ArtifactPayload,
     ValidationPayload,
 } from '../submission.service'
+import { VkycJourneyService } from '../vkyc-journey.service'
 
 @Injectable({
     providedIn: 'root',
@@ -25,7 +26,8 @@ export class FrameCaptureHandler implements StepHandler {
 
     constructor(
         private detectionService: EnhancedDetectionService,
-        private submissionService: SubmissionService
+        private submissionService: SubmissionService,
+        private journeyService: VkycJourneyService
     ) {}
 
     canHandle(step: WorkflowStep): boolean {

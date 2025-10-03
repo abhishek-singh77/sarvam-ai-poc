@@ -489,6 +489,10 @@ async def analyze_image_with_gemini_vision(image_data: str, prompt: str) -> Dict
                         image_data = image_info["base64"]
                     elif "image" in image_info:
                         image_data = image_info["image"]
+                    elif "blob" in image_info:
+                        image_data = image_info["blob"]
+                    elif "url" in image_info:
+                        image_data = image_info["url"]
                     else:
                         logger.warning(f"🎯 GEMINI-VISION: imageInfo doesn't contain expected keys: {list(image_info.keys())}")
                         # Try showSyncResponse as fallback
@@ -515,6 +519,10 @@ async def analyze_image_with_gemini_vision(image_data: str, prompt: str) -> Dict
                         image_data = image_info["base64"]
                     elif "image" in image_info:
                         image_data = image_info["image"]
+                    elif "blob" in image_info:
+                        image_data = image_info["blob"]
+                    elif "url" in image_info:
+                        image_data = image_info["url"]
                     else:
                         logger.error(f"🎯 GEMINI-VISION: imageInfo doesn't contain expected keys: {list(image_info.keys())}")
                         return {"error": f"imageInfo doesn't contain expected keys: {list(image_info.keys())}"}

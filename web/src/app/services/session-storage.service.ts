@@ -26,6 +26,14 @@ export interface WorkflowConfig {
     request_status_invocations: any
 }
 
+export interface StepData {
+    stepId: string
+    stepType: string
+    data: any
+    timestamp: number
+    success: boolean
+}
+
 @Injectable({
     providedIn: 'root',
 })
@@ -33,6 +41,7 @@ export class SessionStorageService {
     private readonly SESSION_KEY = 'kyc_session_data'
     private readonly STEPS_KEY = 'kyc_completed_steps'
     private readonly WORKFLOW_KEY = 'kyc_workflow_config'
+    private readonly STEP_DATA_KEY = 'kyc_step_data'
 
     // Session Data Management
     saveSessionData(data: SessionData): void {
@@ -202,5 +211,55 @@ export class SessionStorageService {
         if (!steps.consent) return 'consent'
         if (!steps.healthCheck) return 'health-check'
         return 'complete'
+    }
+
+    // Step Data Management
+    saveStepData(stepData: StepData): void {
+        try {
+            const existingData = this.getAllStepData()
+            existingData[stepData.stepId] = stepData
+            sessionStorage.setItem(
+                this.STEP_DATA_KEY,
+                JSON.stringify(existingData)
+            )
+            console.log(
+                '🎯 SESSION-STORAGE: Saved step data for',
+                stepData.stepId,
+                stepData
+            )
+        } catch (error) {
+            console.error('Failed to save step data:', error)
+        }
+    }
+
+    getStepData(stepId: string): StepData | null {
+        try {
+            const allData = this.getAllStepData()
+            return allData[stepId] || null
+        } catch (error) {
+            console.error('Failed to get step data:', error)
+            return null
+        }
+    }
+
+    getAllStepData(): { [stepId: string]: StepData } {
+        try {
+            const data = sessionStorage.getItem(this.STEP_DATA_KEY)
+            if (data) {
+                return JSON.parse(data)
+            }
+        } catch (error) {
+            console.error('Failed to get all step data:', error)
+        }
+        return {}
+    }
+
+    clearStepData(): void {
+        try {
+            sessionStorage.removeItem(this.STEP_DATA_KEY)
+            console.log('🎯 SESSION-STORAGE: Cleared step data')
+        } catch (error) {
+            console.error('Failed to clear step data:', error)
+        }
     }
 }

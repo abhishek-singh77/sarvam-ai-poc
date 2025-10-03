@@ -122,6 +122,9 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     ngOnInit(): void {
         console.log('🎯 VKYC-SESSION: ngOnInit called')
 
+        // Make the component globally accessible for debugging
+        ;(window as any).vkycSession = this
+
         // Get room ID from session storage
         const sessionData = this.sessionStorage.getSessionData()
         if (sessionData) {
@@ -1522,5 +1525,15 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             // For other step types, just proceed to next step
             this.workflowFacade.completeCurrentStep()
         }
+    }
+
+    /**
+     * Manually update journey progress when a step is completed via backend API
+     */
+    updateJourneyProgress(stepId: string, data?: Record<string, any>): void {
+        console.log(
+            `🎯 VKYC-SESSION: Updating journey progress for step ${stepId}`
+        )
+        this.journeyService.markStepCompleted(stepId, data)
     }
 }

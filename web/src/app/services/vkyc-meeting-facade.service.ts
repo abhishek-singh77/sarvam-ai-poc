@@ -209,6 +209,12 @@ export class VkycMeetingFacadeService {
                         timestamp: new Date().toISOString(),
                     }
                 )
+
+                // Store health check data in session storage
+                this.storeHealthCheckDataInSession(
+                    healthCheckData,
+                    sessionData.sessionId
+                )
             }
 
             // Load workflow from assets
@@ -283,5 +289,48 @@ export class VkycMeetingFacadeService {
     private updateLoadingState(updates: Partial<AgentLoadingState>): void {
         const current = this.agentLoadingState$.value
         this.agentLoadingState$.next({ ...current, ...updates })
+    }
+
+    private storeHealthCheckDataInSession(
+        healthCheckData: {
+            locationData: any
+            networkSpeed: any
+            isVpnDetected: boolean
+        },
+        sessionId: string
+    ): void {
+        try {
+            // Create a mock response for the health check data
+            const mockResponse = {
+                status: 'success',
+                message: 'Health check data stored successfully',
+                session_id: sessionId,
+                timestamp: Date.now(),
+            }
+
+            // Create a mock request for the health check data
+            const mockRequest = {
+                session_id: sessionId,
+                location_data: healthCheckData.locationData,
+                network_speed: healthCheckData.networkSpeed,
+                is_vpn_detected: healthCheckData.isVpnDetected,
+                user_agent: navigator.userAgent,
+                timestamp: Date.now(),
+            }
+
+            // Use the health check data service to save to session storage
+            this.healthCheckDataService.saveHealthCheckDataToSession(
+                mockRequest,
+                mockResponse
+            )
+            console.log(
+                '🎯 MEETING-FACADE: Health check data stored in session storage'
+            )
+        } catch (error) {
+            console.error(
+                '🎯 MEETING-FACADE: Failed to store health check data:',
+                error
+            )
+        }
     }
 }

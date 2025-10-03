@@ -3,6 +3,8 @@ import { HttpClient, HttpHeaders } from '@angular/common/http'
 import { Observable, BehaviorSubject } from 'rxjs'
 import { map, catchError } from 'rxjs/operators'
 import { environment } from '../../environments/environment'
+import { VkycJourneyService } from './vkyc-journey.service'
+import { SessionStorageService, StepData } from './session-storage.service'
 
 export interface SubmissionConfig {
     baseUrl: string
@@ -81,7 +83,11 @@ export class SubmissionService {
     }>({})
     public submissionState$ = this.submissionState.asObservable()
 
-    constructor(private http: HttpClient) {}
+    constructor(
+        private http: HttpClient,
+        private journeyService: VkycJourneyService,
+        private sessionStorage: SessionStorageService
+    ) {}
 
     /**
      * Submit a selfie or document artifact
@@ -114,6 +120,16 @@ export class SubmissionService {
             }
 
             this.updateSubmissionState(payload.stepRef, result)
+
+            // Update journey progress for artifact submission
+            this.journeyService.updateStepStatus(payload.stepRef, 'completed', {
+                artifactId: result.artifactId,
+                artifactType: payload.artifactType,
+            })
+
+            // Save image data to session storage
+            this.saveImageDataToSession(payload, result)
+
             console.log(
                 '🎯 SUBMISSION-SERVICE: Artifact submitted successfully:',
                 result.artifactId
@@ -216,6 +232,13 @@ export class SubmissionService {
             }
 
             this.updateSubmissionState(payload.stepRef, result)
+
+            // Update journey progress for questionnaire submission
+            this.journeyService.updateStepStatus(payload.stepRef, 'completed', {
+                answers: payload.answers,
+                answersCount: Object.keys(payload.answers).length,
+            })
+
             console.log(
                 '🎯 SUBMISSION-SERVICE: Questionnaire submitted successfully'
             )
@@ -261,6 +284,8 @@ export class SubmissionService {
                 data: response,
             }
 
+            // Update journey progress
+            this.journeyService.updateStepStatus(stepId, 'completed', data)
             console.log(
                 '🎯 SUBMISSION-SERVICE: Step completed successfully:',
                 stepId
@@ -275,6 +300,11 @@ export class SubmissionService {
                 success: false,
                 error: error instanceof Error ? error.message : 'Unknown error',
             }
+
+            // Update journey progress to failed
+            this.journeyService.updateStepStatus(stepId, 'failed', {
+                error: result.error,
+            })
             return result
         }
     }
@@ -318,5 +348,40 @@ export class SubmissionService {
         const state = this.submissionState.value
         state[stepRef] = result
         this.submissionState.next({ ...state })
+    }
+
+    /**
+     * Save image data to session storage
+     */
+    private saveImageDataToSession(
+        payload: ArtifactPayload,
+        result: SubmissionResult
+    ): void {
+        const stepData: StepData = {
+            stepId: payload.stepRef,
+            stepType:
+                payload.artifactType === 'selfie'
+                    ? 'FACE_CAPTURE'
+                    : 'DOCUMENT_CAPTURE',
+            data: {
+                artifactType: payload.artifactType,
+                artifactId: result.artifactId,
+                metadata: payload.metadata,
+                imageData: payload.base64Data.substring(0, 100) + '...', // Store preview only
+                fullImageData: payload.base64Data, // Store full image data
+                quality: payload.metadata?.quality,
+                confidence: payload.metadata?.confidence,
+                timestamp: Date.now(),
+                response: result.data,
+            },
+            timestamp: Date.now(),
+            success: result.success,
+        }
+
+        this.sessionStorage.saveStepData(stepData)
+        console.log(
+            '🎯 SUBMISSION-SERVICE: Saved image data to session storage for',
+            payload.stepRef
+        )
     }
 }

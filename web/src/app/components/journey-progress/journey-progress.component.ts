@@ -12,6 +12,10 @@ import {
     AccordionComponent,
     AccordionItem,
 } from '../accordion/accordion.component'
+import {
+    SessionStorageService,
+    StepData,
+} from '../../services/session-storage.service'
 
 @Component({
     selector: 'app-journey-progress',
@@ -35,7 +39,8 @@ export class JourneyProgressComponent implements OnInit, OnDestroy {
 
     constructor(
         private journeyService: VkycJourneyService,
-        private utils: JourneyUtilsService
+        private utils: JourneyUtilsService,
+        private sessionStorage: SessionStorageService
     ) {}
 
     ngOnInit(): void {
@@ -165,8 +170,17 @@ export class JourneyProgressComponent implements OnInit, OnDestroy {
     private getStepDetails(step: JourneyStep): any {
         const details: any = {}
 
+        // Get actual step data from session storage
+        const stepData = this.sessionStorage.getStepData(step.id)
+        if (stepData) {
+            details.sessionData = stepData.data
+            details.success = stepData.success
+            details.timestamp = stepData.timestamp
+        }
+
+        // Also include journey service data for backward compatibility
         if (step.data) {
-            details.data = step.data
+            details.journeyData = step.data
 
             // Extract specific data types from the generic data object
             if (step.data['healthCheckData']) {

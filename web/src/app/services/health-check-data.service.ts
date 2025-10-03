@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core'
 import { HttpClient } from '@angular/common/http'
 import { Observable } from 'rxjs'
 import { environment } from '../../environments/environment'
+import { SessionStorageService, StepData } from './session-storage.service'
 
 export interface HealthCheckDataRequest {
     session_id: string
@@ -34,7 +35,10 @@ export interface HealthCheckDataResponse {
 export class HealthCheckDataService {
     private readonly apiUrl = environment.apiUrl
 
-    constructor(private http: HttpClient) {}
+    constructor(
+        private http: HttpClient,
+        private sessionStorage: SessionStorageService
+    ) {}
 
     storeHealthCheckData(
         request: HealthCheckDataRequest
@@ -69,5 +73,31 @@ export class HealthCheckDataService {
             user_agent: navigator.userAgent,
             timestamp: Date.now(),
         }
+    }
+
+    // Save health check data to session storage
+    saveHealthCheckDataToSession(
+        request: HealthCheckDataRequest,
+        response: HealthCheckDataResponse
+    ): void {
+        const stepData: StepData = {
+            stepId: 'health_check',
+            stepType: 'HEALTH_CHECK',
+            data: {
+                request: request,
+                response: response,
+                location: request.location_data,
+                networkSpeed: request.network_speed,
+                vpnDetected: request.is_vpn_detected,
+                userAgent: request.user_agent,
+            },
+            timestamp: Date.now(),
+            success: response.status === 'success',
+        }
+
+        this.sessionStorage.saveStepData(stepData)
+        console.log(
+            '🎯 HEALTH-CHECK-DATA: Saved health check data to session storage'
+        )
     }
 }
