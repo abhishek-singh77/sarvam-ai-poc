@@ -193,7 +193,9 @@
                 <app-questionnaire-step
                     *ngIf="state?.currentStep?.type === 'QUESTIONNAIRE'"
                     [questionnaireData]="getQuestionnaireData()"
-                    (questionnaireCompleted)="onQuestionnaireCompleted($event)">
+                    [isLastStep]="getStepCompletionData().isLastStep"
+                    (questionnaireCompleted)="onQuestionnaireCompleted($event)"
+                    (endKyc)="onFinishKyc()">
                 </app-questionnaire-step>
 
                 <!-- Image Capture Steps (Selfie, PAN, Aadhaar) -->
@@ -586,7 +588,8 @@
                     [showDetails]="true"
                     [showProgressBar]="true"
                     [showTimestamps]="true"
-                    [compactMode]="false">
+                    [compactMode]="false"
+                    [currentStepId]="state?.currentStep?.id">
                 </app-journey-progress>
             </div>
         </div>

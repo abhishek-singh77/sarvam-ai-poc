@@ -1099,7 +1099,7 @@ class ProperAgentService:
                 model="gemini-2.0-flash-live-001",
                 api_key=self.settings.google_api_key,
                 config=GeminiLiveConfig(
-                    voice="Leda",  # Natural-sounding voice  #Orus for male Leda for female
+                    voice="Orus",  # Natural-sounding voice  #Orus for male Leda for female
                     response_modalities=["AUDIO"],  # Audio-only for faster processing
                     temperature=0.1,  # Low temperature for consistent responses
                     max_output_tokens=500,  # Increased from 200 to allow longer welcome messages

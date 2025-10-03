@@ -212,6 +212,15 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
     getStepCircleClass(step: WorkflowStep): string {
         // Check if this is the current step
         const isCurrentStep = this.state?.currentStep?.id === step.id
+        // Debug logging (can be removed in production)
+        if (step.type === 'QUESTIONNAIRE') {
+            console.log('🎯 LAYOUT: Questionnaire step highlighting:', {
+                stepId: step.id,
+                currentStepId: this.state?.currentStep?.id,
+                isCurrentStep: isCurrentStep,
+                stepStatus: step.status,
+            })
+        }
 
         switch (step.status) {
             case 'completed':
@@ -223,8 +232,13 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
                     return 'bg-blue-600 ring-4 ring-blue-200' // Highlight current step even if pending
                 }
                 return 'bg-gray-400'
-            case 'skipped':
             case 'error':
+                // If it's the current step and has error status, still highlight it as current
+                if (isCurrentStep) {
+                    return 'bg-blue-600 ring-4 ring-blue-200' // Highlight current step even if error
+                }
+                return 'bg-red-500' // Show error status for non-current steps
+            case 'skipped':
             default:
                 return 'bg-gray-400'
         }
@@ -294,21 +308,33 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
         )
 
         // Sort by order or by type to ensure consistent display
-        return mainSteps.sort((a, b) => {
-            // Face capture first, then document capture, then questionnaire
+        const sortedSteps = mainSteps.sort((a, b) => {
+            // Questionnaire first, then face capture, then document capture
+            if (a.type === 'QUESTIONNAIRE') return -1
             if (
                 a.type === 'FRAME_CAPTURE' &&
-                a.frame_capture_type === 'FACE_CAPTURE'
-            )
-                return -1
-            if (
-                a.type === 'FRAME_CAPTURE' &&
-                a.frame_capture_type === 'DOCUMENT_CAPTURE'
+                ((a as any).data?.frame_capture_type === 'FACE_CAPTURE' ||
+                    (a as any).data?.captureType === 'FACE_CAPTURE')
             )
                 return 0
-            if (a.type === 'QUESTIONNAIRE') return 1
+            if (
+                a.type === 'FRAME_CAPTURE' &&
+                ((a as any).data?.frame_capture_type === 'DOCUMENT_CAPTURE' ||
+                    (a as any).data?.captureType === 'DOCUMENT_CAPTURE')
+            )
+                return 1
             return 0
         })
+
+        // Debug logging (can be removed in production)
+        console.log(
+            '🎯 LAYOUT: In-call steps count:',
+            sortedSteps.length,
+            'Current step:',
+            this.state?.currentStep?.id
+        )
+
+        return sortedSteps
     }
 
     getCompletedStepsCount(): number {
@@ -437,6 +463,12 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
 
     getNextButtonText(): string {
         const currentStep = this.state?.currentStep
+
+        // Check if all steps are completed
+        if (!currentStep && this.areAllStepsCompleted()) {
+            return 'End KYC'
+        }
+
         if (!currentStep) {
             return 'Start KYC'
         }
@@ -458,11 +490,53 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
         }
     }
 
+    private areAllStepsCompleted(): boolean {
+        try {
+            const workflowSteps = this.state?.workflowSteps || []
+            const inCallSteps = workflowSteps.filter(
+                (step: any) => step.phase === 'in_call'
+            )
+
+            // Check if all in-call steps are completed
+            return inCallSteps.every((step: any) => {
+                if (step.type === 'QUESTIONNAIRE') {
+                    const questionnaireData = this.sessionStorage.getStepData(
+                        'questionnaire-answers'
+                    )
+                    return (
+                        step.status === 'completed' ||
+                        questionnaireData?.success === true
+                    )
+                } else if (step.type === 'FRAME_CAPTURE') {
+                    return (
+                        step.status === 'completed' ||
+                        step.analysisResult ||
+                        this.isStepDataCompleted(step.id)
+                    )
+                }
+                return step.status === 'completed'
+            })
+        } catch (error) {
+            console.warn(
+                '🎯 LAYOUT: Error checking if all steps completed:',
+                error
+            )
+            return false
+        }
+    }
+
     onNextStep(): void {
         console.log('🎯 LAYOUT: Next step requested')
         const currentStep = this.state?.currentStep
 
         if (!currentStep) {
+            // Check if all steps are completed
+            if (this.areAllStepsCompleted()) {
+                console.log('🎯 LAYOUT: All steps completed, ending KYC')
+                this.finishKyc.emit()
+                return
+            }
+
             // Start the workflow
             this.nextStep.emit()
             return
@@ -521,7 +595,11 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
 
     getStepCompletionData(): any {
         const currentStep = this.state?.currentStep
-        if (!currentStep || currentStep.type !== 'FRAME_CAPTURE') {
+        if (
+            !currentStep ||
+            (currentStep.type !== 'FRAME_CAPTURE' &&
+                currentStep.type !== 'QUESTIONNAIRE')
+        ) {
             return {
                 stepTitle: '',
                 stepDescription: '',
@@ -530,18 +608,34 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
             }
         }
 
-        // Check if this is the last step
+        // Get all in-call steps (the main workflow steps)
         const workflowSteps = this.state?.workflowSteps || []
-        const currentStepIndex = workflowSteps.findIndex(
+        const inCallSteps = workflowSteps.filter(
+            (step: any) => step.phase === 'in_call'
+        )
+
+        // Check if this is the last in-call step
+        const currentStepIndex = inCallSteps.findIndex(
             (step) => step.id === currentStep.id
         )
-        const isLastStep = currentStepIndex === workflowSteps.length - 1
+        const isLastStep = currentStepIndex === inCallSteps.length - 1
 
-        // Check if step is completed (has analysis result or is marked completed)
-        const isCompleted =
-            currentStep.status === 'completed' ||
-            currentStep.analysisResult ||
-            this.isStepDataCompleted(currentStep.id)
+        // Check if step is completed
+        let isCompleted = false
+        if (currentStep.type === 'FRAME_CAPTURE') {
+            isCompleted =
+                currentStep.status === 'completed' ||
+                currentStep.analysisResult ||
+                this.isStepDataCompleted(currentStep.id)
+        } else if (currentStep.type === 'QUESTIONNAIRE') {
+            // For questionnaire, check if answers are saved
+            const questionnaireData = this.sessionStorage.getStepData(
+                'questionnaire-answers'
+            )
+            isCompleted =
+                currentStep.status === 'completed' ||
+                questionnaireData?.success === true
+        }
 
         return {
             stepTitle: currentStep.title || this.getCurrentStepTitle(),
@@ -550,6 +644,7 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
             isCompleted: isCompleted,
             isLastStep: isLastStep,
             analysisResult: currentStep.analysisResult,
+            stepType: currentStep.type,
         }
     }
 

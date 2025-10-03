@@ -59,7 +59,11 @@ export interface QuestionnaireData {
                 <!-- Action Buttons -->
                 <div class="flex justify-center">
                     <button
-                        (click)="onNextQuestion()"
+                        (click)="
+                            isLastQuestion && isLastStep
+                                ? onEndKyc()
+                                : onNextQuestion()
+                        "
                         [disabled]="isSubmitting"
                         class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition-colors">
                         <div *ngIf="isSubmitting" class="flex items-center">
@@ -88,7 +92,9 @@ export interface QuestionnaireData {
                         </div>
                         <span *ngIf="!isSubmitting">
                             {{
-                                isLastQuestion
+                                isLastQuestion && isLastStep
+                                    ? 'End KYC'
+                                    : isLastQuestion
                                     ? 'Complete Questionnaire'
                                     : 'Next Question'
                             }}
@@ -108,9 +114,11 @@ export interface QuestionnaireData {
 })
 export class QuestionnaireStepComponent implements OnInit {
     @Input() questionnaireData: QuestionnaireData | null = null
+    @Input() isLastStep: boolean = false
     @Output() questionnaireCompleted = new EventEmitter<{
         [key: string]: string
     }>()
+    @Output() endKyc = new EventEmitter<void>()
 
     currentQuestionIndex = 0
     answers: { [key: string]: string } = {}
@@ -177,5 +185,10 @@ export class QuestionnaireStepComponent implements OnInit {
                 )
             }, 500)
         }
+    }
+
+    onEndKyc(): void {
+        console.log('🎯 QUESTIONNAIRE-STEP: End KYC requested')
+        this.endKyc.emit()
     }
 }

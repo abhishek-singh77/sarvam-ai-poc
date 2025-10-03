@@ -219,4 +219,9 @@ export class StepCompletionComponent {
         console.log('🎯 STEP-COMPLETION: Finish requested')
         this.finish.emit()
     }
+
+    onEndKyc(): void {
+        console.log('🎯 STEP-COMPLETION: End KYC requested')
+        this.finish.emit()
+    }
 }

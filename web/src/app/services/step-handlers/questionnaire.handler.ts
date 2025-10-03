@@ -34,8 +34,20 @@ export class QuestionnaireHandler implements StepHandler {
         )
 
         // Initialize with first question
-        const questions = step.data?.questions || []
+        const questions =
+            step.data?.questions || step.data?.questionnaire?.questions || []
         if (questions.length === 0) {
+            console.error(
+                '🎯 QUESTIONNAIRE-HANDLER: No questions found in step data:',
+                {
+                    stepId: step.id,
+                    stepData: step.data,
+                    hasQuestions: !!step.data?.questions,
+                    hasQuestionnaire: !!step.data?.questionnaire,
+                    hasQuestionnaireQuestions:
+                        !!step.data?.questionnaire?.questions,
+                }
+            )
             return of({
                 success: false,
                 error: 'No questions found',
@@ -103,7 +115,8 @@ export class QuestionnaireHandler implements StepHandler {
     }
 
     getUIState(step: WorkflowStep): any {
-        const questions = step.data?.questions || []
+        const questions =
+            step.data?.questions || step.data?.questionnaire?.questions || []
         const currentQuestion = questions[this.currentQuestionIndex]
 
         return {

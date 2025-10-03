@@ -41,7 +41,7 @@ export class VkycJourneyService extends BaseJourneyService {
             },
             // In-call steps - Questionnaire moved to first position
             {
-                id: 'questionnaire-1',
+                id: 'QUESTIONNAIRE-0',
                 title: 'Verification Questions',
                 type: 'in_call' as const,
                 status: 'pending' as const,

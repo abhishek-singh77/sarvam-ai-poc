@@ -833,10 +833,12 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                 )
             }
 
-            // Clear session storage
+            // Clear session storage (includes journey data)
             try {
                 this.sessionStorage.clearAll()
-                console.log('🎯 VKYC-SESSION: Session storage cleared')
+                console.log(
+                    '🎯 VKYC-SESSION: Session storage cleared (including journey data)'
+                )
             } catch (error) {
                 console.warn(
                     '🎯 VKYC-SESSION: Error clearing session storage:',
@@ -1119,11 +1121,14 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     private async handleFaceAnalysisResult(analysisResult: any): Promise<void> {
         console.log('🎯 VKYC-SESSION: Face analysis result:', analysisResult)
 
-        // Check for API errors first
-        if (analysisResult.error) {
+        // Only show error if API status is not 200 (success) or if there's an explicit error
+        if (
+            (analysisResult.status && analysisResult.status !== 200) ||
+            analysisResult.error
+        ) {
             console.error(
                 '🎯 VKYC-SESSION: Face analysis error:',
-                analysisResult.error
+                analysisResult.error || 'API returned non-200 status'
             )
             this.showErrorNotification(
                 'Image processing failed. Please try again.'
@@ -1131,34 +1136,20 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             return
         }
 
-        // Be more lenient with face detection - if we have any analysis result, proceed
-        if (
-            analysisResult.face_detected === false &&
-            !analysisResult.verification_ready
-        ) {
-            // Only show error if explicitly detected as no face AND not verification ready
-            const recommendations = analysisResult.recommendations || [
-                'Please ensure your face is clearly visible',
-            ]
-            this.showErrorNotification(
-                `Face detection issue: ${recommendations.join(', ')}`
-            )
-            return
+        // Store face analysis results regardless of validation
+        this.layoutState.currentStep = {
+            ...this.layoutState.currentStep,
+            analysisResult: analysisResult,
         }
 
-        // Show quality warnings but don't block the process
+        // Log quality warnings but don't block the process
         if (
             analysisResult.quality_score &&
             analysisResult.quality_score < 0.5
         ) {
-            console.warn('🎯 VKYC-SESSION: Low quality image detected')
-            // Don't show error notification for low quality, just log it
-        }
-
-        // Store face analysis results for future use
-        this.layoutState.currentStep = {
-            ...this.layoutState.currentStep,
-            analysisResult: analysisResult,
+            console.warn(
+                '🎯 VKYC-SESSION: Low quality image detected, but proceeding'
+            )
         }
     }
 
@@ -1170,21 +1161,22 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             analysisResult
         )
 
-        if (!analysisResult.is_valid) {
-            // Show error and allow retake
+        // Only show error if API status is not 200 (success)
+        // Don't validate document content - let the user proceed with any analysis result
+        if (analysisResult.status && analysisResult.status !== 200) {
             this.showErrorNotification(
-                'Document not recognized. Please ensure the document is clearly visible.'
+                'Document upload failed. Please try again.'
             )
             return
         }
 
-        // Store document analysis results
+        // Store document analysis results regardless of validation
         this.layoutState.currentStep = {
             ...this.layoutState.currentStep,
             analysisResult: analysisResult,
         }
 
-        // Show extracted information to user
+        // Show extracted information to user if available
         if (analysisResult.extracted_fields) {
             this.showDocumentExtractedInfo(analysisResult.extracted_fields)
         }

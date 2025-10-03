@@ -313,9 +313,24 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
         imageInfo: Readonly<ImageInfo>,
         subActionId: string
     ): Promise<void> {
+        console.log('🎯 IMAGE-MANIPULATOR: uploadCroppedImage called', {
+            subActionId,
+            mode: this.config.mode,
+            alreadyUploading: this.uploading,
+            alreadyUploaded: this.uploadSuccess,
+        })
+
         if (this.config.mode === 'FRONT_BACK' && !this.config.frontImage) {
             console.log('Mode requires both front and back images')
             this.closeDialog(false, imageInfo)
+            return
+        }
+
+        // Prevent duplicate uploads
+        if (this.uploading || this.uploadSuccess) {
+            console.warn(
+                '🎯 IMAGE-MANIPULATOR: Upload already in progress or completed, skipping'
+            )
             return
         }
 
@@ -324,7 +339,7 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
         this.uploadSuccess = false
 
         try {
-            console.log('🎯 IMAGE-MANIPULATOR: Uploading image...', {
+            console.log('🎯 IMAGE-MANIPULATOR: Starting image upload...', {
                 subActionId,
                 mode: this.config.mode,
             })
@@ -527,16 +542,26 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
                 '🎯 IMAGE-MANIPULATOR: Completing workflow step:',
                 stepId
             )
+
+            // Only complete the step if it hasn't been completed already
+            if (!this.uploadSuccess) {
+                console.warn(
+                    '🎯 IMAGE-MANIPULATOR: Upload not successful, skipping step completion'
+                )
+                return
+            }
+
             await this.workflowFacade.completeCurrentStep()
             console.log(
                 '🎯 IMAGE-MANIPULATOR: Workflow step completed successfully'
             )
         } catch (error) {
-            console.error(
-                '🎯 IMAGE-MANIPULATOR: Failed to complete workflow step:',
+            console.warn(
+                '🎯 IMAGE-MANIPULATOR: Step completion failed (non-critical):',
                 error
             )
             // Don't throw here - the image upload was successful, just step completion failed
+            // This is not a critical error that should show to the user
         }
     }
 
@@ -545,6 +570,15 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
             this.handleError('Cannot approve image at this time')
             return
         }
+
+        // Prevent duplicate uploads
+        if (this.uploading || this.uploadSuccess) {
+            console.warn(
+                '🎯 IMAGE-MANIPULATOR: Upload already in progress or completed'
+            )
+            return
+        }
+
         this.uploadCroppedImage({ blob, url }, this.config.subActionId)
     }
 
@@ -558,8 +592,17 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
     async continueAfterAnalysis(): Promise<void> {
         console.log('🎯 IMAGE-MANIPULATOR: Continuing after analysis review')
 
-        // Just close the dialog - step completion was already handled during upload
-        this.closeDialog(true, this.croppedImage, this.uploadResponse)
+        // Prevent multiple calls
+        if (this.uploading) {
+            console.warn(
+                '🎯 IMAGE-MANIPULATOR: Upload still in progress, cannot continue'
+            )
+            return
+        }
+
+        // Just close the dialog without triggering any additional API calls
+        // The upload and step completion were already handled during the initial upload
+        this.closeDialog(false)
     }
 
     getAnalysisSummary(): string {
@@ -619,7 +662,11 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
         imageInfo?: ImageInfo | null,
         imageUploadActionResponse?: any
     ): void {
-        console.log('Closing image manipulator dialog')
+        console.log('🎯 IMAGE-MANIPULATOR: Closing dialog with params:', {
+            showSyncResponse,
+            hasImageInfo: !!imageInfo,
+            hasUploadResponse: !!imageUploadActionResponse,
+        })
 
         const data: UploadCroppedImageResponse = {
             showSyncResponse,

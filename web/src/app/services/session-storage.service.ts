@@ -195,9 +195,22 @@ export class SessionStorageService {
         this.clearCompletedSteps()
         this.clearWorkflowConfig()
         this.clearStepData()
+        this.clearJourneyData()
         console.log(
-            '🎯 SESSION-STORAGE: Cleared all session data including step data'
+            '🎯 SESSION-STORAGE: Cleared all session data including step data and journey data'
         )
+    }
+
+    clearJourneyData(): void {
+        try {
+            sessionStorage.removeItem('vkyc_journey_data')
+            console.log('🎯 SESSION-STORAGE: Cleared VKYC journey data')
+        } catch (error) {
+            console.warn(
+                '🎯 SESSION-STORAGE: Failed to clear journey data:',
+                error
+            )
+        }
     }
 
     // Check if we have valid session data

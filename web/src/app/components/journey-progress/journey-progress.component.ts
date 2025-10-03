@@ -29,6 +29,7 @@ export class JourneyProgressComponent implements OnInit, OnDestroy {
     @Input() showProgressBar: boolean = true
     @Input() showTimestamps: boolean = true
     @Input() compactMode: boolean = false
+    @Input() currentStepId: string | null = null
 
     journeyData: JourneyData | null = null
     progress: JourneyProgress | null = null
@@ -231,6 +232,27 @@ export class JourneyProgressComponent implements OnInit, OnDestroy {
         } else if (item.id.startsWith('postCall-')) {
             const index = parseInt(item.id.split('-')[1])
             this.expandedSteps[`postCall-${index}`] = expanded
+        }
+    }
+
+    getStepCircleClass(step: JourneyStep): string {
+        // Check if this is the current step
+        const isCurrentStep = this.currentStepId === step.id
+
+        switch (step.status) {
+            case 'completed':
+                return 'bg-green-500'
+            case 'in_progress':
+                return 'bg-blue-600 ring-4 ring-blue-200' // Enhanced blue with ring for current step
+            case 'pending':
+                if (isCurrentStep) {
+                    return 'bg-blue-600 ring-4 ring-blue-200' // Highlight current step even if pending
+                }
+                return 'bg-gray-400'
+            case 'skipped':
+            case 'failed':
+            default:
+                return 'bg-gray-400'
         }
     }
 }

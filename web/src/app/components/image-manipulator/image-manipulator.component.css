@@ -1,6 +1,6 @@
 /* Image Manipulator Styles */
 .image-manipulator-container {
-    @apply bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col;
+    @apply bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] flex flex-col;
 }
 
 .image-manipulator-header {
@@ -16,7 +16,7 @@
 }
 
 .image-manipulator-main {
-    @apply flex-1 relative p-4;
+    @apply flex-1 relative p-4 overflow-y-auto;
 }
 
 .cropper-container {
@@ -133,6 +133,11 @@
     @apply w-full h-full;
 }
 
+/* Analysis Results Styles */
+.analysis-results {
+    @apply max-h-96 overflow-y-auto;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .image-manipulator-container {
@@ -150,5 +155,9 @@
     .primary-button,
     .secondary-button {
         @apply w-full justify-center;
+    }
+
+    .analysis-results {
+        @apply max-h-64;
     }
 }
