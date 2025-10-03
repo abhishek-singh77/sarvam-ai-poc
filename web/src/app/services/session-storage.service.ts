@@ -194,7 +194,10 @@ export class SessionStorageService {
         this.clearSessionData()
         this.clearCompletedSteps()
         this.clearWorkflowConfig()
-        console.log('🎯 SESSION-STORAGE: Cleared all session data')
+        this.clearStepData()
+        console.log(
+            '🎯 SESSION-STORAGE: Cleared all session data including step data'
+        )
     }
 
     // Check if we have valid session data

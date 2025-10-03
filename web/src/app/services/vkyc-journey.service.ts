@@ -39,14 +39,22 @@ export class VkycJourneyService extends BaseJourneyService {
                 description: 'KYC process overview and guidelines',
                 order: 3,
             },
-            // In-call steps
+            // In-call steps - Questionnaire moved to first position
+            {
+                id: 'questionnaire-1',
+                title: 'Verification Questions',
+                type: 'in_call' as const,
+                status: 'pending' as const,
+                description: 'Answer questions to verify your identity',
+                order: 4,
+            },
             {
                 id: 'frame_capture-1',
                 title: 'Selfie Capture',
                 type: 'in_call' as const,
                 status: 'pending' as const,
                 description: 'Capture your selfie for identity verification',
-                order: 4,
+                order: 5,
             },
             {
                 id: 'frame_capture-2',
@@ -54,14 +62,6 @@ export class VkycJourneyService extends BaseJourneyService {
                 type: 'in_call' as const,
                 status: 'pending' as const,
                 description: 'Capture your identity document (PAN/Aadhaar)',
-                order: 5,
-            },
-            {
-                id: 'questionnaire-1',
-                title: 'Verification Questions',
-                type: 'in_call' as const,
-                status: 'pending' as const,
-                description: 'Answer questions to verify your identity',
                 order: 6,
             },
             // Post-call steps

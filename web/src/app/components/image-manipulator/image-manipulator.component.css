@@ -138,15 +138,15 @@
     .image-manipulator-container {
         @apply max-w-full mx-2;
     }
-    
+
     .cropper-container {
         @apply h-64;
     }
-    
+
     .action-buttons {
         @apply flex-col space-x-0 space-y-3;
     }
-    
+
     .primary-button,
     .secondary-button {
         @apply w-full justify-center;

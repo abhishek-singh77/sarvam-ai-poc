@@ -19,6 +19,13 @@ import {
 import { FormsModule } from '@angular/forms'
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog'
 import { CustomSpinnerComponent } from '../custom-spinner/custom-spinner.component'
+import { ImageUploadService } from '../../services/image-upload.service'
+import { VkycWorkflowFacadeService } from '../../services/vkyc-workflow-facade.service'
+import { SessionStorageService } from '../../services/session-storage.service'
+import {
+    AnalysisDisplayComponent,
+    AnalysisData,
+} from '../analysis-display/analysis-display.component'
 
 // Define interfaces locally
 export interface ImageInfo {
@@ -72,6 +79,7 @@ const MAX_SCALE = 3
         ImageCropperComponent,
         FormsModule,
         CustomSpinnerComponent,
+        AnalysisDisplayComponent,
     ],
     templateUrl: './image-manipulator.component.html',
     styleUrl: './image-manipulator.component.css',
@@ -86,6 +94,20 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
 
     @Output() imageProcessed = new EventEmitter<UploadCroppedImageResponse>()
     @Output() error = new EventEmitter<string>()
+
+    constructor(
+        @Optional() @Inject(MAT_DIALOG_DATA) public dialogData: any,
+        @Optional() private dialogRef: MatDialogRef<ImageManipulatorComponent>,
+        private cdr: ChangeDetectorRef,
+        private imageUploadService: ImageUploadService,
+        private workflowFacade: VkycWorkflowFacadeService,
+        private sessionStorage: SessionStorageService
+    ) {
+        // Initialize config from dialog data if available
+        if (this.dialogData) {
+            this.config = { ...this.config, ...this.dialogData }
+        }
+    }
 
     // State management
     private _manipulationState: ManipulationState = {
@@ -104,6 +126,9 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
     uploadError: string | null = null
     uploadSuccess = false
     validationErrors: string[] = []
+    uploadResponse: any = null
+    showAnalysisResults = false
+    analysisData: AnalysisData | null = null
 
     // Computed properties
     get manipulationState(): ManipulationState {
@@ -124,15 +149,6 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
 
     get hasErrors(): boolean {
         return this.validationErrors.length > 0 || !!this.uploadError
-    }
-
-    constructor(
-        private cdr: ChangeDetectorRef,
-        @Optional() private dialogRef: MatDialogRef<ImageManipulatorComponent>,
-        @Optional() @Inject(MAT_DIALOG_DATA) dialogData?: ImageManipulatorConfig
-    ) {
-        // Merge with default config
-        this.config = { ...DEFAULT_CONFIG, ...this.config, ...dialogData }
     }
 
     ngOnInit(): void {
@@ -308,21 +324,82 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
         this.uploadSuccess = false
 
         try {
-            console.log('Uploading image...', {
+            console.log('🎯 IMAGE-MANIPULATOR: Uploading image...', {
                 subActionId,
                 mode: this.config.mode,
             })
 
-            // Simulate upload process - replace with actual API call
-            await this.simulateUpload(imageInfo, subActionId)
+            // Get room ID from session storage
+            const sessionData = this.sessionStorage.getSessionData()
+            if (!sessionData?.roomId) {
+                throw new Error('No room ID found in session storage')
+            }
+            const roomId = sessionData.roomId
 
-            this.uploading = false
-            this.uploadSuccess = true
-            console.log('Image upload completed successfully')
+            // Convert blob to base64
+            const base64Image = await this.blobToBase64(imageInfo.blob)
 
-            this.closeDialog(true, imageInfo)
+            // Determine capture type based on mode
+            const captureType =
+                this.config.mode === 'selfie'
+                    ? 'FACE_CAPTURE'
+                    : 'DOCUMENT_CAPTURE'
+
+            // Upload image using the real API
+            const uploadResponse = await this.imageUploadService
+                .uploadImage(roomId, {
+                    image_data: base64Image,
+                    step_id: subActionId,
+                    capture_type: captureType,
+                    timestamp: new Date().toISOString(),
+                })
+                .toPromise()
+
+            if (uploadResponse?.status === 'success') {
+                this.uploading = false
+                this.uploadSuccess = true
+                this.uploadResponse = uploadResponse
+                this.showAnalysisResults = true
+
+                // Create analysis data for the display component
+                this.analysisData = {
+                    captureType: uploadResponse.capture_type,
+                    analysisResult: uploadResponse.analysis_result,
+                    parsedAnalysis: this.parseAnalysisResult(
+                        uploadResponse.analysis_result
+                    ),
+                    recommendations:
+                        this.parseAnalysisResult(uploadResponse.analysis_result)
+                            ?.recommendations || [],
+                }
+
+                console.log(
+                    '🎯 IMAGE-MANIPULATOR: Image upload completed successfully',
+                    uploadResponse
+                )
+
+                // Save analysis data to session storage for accordion display
+                this.saveAnalysisData(subActionId, uploadResponse)
+
+                // Complete the workflow step (don't let this fail the upload)
+                try {
+                    await this.completeWorkflowStep(subActionId, uploadResponse)
+                } catch (stepError) {
+                    console.warn(
+                        '🎯 IMAGE-MANIPULATOR: Step completion failed, but upload was successful:',
+                        stepError
+                    )
+                    // Don't throw here - the image upload was successful
+                }
+
+                // Don't close dialog immediately - show analysis results first
+                // User will click Continue to close and see results in accordion
+            } else {
+                throw new Error(uploadResponse?.message || 'Upload failed')
+            }
         } catch (error) {
             this.uploading = false
+            console.error('🎯 IMAGE-MANIPULATOR: Upload failed:', error)
             this.handleError(
                 `Upload failed: ${
                     error instanceof Error ? error.message : 'Unknown error'
@@ -331,21 +408,136 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
         }
     }
 
-    private simulateUpload(
-        imageInfo: ImageInfo,
-        subActionId: string
-    ): Promise<void> {
+    private async blobToBase64(blob: Blob): Promise<string> {
         return new Promise((resolve, reject) => {
-            setTimeout(() => {
-                // Simulate random success/failure for demo
-                if (Math.random() > 0.1) {
-                    // 90% success rate
-                    resolve()
-                } else {
-                    reject(new Error('Simulated upload failure'))
-                }
-            }, 2000)
+            const reader = new FileReader()
+            reader.onload = () => {
+                const result = reader.result as string
+                // Remove data URL prefix if present
+                const base64 = result.includes(',')
+                    ? result.split(',')[1]
+                    : result
+                resolve(base64)
+            }
+            reader.onerror = reject
+            reader.readAsDataURL(blob)
         })
+    }
+
+    private saveAnalysisData(stepId: string, uploadResponse: any): void {
+        try {
+            const analysisData = {
+                stepId: stepId,
+                timestamp: new Date().toISOString(),
+                captureType: uploadResponse.capture_type,
+                status: uploadResponse.status,
+                message: uploadResponse.message,
+                analysisResult: uploadResponse.analysis_result,
+                // Parse the analysis JSON if it's a string
+                parsedAnalysis: this.parseAnalysisResult(
+                    uploadResponse.analysis_result
+                ),
+            }
+
+            // Save to session storage
+            this.sessionStorage.saveStepData({
+                stepId: stepId,
+                stepType: 'image_capture',
+                data: analysisData,
+                timestamp: Date.now(),
+                success: true,
+            })
+
+            console.log(
+                '🎯 IMAGE-MANIPULATOR: Analysis data saved:',
+                analysisData
+            )
+
+            // Verify the data was saved
+            const savedData = this.sessionStorage.getStepData(stepId)
+            console.log('🎯 IMAGE-MANIPULATOR: Verified saved data:', savedData)
+
+            // Also update the current step with analysis results for the step completion component
+            this.updateCurrentStepWithAnalysis(
+                stepId,
+                uploadResponse.analysis_result
+            )
+        } catch (error) {
+            console.error(
+                '🎯 IMAGE-MANIPULATOR: Failed to save analysis data:',
+                error
+            )
+        }
+    }
+
+    private updateCurrentStepWithAnalysis(
+        stepId: string,
+        analysisResult: any
+    ): void {
+        try {
+            // Get the current workflow state
+            const currentState = this.workflowFacade.state$.value
+            if (
+                currentState?.currentStep &&
+                currentState.currentStep.id === stepId
+            ) {
+                // Update the current step with analysis results
+                currentState.currentStep.analysisResult = analysisResult
+                currentState.currentStep.status = 'completed'
+
+                // Emit the updated state
+                this.workflowFacade.state$.next(currentState)
+
+                console.log(
+                    '🎯 IMAGE-MANIPULATOR: Updated current step with analysis results'
+                )
+            }
+        } catch (error) {
+            console.error(
+                '🎯 IMAGE-MANIPULATOR: Failed to update current step with analysis:',
+                error
+            )
+        }
+    }
+
+    private parseAnalysisResult(analysisResult: any): any {
+        try {
+            if (
+                analysisResult?.analysis &&
+                typeof analysisResult.analysis === 'string'
+            ) {
+                return JSON.parse(analysisResult.analysis)
+            }
+            return analysisResult
+        } catch (error) {
+            console.error(
+                '🎯 IMAGE-MANIPULATOR: Failed to parse analysis result:',
+                error
+            )
+            return analysisResult
+        }
+    }
+
+    private async completeWorkflowStep(
+        stepId: string,
+        uploadResponse: any
+    ): Promise<void> {
+        try {
+            console.log(
+                '🎯 IMAGE-MANIPULATOR: Completing workflow step:',
+                stepId
+            )
+            await this.workflowFacade.completeCurrentStep()
+            console.log(
+                '🎯 IMAGE-MANIPULATOR: Workflow step completed successfully'
+            )
+        } catch (error) {
+            console.error(
+                '🎯 IMAGE-MANIPULATOR: Failed to complete workflow step:',
+                error
+            )
+            // Don't throw here - the image upload was successful, just step completion failed
+        }
     }
 
     approveImage({ blob, url }: Readonly<ImageInfo>): void {
@@ -361,6 +553,65 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
             return
         }
         this.closeDialog(false)
+    }
+
+    async continueAfterAnalysis(): Promise<void> {
+        console.log('🎯 IMAGE-MANIPULATOR: Continuing after analysis review')
+
+        // Just close the dialog - step completion was already handled during upload
+        this.closeDialog(true, this.croppedImage, this.uploadResponse)
+    }
+
+    getAnalysisSummary(): string {
+        if (!this.uploadResponse?.analysis_result) {
+            return 'Analysis completed successfully'
+        }
+
+        const analysis = this.parseAnalysisResult(
+            this.uploadResponse.analysis_result
+        )
+        const captureType = this.uploadResponse.capture_type
+
+        if (captureType === 'FACE_CAPTURE') {
+            return `Face detected: ${
+                analysis.face_detected ? 'Yes' : 'No'
+            } | Quality: ${analysis.image_quality || 'Unknown'} | Confidence: ${
+                (analysis.confidence_score * 100)?.toFixed(1) || 'Unknown'
+            }%`
+        } else if (captureType === 'DOCUMENT_CAPTURE') {
+            return `Document detected: ${
+                analysis.document_detected ? 'Yes' : 'No'
+            } | Quality: ${
+                (analysis.quality_score * 100)?.toFixed(1) || 'Unknown'
+            }% | OCR: ${(analysis.confidence * 100)?.toFixed(1) || 'Unknown'}%`
+        }
+
+        return 'Analysis completed successfully'
+    }
+
+    getRecommendations(): string[] {
+        if (!this.uploadResponse?.analysis_result) {
+            return []
+        }
+
+        const analysis = this.parseAnalysisResult(
+            this.uploadResponse.analysis_result
+        )
+        return analysis.recommendations || []
+    }
+
+    onAnalysisRetake(): void {
+        console.log(
+            '🎯 IMAGE-MANIPULATOR: Retake requested from analysis display'
+        )
+        this.retakePhoto()
+    }
+
+    async onAnalysisContinue(): Promise<void> {
+        console.log(
+            '🎯 IMAGE-MANIPULATOR: Continue requested from analysis display'
+        )
+        await this.continueAfterAnalysis()
     }
 
     closeDialog(

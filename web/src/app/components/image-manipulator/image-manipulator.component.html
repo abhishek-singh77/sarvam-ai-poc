@@ -204,4 +204,13 @@
         <span class="material-symbols-outlined">check_circle</span>
         <span>Image uploaded successfully!</span>
     </div>
+
+    <!-- Analysis Results -->
+    <app-analysis-display
+        *ngIf="showAnalysisResults && analysisData"
+        [analysisData]="analysisData"
+        [showActions]="true"
+        (retakeRequested)="onAnalysisRetake()"
+        (continueRequested)="onAnalysisContinue()">
+    </app-analysis-display>
 </div>

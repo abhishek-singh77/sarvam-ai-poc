@@ -16,6 +16,7 @@ import {
     VkycLayoutState,
 } from '../vkyc-session-layout/vkyc-session-layout.component'
 import { ImageManipulatorComponent } from '../image-manipulator/image-manipulator.component'
+// AccordionComponent removed - no longer used
 import { Subscription } from 'rxjs'
 import { VkycMeetingFacadeService } from '../../services/vkyc-meeting-facade.service'
 import { VkycWorkflowFacadeService } from '../../services/vkyc-workflow-facade.service'
@@ -32,6 +33,7 @@ import {
 } from '../../services/image-upload.service'
 import { NotificationService } from '../../services/notification.service'
 import { VkycJourneyService } from '../../services/vkyc-journey.service'
+import { StepHandlerRegistry } from '../../services/step-handlers/step-handler.registry'
 
 @Component({
     selector: 'app-vkyc-session',
@@ -41,6 +43,7 @@ import { VkycJourneyService } from '../../services/vkyc-journey.service'
         FormsModule,
         VkycSessionLayoutComponent,
         ImageManipulatorComponent,
+        // AccordionComponent removed
     ],
     templateUrl: './vkyc-session.component.html',
     styleUrls: ['./vkyc-session.component.css'],
@@ -100,6 +103,8 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     // Flag to prevent multiple startCall calls
     startCallInProgress: boolean = false
 
+    // Analysis data is now integrated into the KYC journey progress accordion
+
     constructor(
         public preCallFlowService: PreCallFlowService,
         private meetingFacade: VkycMeetingFacadeService,
@@ -111,6 +116,7 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         private roomService: EnterpriseRoomService,
         private meetingService: MeetingService,
         private agentWorkflowService: AgentWorkflowService,
+        private stepHandlerRegistry: StepHandlerRegistry,
         private imageUploadService: ImageUploadService,
         private router: Router,
         private notificationService: NotificationService,
@@ -432,14 +438,7 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                         phase: 'in_call', // Ensure we stay in in_call phase
                         showPreCallFlow: false, // Ensure pre-call flow is hidden
                     })
-                    // Start the actual KYC workflow (only if not already initialized)
-                    if (!this.workflowInitialized) {
-                        this.workflowInitialized = true
-                        this.workflowFacade.init()
-
-                        // Initialize agent workflow
-                        this.initializeAgentWorkflow()
-                    }
+                    // Workflow is now initialized in startCall() method
                 }
             })
         )
@@ -546,6 +545,14 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                 )
             }
 
+            // Initialize workflow immediately after call starts
+            if (!this.workflowInitialized) {
+                console.log('🎯 VKYC-SESSION: Initializing workflow...')
+                this.workflowInitialized = true
+                this.workflowFacade.init()
+                this.initializeAgentWorkflow()
+            }
+
             // Pass health check data to join-agent API
             if (this.healthCheckData) {
                 console.log(
@@ -616,9 +623,20 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             this.layoutState.captureType = 'QUESTIONNAIRE'
         }
 
-        // Questionnaire steps are handled by the agent
-        // The agent will ask questions one by one and handle responses
-        // No UI interaction needed - agent manages the conversation
+        // Start the questionnaire questions
+        const questions = step.data?.questions || []
+        if (questions.length > 0) {
+            console.log(
+                '🎯 VKYC-SESSION: Starting questionnaire with',
+                questions.length,
+                'questions'
+            )
+            this.agentWorkflowService.startQuestionnaire(questions)
+        } else {
+            console.warn(
+                '🎯 VKYC-SESSION: No questions found in questionnaire step'
+            )
+        }
     }
 
     private startAutoCaptureTimeout(step: any): void {
@@ -826,6 +844,8 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                 )
             }
 
+            // Analysis data is now integrated into KYC journey progress accordion
+
             // Reset component state
             this.workflowInitialized = false
             this.agentLoadingInitialized = false
@@ -859,8 +879,16 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     private showError(message: string): void {
         this.errorMessage = message
-        this.showErrorModal = true
+        // Use setTimeout to avoid ExpressionChangedAfterItHasBeenCheckedError
+        setTimeout(() => {
+            this.showErrorModal = true
+            this.cdRef.detectChanges()
+        }, 0)
     }
+
+    // loadAnalysisData method removed - analysis data is now integrated into KYC journey progress
+
+    // Helper methods removed - analysis data is now integrated into KYC journey progress
 
     // Image manipulator event handlers
     async onImageProcessed(response: any): Promise<void> {
@@ -1278,8 +1306,24 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     onImageManipulatorError(error: string): void {
         console.error('🎯 VKYC-SESSION: Image manipulator error:', error)
-        this.showErrorModal = true
-        this.errorMessage = error
+
+        // Don't show error modal for certain types of errors
+        if (
+            error.includes('Sub action ID is required') ||
+            error.includes('No valid step ID found')
+        ) {
+            console.warn(
+                '🎯 VKYC-SESSION: Suppressing error modal for step ID error'
+            )
+            return
+        }
+
+        // Use setTimeout to avoid ExpressionChangedAfterItHasBeenCheckedError
+        setTimeout(() => {
+            this.showErrorModal = true
+            this.errorMessage = error
+            this.cdRef.detectChanges()
+        }, 0)
     }
 
     onImageManipulatorClose(): void {
@@ -1287,6 +1331,8 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         this.showImageManipulator = false
         this.capturedImageBlob = null
         this.capturedImageBase64 = ''
+
+        // Analysis data is now integrated into the KYC journey progress accordion
     }
 
     onImageManipulatorRetake(): void {
@@ -1305,13 +1351,44 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     }
 
     getImageManipulatorConfig(): any {
+        // Get the current step
+        const currentStep = this.layoutState?.currentStep
+
+        // Determine capture type from step data
+        const captureType =
+            currentStep?.data?.captureType ||
+            currentStep?.data?.frame_capture_type ||
+            currentStep?.frame_capture_type ||
+            this.layoutState?.captureType
+
+        // Get step ID from multiple possible sources
+        const stepId =
+            currentStep?.id ||
+            currentStep?.sub_action_ref ||
+            currentStep?.data?.sub_action_ref ||
+            'unknown-step'
+
+        console.log('🎯 VKYC-SESSION: Image manipulator config:', {
+            currentStep: currentStep,
+            captureType: captureType,
+            stepId: stepId,
+            layoutState: this.layoutState,
+        })
+
+        // Validate that we have a step ID
+        if (!stepId || stepId === 'unknown-step') {
+            console.error(
+                '🎯 VKYC-SESSION: No valid step ID found for image manipulator'
+            )
+            throw new Error(
+                'No valid step ID found. Please ensure you are in an active capture step.'
+            )
+        }
+
         return {
             base64: this.capturedImageBase64,
-            subActionId: this.layoutState?.currentStep?.id || '',
-            mode:
-                this.layoutState?.captureType === 'FACE_CAPTURE'
-                    ? 'selfie'
-                    : 'document',
+            subActionId: stepId,
+            mode: captureType === 'FACE_CAPTURE' ? 'selfie' : 'document',
             frontImage: this.capturedImageBlob || new Blob(),
         }
     }
@@ -1353,14 +1430,40 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     onCapturePhoto(): void {
         console.log('🎯 VKYC-SESSION: Capture photo requested')
 
-        // Check if we're on a frame capture step
+        // Check if we have a valid current step
         const currentStep = this.layoutState?.currentStep
-        if (!currentStep || currentStep.type !== 'FRAME_CAPTURE') {
+        if (!currentStep) {
             console.warn(
-                '🎯 VKYC-SESSION: Not on a frame capture step, ignoring capture request'
+                '🎯 VKYC-SESSION: No current step available for capture'
             )
+
+            // Try to initialize workflow if not already done
+            if (!this.workflowInitialized) {
+                console.log(
+                    '🎯 VKYC-SESSION: Attempting to initialize workflow...'
+                )
+                this.workflowInitialized = true
+                this.workflowFacade.init()
+                this.initializeAgentWorkflow()
+
+                // Wait a moment for workflow to initialize, then try again
+                setTimeout(() => {
+                    if (this.layoutState?.currentStep) {
+                        console.log(
+                            '🎯 VKYC-SESSION: Workflow initialized, retrying capture...'
+                        )
+                        this.onCapturePhoto()
+                    } else {
+                        this.showErrorNotification(
+                            'Workflow is still initializing. Please wait a moment and try again.'
+                        )
+                    }
+                }, 1000)
+                return
+            }
+
             this.showErrorNotification(
-                'Please wait for the capture step to begin'
+                'No active step available. Please wait for the workflow to initialize.'
             )
             return
         }
@@ -1414,8 +1517,13 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     ): void {
         // TODO: Implement proper notification system
         // For now, we'll use the existing error modal
-        this.showErrorModal = true
         this.errorMessage = message
+
+        // Use setTimeout to avoid ExpressionChangedAfterItHasBeenCheckedError
+        setTimeout(() => {
+            this.showErrorModal = true
+            this.cdRef.detectChanges()
+        }, 0)
 
         if (type === 'error') {
             console.error('🎯 VKYC-SESSION: Error notification:', message)
@@ -1433,16 +1541,26 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         this.subscriptions.add(
             this.workflowFacade.state$.subscribe((state: any) => {
                 if (state?.steps && state.steps.length > 0) {
+                    console.log(
+                        '🎯 VKYC-SESSION: Initializing agent workflow with steps:',
+                        state.steps
+                    )
                     // Initialize agent workflow with the steps
                     this.agentWorkflowService.initializeAgentWorkflow(
                         state.steps
                     )
 
                     // Update layout state with workflow steps and current step
+                    const currentStep = state.currentStep
+                    const captureType =
+                        currentStep?.data?.captureType ||
+                        currentStep?.data?.frame_capture_type ||
+                        currentStep?.frame_capture_type
+
                     this.updateLayoutState({
                         workflowSteps: state.steps,
-                        currentStep: state.currentStep,
-                        captureType: state.currentStep?.data?.captureType,
+                        currentStep: currentStep,
+                        captureType: captureType,
                     })
 
                     console.log(
@@ -1457,6 +1575,10 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         this.subscriptions.add(
             this.agentWorkflowService.workflowState$.subscribe(
                 (workflowState) => {
+                    console.log(
+                        '🎯 VKYC-SESSION: Agent workflow state updated:',
+                        workflowState
+                    )
                     // Update layout state with current prompt
                     this.updateLayoutState({
                         currentPrompt: workflowState.currentPrompt,
@@ -1492,6 +1614,23 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             event.questionId,
             event.response
         )
+
+        // If this is a questionnaire step, also handle it in the questionnaire handler
+        const currentStep = this.layoutState?.currentStep
+        if (currentStep?.type === 'QUESTIONNAIRE') {
+            // Get the questionnaire handler and submit the answer
+            const questionnaireHandler =
+                this.stepHandlerRegistry.getHandler(currentStep)
+            if (
+                questionnaireHandler &&
+                'answerQuestion' in questionnaireHandler
+            ) {
+                ;(questionnaireHandler as any).answerQuestion(
+                    event.questionId,
+                    event.response
+                )
+            }
+        }
     }
 
     onAgentResponseUpdated(event: {
@@ -1524,6 +1663,165 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             )
             // For other step types, just proceed to next step
             this.workflowFacade.completeCurrentStep()
+        }
+    }
+
+    onNextStep(): void {
+        console.log('🎯 VKYC-SESSION: Next step requested from layout')
+        const currentStep = this.layoutState?.currentStep
+
+        if (!currentStep) {
+            // Start the workflow if no current step
+            console.log('🎯 VKYC-SESSION: Starting workflow')
+            if (!this.workflowInitialized) {
+                this.workflowInitialized = true
+                this.workflowFacade.init()
+                this.initializeAgentWorkflow()
+            }
+            return
+        }
+
+        // For manual flow, allow user to proceed with button clicks
+        // Only validate for image capture steps that require actual completion
+        if (
+            currentStep.type === 'FRAME_CAPTURE' &&
+            !this.isCurrentStepCompleted(currentStep)
+        ) {
+            this.showErrorNotification(
+                'Please complete the current step before proceeding.'
+            )
+            return
+        }
+
+        // Handle different step types
+        switch (currentStep.type) {
+            case 'QUESTIONNAIRE':
+                // For questionnaire, mark as completed and move to next step
+                console.log(
+                    '🎯 VKYC-SESSION: Completing questionnaire step manually'
+                )
+                this.workflowFacade.completeCurrentStep()
+                break
+            case 'FRAME_CAPTURE':
+                // For image capture, the camera will be opened by the layout component
+                console.log(
+                    '🎯 VKYC-SESSION: Image capture step - camera will be opened'
+                )
+                break
+            default:
+                // For other steps, just complete and move to next
+                console.log(
+                    '🎯 VKYC-SESSION: Completing step:',
+                    currentStep.type
+                )
+                this.workflowFacade.completeCurrentStep()
+                break
+        }
+    }
+
+    onQuestionnaireCompleted(answers: { [key: string]: string }): void {
+        console.log(
+            '🎯 VKYC-SESSION: Questionnaire completed with answers:',
+            answers
+        )
+
+        try {
+            // Store the questionnaire completion in session storage
+            this.sessionStorage.saveStepData({
+                stepId: 'questionnaire-answers',
+                stepType: 'questionnaire',
+                data: answers,
+                timestamp: Date.now(),
+                success: true,
+            })
+
+            // Complete the questionnaire step manually
+            this.workflowFacade.completeCurrentStep()
+
+            console.log(
+                '🎯 VKYC-SESSION: Questionnaire step completed manually, moving to next step'
+            )
+        } catch (error) {
+            console.error(
+                '🎯 VKYC-SESSION: Failed to complete questionnaire:',
+                error
+            )
+            this.showErrorNotification(
+                'Failed to complete questionnaire. Please try again.'
+            )
+        }
+    }
+
+    onStartImageCapture(): void {
+        console.log('🎯 VKYC-SESSION: Start image capture requested')
+        this.onCapturePhoto()
+    }
+
+    onFinishKyc(): void {
+        console.log('🎯 VKYC-SESSION: Finish KYC requested')
+
+        // Validate that all required steps are completed
+        if (this.validateAllStepsCompleted()) {
+            this.endSession()
+        } else {
+            this.showErrorNotification(
+                'Please complete all required steps before finishing.'
+            )
+        }
+    }
+
+    private validateAllStepsCompleted(): boolean {
+        try {
+            const currentState = this.workflowFacade.state$.value
+            if (!currentState?.steps) return false
+
+            // Check if all required steps are completed
+            const requiredSteps = currentState.steps.filter(
+                (step) =>
+                    step.type === 'QUESTIONNAIRE' ||
+                    (step.type === 'FRAME_CAPTURE' && !step.subAction.optional)
+            )
+
+            return requiredSteps.every(
+                (step) =>
+                    step.status === 'completed' ||
+                    this.sessionStorage.getStepData(step.id)?.success === true
+            )
+        } catch (error) {
+            console.error('🎯 VKYC-SESSION: Error validating steps:', error)
+            return false
+        }
+    }
+
+    private isCurrentStepCompleted(step: any): boolean {
+        try {
+            // Check if step is marked as completed
+            if (step.status === 'completed') return true
+
+            // Check if step has analysis results (for image capture steps)
+            if (step.analysisResult) return true
+
+            // Check if step data is saved in session storage
+            const stepData = this.sessionStorage.getStepData(step.id)
+            if (stepData?.success === true) return true
+
+            // For questionnaire, check if answers are saved
+            if (step.type === 'QUESTIONNAIRE') {
+                const questionnaireData = this.sessionStorage.getStepData(
+                    'questionnaire-answers'
+                )
+                return questionnaireData?.success === true
+            }
+
+            // For manual flow, allow progression if user explicitly clicks next
+            // This makes the flow more user-controlled
+            return false
+        } catch (error) {
+            console.error(
+                '🎯 VKYC-SESSION: Error checking step completion:',
+                error
+            )
+            return false
         }
     }
 

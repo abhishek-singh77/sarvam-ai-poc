@@ -1,0 +1,114 @@
+/* Analysis Results Styles */
+.analysis-results {
+    @apply mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200;
+}
+
+.analysis-header {
+    @apply mb-4;
+}
+
+.analysis-title {
+    @apply flex items-center gap-2 text-lg font-semibold text-gray-900;
+}
+
+.analysis-content {
+    @apply space-y-4;
+}
+
+.analysis-summary {
+    @apply p-3 bg-blue-50 border border-blue-200 rounded-lg;
+}
+
+.summary-text {
+    @apply text-sm font-medium text-blue-800;
+}
+
+.analysis-details {
+    @apply space-y-4;
+}
+
+.detail-grid {
+    @apply space-y-3;
+}
+
+.detail-section {
+    @apply p-3 bg-white border border-gray-200 rounded-lg;
+}
+
+.detail-title {
+    @apply text-sm font-semibold text-gray-900 mb-2;
+}
+
+.detail-items {
+    @apply grid grid-cols-1 sm:grid-cols-2 gap-2;
+}
+
+.detail-item {
+    @apply flex justify-between items-center text-sm;
+}
+
+.detail-label {
+    @apply font-medium text-gray-600;
+}
+
+.detail-value {
+    @apply font-semibold text-gray-900;
+}
+
+.detail-value.success {
+    @apply text-green-600;
+}
+
+.detail-value.error {
+    @apply text-red-600;
+}
+
+.recommendations {
+    @apply p-3 bg-yellow-50 border border-yellow-200 rounded-lg;
+}
+
+.recommendations-title {
+    @apply flex items-center gap-2 text-sm font-semibold text-yellow-800 mb-2;
+}
+
+.recommendations-list {
+    @apply space-y-1;
+}
+
+.recommendation-item {
+    @apply text-sm text-yellow-700;
+}
+
+.analysis-actions {
+    @apply flex gap-3 mt-4;
+}
+
+.analysis-actions .primary-button,
+.analysis-actions .secondary-button {
+    @apply flex-1;
+}
+
+/* Button Styles */
+.primary-button {
+    @apply bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors duration-200;
+}
+
+.secondary-button {
+    @apply bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors duration-200;
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+    .detail-items {
+        @apply grid-cols-1;
+    }
+
+    .analysis-actions {
+        @apply flex-col space-y-2;
+    }
+
+    .analysis-actions .primary-button,
+    .analysis-actions .secondary-button {
+        @apply w-full;
+    }
+}

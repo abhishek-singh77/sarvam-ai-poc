@@ -24,6 +24,21 @@ from videosdk.plugins.simli import SimliAvatar, SimliConfig  # VideoSDK docs: ht
 
 logger = get_logger(__name__)
 
+# Import patched Simli plugin with rate-limited logging
+try:
+    from patches.simli_patch import SimliAvatar, SimliConfig
+    USE_PATCHED_SIMLI = True
+    logger.info("🎭 Using patched Simli plugin with rate-limited logging")
+except ImportError:
+    from videosdk.plugins.simli import SimliAvatar, SimliConfig
+    USE_PATCHED_SIMLI = False
+    logger.info("🎭 Using standard Simli plugin")
+
+# Re-enable Simli with proper implementation
+DISABLE_SIMLI = False
+if not DISABLE_SIMLI:
+    logger.info("🎭 Simli Avatar enabled with proper implementation")
+
 class KYCVoiceAgent(Agent):
     """
     KYC Voice Agent that helps with identity verification process using voice interaction
@@ -67,7 +82,7 @@ class KYCVoiceAgent(Agent):
             base_instructions = """
         You are a professional KYC (Know Your Customer) Voice Assistant. Your role is to guide users through a smooth identity verification process using natural conversation.
 
-        IMPORTANT: When you first start, you MUST begin with this exact greeting: "Hello! I'm your KYC assistant. Welcome to your identity verification session. I'll guide you through a few simple steps to complete your verification. We'll start by taking a clear photo of your face, then capture your identity documents, and finally ask you a few verification questions. Please ensure you have good lighting and your documents ready. Let's begin with the first step."
+        IMPORTANT: When you first start, you MUST begin with this exact greeting: "Hello! I'm your KYC assistant. Welcome to your identity verification session. I'll guide you through a few simple steps to complete your verification. We'll start by asking you a few verification questions, then take a clear photo of your face, and finally capture your identity documents. Please ensure you have good lighting and your documents ready. Let's begin with the first step."
 
         CORE RESPONSIBILITIES:
         1. Guide users through each verification step conversationally
@@ -148,9 +163,9 @@ class KYCVoiceAgent(Agent):
                 # Fallback if no workflow steps
                 fallback_context = "\n\n        WORKFLOW CONTEXT:\n"
                 fallback_context += "        No specific workflow steps provided. Use your general KYC knowledge to guide the user through:\n"
+                fallback_context += "        - Basic questionnaire about personal information\n"
                 fallback_context += "        - Face capture for identity verification\n"
                 fallback_context += "        - Document capture (PAN card, Aadhaar, etc.)\n"
-                fallback_context += "        - Basic questionnaire about personal information\n"
                 
                 return base_instructions + fallback_context
                 
@@ -290,7 +305,32 @@ class KYCVoiceAgent(Agent):
                             "description": "Keep your PAN Card ready before starting the process",
                             "sub_action_step": "pre"
                         },
-                        # In-call steps (handled by agent)
+                        # In-call steps (handled by agent) - Questionnaire moved to first position
+                        {
+                            "type": "QUESTIONNAIRE",
+                            "title": "QUESTIONNAIRE",
+                            "description": "Questions",
+                            "sub_action_step": "in_call",
+                            "questionnaire": {
+                                "questions": [
+                                    {
+                                        "title": "What is your name as per the document?",
+                                        "input_type": "text",
+                                        "mandatory": True
+                                    },
+                                    {
+                                        "title": "What is your address as per the document?",
+                                        "input_type": "text",
+                                        "mandatory": True
+                                    },
+                                    {
+                                        "title": "What is your monthly income?",
+                                        "input_type": "text",
+                                        "mandatory": True
+                                    }
+                                ]
+                            }
+                        },
                         {
                             "type": "FRAME_CAPTURE",
                             "title": "Customer Selfie",
@@ -319,31 +359,6 @@ class KYCVoiceAgent(Agent):
                             "frame_capture_type": "DOCUMENT_CAPTURE",
                             "strict_validation_type": "aadhaar",
                             "sub_action_name": "Details from ID Proof"
-                        },
-                        {
-                            "type": "QUESTIONNAIRE",
-                            "title": "QUESTIONNAIRE",
-                            "description": "Questions",
-                            "sub_action_step": "in_call",
-                            "questionnaire": {
-                                "questions": [
-                                    {
-                                        "title": "What is your name as per the document?",
-                                        "input_type": "text",
-                                        "mandatory": True
-                                    },
-                                    {
-                                        "title": "What is your address as per the document?",
-                                        "input_type": "text",
-                                        "mandatory": True
-                                    },
-                                    {
-                                        "title": "What is your monthly income?",
-                                        "input_type": "text",
-                                        "mandatory": True
-                                    }
-                                ]
-                            }
                         }
                     ]
                 }
@@ -630,9 +645,12 @@ class KYCVoiceAgent(Agent):
         question = questions[question_index]
         question_text = question.get('title', f'Question {question_index + 1}')
         
-        # Ask the question
+        # Ask the question via voice
         await self.session.say(f"Question {question_index + 1}: {question_text}")
         logger.info(f"🎯 AGENT: Asked question {question_index + 1}: {question_text}")
+        
+        # Send question to frontend for display
+        await self._send_question_to_frontend(question, question_index, questions)
         
         # Store current question context for when user responds
         self.current_question_context = {
@@ -641,6 +659,29 @@ class KYCVoiceAgent(Agent):
             'current_index': question_index,
             'question': question
         }
+    
+    async def _send_question_to_frontend(self, question: dict, question_index: int, all_questions: list):
+        """Send question to frontend for display"""
+        try:
+            # Create a structured message that the frontend can parse
+            question_data = {
+                'type': 'questionnaire_question',
+                'question': question,
+                'questionIndex': question_index,
+                'totalQuestions': len(all_questions),
+                'questionId': f'question_{question_index}',
+                'timestamp': int(time.time() * 1000)
+            }
+            
+            # Send via session message (this will be received by the frontend)
+            if hasattr(self, 'session') and self.session:
+                # Use a special message format that the frontend can detect
+                message = f"[QUESTIONNAIRE_QUESTION]{json.dumps(question_data)}[/QUESTIONNAIRE_QUESTION]"
+                await self.session.say(message)
+                logger.info(f"🎯 AGENT: Sent question to frontend: {question.get('title', 'Unknown')}")
+            
+        except Exception as e:
+            logger.error(f"🎯 AGENT: Error sending question to frontend: {e}")
     
     async def _complete_questionnaire(self, step_id: str):
         """Complete the questionnaire and submit answers"""
@@ -1036,7 +1077,7 @@ class ProperAgentService:
             logger.info("🔑 Using Google API key for RealTimePipeline")
             
             # Use provided Simli Avatar or initialize if not provided
-            if simli_avatar is None and self.settings.simli_api_key and self.settings.simli_avatar_id:
+            if not DISABLE_SIMLI and simli_avatar is None and self.settings.simli_api_key and self.settings.simli_avatar_id:
                 try:
                     simli_config = SimliConfig(
                         apiKey=self.settings.simli_api_key,
@@ -1048,13 +1089,17 @@ class ProperAgentService:
                     logger.warning(f"⚠️ Failed to initialize Simli Avatar for RealTimePipeline: {e}")
                     logger.info("🎭 Continuing with voice-only RealTimePipeline")
                     simli_avatar = None
+            elif DISABLE_SIMLI:
+                logger.info("🎭 Simli Avatar disabled for RealTimePipeline - using voice-only mode")
+            else:
+                logger.info("🎭 No Simli Avatar available for RealTimePipeline - using voice-only mode")
             
             # Initialize Google Gemini Realtime model with Indian English
             model = GeminiRealtime(
                 model="gemini-2.0-flash-live-001",
                 api_key=self.settings.google_api_key,
                 config=GeminiLiveConfig(
-                    voice="Orus",  # Natural-sounding voice  #Orus for male Leda for female
+                    voice="Leda",  # Natural-sounding voice  #Orus for male Leda for female
                     response_modalities=["AUDIO"],  # Audio-only for faster processing
                     temperature=0.1,  # Low temperature for consistent responses
                     max_output_tokens=500,  # Increased from 200 to allow longer welcome messages
@@ -1479,19 +1524,29 @@ class ProperAgentService:
             turn_detector = TurnDetector(threshold=0.3)  # Lower threshold for faster turn detection
             denoise = RNNoise()
             
-            # Initialize Simli Avatar following working repository pattern
+            # Initialize Simli Avatar with enhanced error handling
             simli_avatar = None
             simli_api_key = self.settings.simli_api_key
             simli_avatar_id = self.settings.simli_avatar_id
-            logger.info(f"🎭 Using default Simli avatar ID: {simli_api_key}, {simli_avatar_id}")
-            # Check if we have a valid Simli API key
-            simli_config = SimliConfig(
-                apiKey=simli_api_key,
-                faceId=simli_avatar_id,
-            )
-
-            # 2. Create a SimliAvatar instance
-            simli_avatar = SimliAvatar(config=simli_config)
+            logger.info(f"🎭 Using Simli avatar ID: {simli_api_key}, {simli_avatar_id}")
+            
+            # Initialize Simli Avatar if not disabled and credentials are available
+            if not DISABLE_SIMLI and simli_api_key and simli_avatar_id:
+                try:
+                    simli_config = SimliConfig(
+                        apiKey=simli_api_key,
+                        faceId=simli_avatar_id,
+                    )
+                    simli_avatar = SimliAvatar(config=simli_config)
+                    logger.info("🎭 Simli Avatar initialized successfully")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to initialize Simli Avatar: {e}")
+                    logger.info("🎭 Continuing without avatar")
+                    simli_avatar = None
+            elif DISABLE_SIMLI:
+                logger.info("🎭 Simli Avatar disabled - continuing without avatar")
+            else:
+                logger.info("🎭 No Simli API credentials provided - continuing without avatar")
 
             # Create the cascading pipeline (following working repository pattern)
             pipeline_kwargs = {
@@ -1503,15 +1558,16 @@ class ProperAgentService:
                 "denoise": denoise
             }
             
-            # Add avatar to pipeline if available
-            if simli_avatar is not None:
+            # Add avatar to pipeline if available and not disabled
+            if not DISABLE_SIMLI and simli_avatar is not None:
                 pipeline_kwargs["avatar"] = simli_avatar
                 logger.info("🎭 Avatar included in pipeline")
             else:
-                logger.info("🎭 No avatar - voice-only pipeline")
+                logger.info("🎭 No avatar - voice-only pipeline (Simli disabled or unavailable)")
             
-            # Create pipeline based on configuration
-            pipeline = self._create_pipeline(pipeline_kwargs, simli_avatar)
+            # Create pipeline based on configuration (no avatar if disabled)
+            avatar_for_pipeline = simli_avatar if not DISABLE_SIMLI else None
+            pipeline = self._create_pipeline(pipeline_kwargs, avatar_for_pipeline)
             
             # Handle fallback if RealTimePipeline fails
             if pipeline is None:
@@ -1557,7 +1613,7 @@ class ProperAgentService:
                 elif "422" in error_str and "simli" in error_str:
                     logger.warning("🎯 Simli Avatar connection error - this is expected if no valid API key is provided")
                     logger.info("🎯 Agent will continue in voice-only mode")
-                elif "simli" in error_str:
+                elif "simli" in error_str or "nonetype" in error_str or "replace" in error_str:
                     logger.warning("🎯 Simli Avatar connection error - continuing without avatar")
                     logger.info("🎯 Agent will continue in voice-only mode")
                 else:

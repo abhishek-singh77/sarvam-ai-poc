@@ -3,6 +3,7 @@ import { Observable, BehaviorSubject, of } from 'rxjs'
 import { WorkflowStep } from '../../services/workflow-runner.service'
 import { StepHandler, StepHandlerResult } from './step-handler.interface'
 import { SubmissionService, QuestionnairePayload } from '../submission.service'
+import { AgentWorkflowService } from '../agent-workflow.service'
 
 @Injectable({
     providedIn: 'root',
@@ -13,7 +14,10 @@ export class QuestionnaireHandler implements StepHandler {
     private answers: { [questionId: string]: string } = {}
     private isListening = false
 
-    constructor(private submissionService: SubmissionService) {}
+    constructor(
+        private submissionService: SubmissionService,
+        private agentWorkflowService: AgentWorkflowService
+    ) {}
 
     canHandle(step: WorkflowStep): boolean {
         return step.type === 'QUESTIONNAIRE'
@@ -37,6 +41,12 @@ export class QuestionnaireHandler implements StepHandler {
                 error: 'No questions found',
             })
         }
+
+        // Trigger agent workflow service to show the first question
+        this.agentWorkflowService.askQuestion(questions[0], 0, questions)
+        console.log(
+            '🎯 QUESTIONNAIRE-HANDLER: Triggered agent workflow to show first question'
+        )
 
         return of({
             success: true,
@@ -117,6 +127,36 @@ export class QuestionnaireHandler implements StepHandler {
             questionId,
             answer
         )
+
+        // Move to next question if this was the current question
+        if (!this.currentStep) return
+
+        const questions = this.currentStep.data?.questions || []
+        const currentQuestion = questions[this.currentQuestionIndex]
+
+        if (currentQuestion && questionId === currentQuestion.title) {
+            this.currentQuestionIndex++
+
+            // If there are more questions, show the next one
+            if (this.currentQuestionIndex < questions.length) {
+                const nextQuestion = questions[this.currentQuestionIndex]
+                this.agentWorkflowService.askQuestion(
+                    nextQuestion,
+                    this.currentQuestionIndex,
+                    questions
+                )
+                console.log(
+                    '🎯 QUESTIONNAIRE-HANDLER: Showing next question:',
+                    nextQuestion.title
+                )
+            } else {
+                // All questions answered, complete the questionnaire
+                console.log(
+                    '🎯 QUESTIONNAIRE-HANDLER: All questions answered, completing questionnaire'
+                )
+                this.complete(this.currentStep, this.answers).subscribe()
+            }
+        }
     }
 
     /**

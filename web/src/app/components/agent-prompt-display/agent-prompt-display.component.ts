@@ -41,14 +41,23 @@ import {
             </div>
 
             <!-- Proceed Button for Step Instructions -->
-            <div *ngIf="currentPrompt?.showProceedButton && currentPrompt?.type === 'step_instruction'" 
-                 class="proceed-button-container">
-                <button 
-                    (click)="onProceedClick()"
-                    class="proceed-button">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                              d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+            <div
+                *ngIf="
+                    currentPrompt?.showProceedButton &&
+                    currentPrompt?.type === 'step_instruction'
+                "
+                class="proceed-button-container">
+                <button (click)="onProceedClick()" class="proceed-button">
+                    <svg
+                        class="w-5 h-5 mr-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
                     </svg>
                     {{ currentPrompt?.proceedButtonText || 'Proceed' }}
                 </button>
@@ -127,6 +136,22 @@ import {
                         Submit
                     </button>
                 </div>
+            </div>
+
+            <!-- Start Questions Button (fallback) -->
+            <div
+                *ngIf="
+                    workflowState?.currentStep?.type === 'QUESTIONNAIRE' &&
+                    !currentQuestion &&
+                    !isWaitingForResponse
+                "
+                class="start-questions-container">
+                <div class="start-questions-prompt">
+                    <strong>Ready to start the questionnaire?</strong>
+                </div>
+                <button (click)="startQuestions()" class="start-questions-btn">
+                    Start Questions
+                </button>
             </div>
         </div>
     `,
@@ -326,6 +351,36 @@ import {
                 box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
             }
 
+            .start-questions-container {
+                background: #fef3c7;
+                border: 1px solid #f59e0b;
+                border-radius: 0.75rem;
+                padding: 1rem;
+                margin-top: 1rem;
+                text-align: center;
+            }
+
+            .start-questions-prompt {
+                color: #92400e;
+                font-size: 0.875rem;
+                margin-bottom: 0.75rem;
+            }
+
+            .start-questions-btn {
+                background: #f59e0b;
+                color: white;
+                border: none;
+                border-radius: 0.375rem;
+                padding: 0.5rem 1rem;
+                font-size: 0.875rem;
+                cursor: pointer;
+                transition: background-color 0.2s ease;
+            }
+
+            .start-questions-btn:hover {
+                background: #d97706;
+            }
+
             @keyframes slideIn {
                 from {
                     opacity: 0;
@@ -373,6 +428,24 @@ export class AgentPromptDisplayComponent implements OnInit, OnDestroy {
                 this.customerResponses = state.customerResponses
                 this.currentQuestion = state.currentQuestion
                 this.isWaitingForResponse = state.isWaitingForResponse
+
+                // Fallback: If no current question but we have a questionnaire step, show the first question
+                if (
+                    !this.currentQuestion &&
+                    state.currentStep?.type === 'QUESTIONNAIRE'
+                ) {
+                    const questions = state.currentStep?.data?.questions || []
+                    if (questions.length > 0 && !this.currentPrompt) {
+                        console.log(
+                            '🎯 AGENT-PROMPT: Fallback - showing first question from step data'
+                        )
+                        this.agentWorkflowService.askQuestion(
+                            questions[0],
+                            0,
+                            questions
+                        )
+                    }
+                }
             })
         )
     }
@@ -433,6 +506,27 @@ export class AgentPromptDisplayComponent implements OnInit, OnDestroy {
     onProceedClick(): void {
         console.log('🎯 AGENT-PROMPT: Proceed button clicked')
         this.proceed.emit()
+    }
+
+    startQuestions(): void {
+        console.log('🎯 AGENT-PROMPT: Start questions button clicked')
+
+        if (this.workflowState?.currentStep?.type === 'QUESTIONNAIRE') {
+            const questions =
+                this.workflowState.currentStep?.data?.questions || []
+            if (questions.length > 0) {
+                console.log(
+                    '🎯 AGENT-PROMPT: Starting questionnaire with',
+                    questions.length,
+                    'questions'
+                )
+                this.agentWorkflowService.startQuestionnaire(questions)
+            } else {
+                console.warn(
+                    '🎯 AGENT-PROMPT: No questions found in questionnaire step'
+                )
+            }
+        }
     }
 
     private updateCurrentTime(): void {

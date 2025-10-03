@@ -18,7 +18,11 @@
     (capturePhoto)="onCapturePhoto()"
     (agentResponseSubmitted)="onAgentResponseSubmitted($event)"
     (agentResponseUpdated)="onAgentResponseUpdated($event)"
-    (agentProceed)="onAgentProceed()">
+    (agentProceed)="onAgentProceed()"
+    (nextStep)="onNextStep()"
+    (questionnaireCompleted)="onQuestionnaireCompleted($event)"
+    (startImageCapture)="onStartImageCapture()"
+    (finishKyc)="onFinishKyc()">
 </app-vkyc-session-layout>
 
 <!-- Image Manipulator Modal -->
@@ -53,6 +57,8 @@
         </lib-image-manipulator>
     </div>
 </div>
+
+<!-- Analysis data is now integrated into the KYC journey progress accordion -->
 
 <!-- Error Modal -->
 <div

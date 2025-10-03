@@ -200,17 +200,19 @@
                 (itemToggled)="onAccordionItemToggled($event)">
                 <ng-template #inCallContentTemplate let-item>
                     <div class="space-y-3">
-                        <!-- Image Capture Data -->
+                        <!-- Image Capture Data with Analysis Results -->
                         <div
                             *ngIf="
                                 item.data?.sessionData?.fullImageData ||
-                                item.data?.sessionData?.imageData
+                                item.data?.sessionData?.imageData ||
+                                item.data?.sessionData?.analysisResult
                             ">
                             <h6
                                 class="text-xs font-semibold text-gray-700 mb-2">
-                                Captured Image:
+                                Captured Image & Analysis:
                             </h6>
-                            <div class="space-y-2 text-xs text-gray-600">
+                            <div class="space-y-3 text-xs text-gray-600">
+                                <!-- Captured Image -->
                                 <div
                                     *ngIf="
                                         item.data?.sessionData?.fullImageData
@@ -223,14 +225,302 @@
                                         alt="Captured Image"
                                         class="w-full max-w-xs rounded border shadow-sm" />
                                 </div>
-                                <div *ngIf="item.data?.sessionData?.quality">
+
+                                <!-- Analysis Results -->
+                                <div
+                                    *ngIf="
+                                        item.data?.sessionData?.analysisResult
+                                    ">
+                                    <h6
+                                        class="text-xs font-semibold text-gray-700 mb-2 block">
+                                        Analysis Results:
+                                    </h6>
+
+                                    <!-- Face Analysis -->
+                                    <div
+                                        *ngIf="
+                                            item.data?.sessionData
+                                                ?.captureType ===
+                                                'FACE_CAPTURE' &&
+                                            item.data?.sessionData
+                                                ?.parsedAnalysis
+                                        "
+                                        class="space-y-2">
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <strong>Face Detected:</strong>
+                                                {{
+                                                    item.data.sessionData
+                                                        .parsedAnalysis
+                                                        .face_detected
+                                                        ? 'Yes'
+                                                        : 'No'
+                                                }}
+                                            </div>
+                                            <div>
+                                                <strong>Quality:</strong>
+                                                {{
+                                                    item.data.sessionData
+                                                        .parsedAnalysis
+                                                        .image_quality ||
+                                                        'Unknown'
+                                                }}
+                                            </div>
+                                            <div>
+                                                <strong>Lighting:</strong>
+                                                {{
+                                                    item.data.sessionData
+                                                        .parsedAnalysis
+                                                        .lighting_quality ||
+                                                        'Unknown'
+                                                }}
+                                            </div>
+                                            <div>
+                                                <strong>Confidence:</strong>
+                                                {{
+                                                    (
+                                                        item.data.sessionData
+                                                            .parsedAnalysis
+                                                            .confidence_score *
+                                                        100
+                                                    ).toFixed(1) || 'Unknown'
+                                                }}%
+                                            </div>
+                                            <div>
+                                                <strong>Eyes Open:</strong>
+                                                {{
+                                                    item.data.sessionData
+                                                        .parsedAnalysis
+                                                        .eyes_open
+                                                        ? 'Yes'
+                                                        : 'No'
+                                                }}
+                                            </div>
+                                            <div>
+                                                <strong
+                                                    >Looking at Camera:</strong
+                                                >
+                                                {{
+                                                    item.data.sessionData
+                                                        .parsedAnalysis
+                                                        .looking_at_camera
+                                                        ? 'Yes'
+                                                        : 'No'
+                                                }}
+                                            </div>
+                                        </div>
+
+                                        <!-- Recommendations -->
+                                        <div
+                                            *ngIf="
+                                                item.data.sessionData
+                                                    .parsedAnalysis
+                                                    .recommendations?.length > 0
+                                            "
+                                            class="mt-2">
+                                            <strong>Recommendations:</strong>
+                                            <ul
+                                                class="list-disc list-inside space-y-1 mt-1">
+                                                <li
+                                                    *ngFor="
+                                                        let rec of item.data
+                                                            .sessionData
+                                                            .parsedAnalysis
+                                                            .recommendations
+                                                    ">
+                                                    {{ rec }}
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    <!-- Document Analysis -->
+                                    <div
+                                        *ngIf="
+                                            item.data?.sessionData
+                                                ?.captureType ===
+                                                'DOCUMENT_CAPTURE' &&
+                                            item.data?.sessionData
+                                                ?.parsedAnalysis
+                                        "
+                                        class="space-y-2">
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <strong
+                                                    >Document Detected:</strong
+                                                >
+                                                {{
+                                                    item.data.sessionData
+                                                        .parsedAnalysis
+                                                        .document_detected
+                                                        ? 'Yes'
+                                                        : 'No'
+                                                }}
+                                            </div>
+                                            <div>
+                                                <strong>Document Type:</strong>
+                                                {{
+                                                    item.data.sessionData
+                                                        .parsedAnalysis
+                                                        .document_type ||
+                                                        'Unknown'
+                                                }}
+                                            </div>
+                                            <div>
+                                                <strong>Image Quality:</strong>
+                                                {{
+                                                    item.data.sessionData
+                                                        .parsedAnalysis
+                                                        .image_quality ||
+                                                        'Unknown'
+                                                }}
+                                            </div>
+                                            <div>
+                                                <strong
+                                                    >Confidence Score:</strong
+                                                >
+                                                {{
+                                                    (
+                                                        item.data.sessionData
+                                                            .parsedAnalysis
+                                                            .confidence_score *
+                                                        100
+                                                    ).toFixed(1) || 'Unknown'
+                                                }}%
+                                            </div>
+                                            <div>
+                                                <strong>Is Valid:</strong>
+                                                {{
+                                                    item.data.sessionData
+                                                        .parsedAnalysis.is_valid
+                                                        ? 'Yes'
+                                                        : 'No'
+                                                }}
+                                            </div>
+                                            <div>
+                                                <strong>Text Clarity:</strong>
+                                                {{
+                                                    item.data.sessionData
+                                                        .parsedAnalysis
+                                                        .text_clarity ||
+                                                        'Unknown'
+                                                }}
+                                            </div>
+                                        </div>
+
+                                        <!-- Extracted Fields -->
+                                        <div
+                                            *ngIf="
+                                                item.data.sessionData
+                                                    .parsedAnalysis
+                                                    .extracted_fields
+                                            "
+                                            class="mt-2">
+                                            <strong
+                                                >Extracted Information:</strong
+                                            >
+                                            <div class="space-y-1 mt-1">
+                                                <div
+                                                    *ngIf="
+                                                        item.data.sessionData
+                                                            .parsedAnalysis
+                                                            .extracted_fields
+                                                            .pan_number
+                                                    ">
+                                                    <strong>PAN Number:</strong>
+                                                    {{
+                                                        item.data.sessionData
+                                                            .parsedAnalysis
+                                                            .extracted_fields
+                                                            .pan_number
+                                                    }}
+                                                </div>
+                                                <div
+                                                    *ngIf="
+                                                        item.data.sessionData
+                                                            .parsedAnalysis
+                                                            .extracted_fields
+                                                            .name
+                                                    ">
+                                                    <strong>Name:</strong>
+                                                    {{
+                                                        item.data.sessionData
+                                                            .parsedAnalysis
+                                                            .extracted_fields
+                                                            .name
+                                                    }}
+                                                </div>
+                                                <div
+                                                    *ngIf="
+                                                        item.data.sessionData
+                                                            .parsedAnalysis
+                                                            .extracted_fields
+                                                            .father_name
+                                                    ">
+                                                    <strong
+                                                        >Father's Name:</strong
+                                                    >
+                                                    {{
+                                                        item.data.sessionData
+                                                            .parsedAnalysis
+                                                            .extracted_fields
+                                                            .father_name
+                                                    }}
+                                                </div>
+                                                <div
+                                                    *ngIf="
+                                                        item.data.sessionData
+                                                            .parsedAnalysis
+                                                            .extracted_fields
+                                                            .date_of_birth
+                                                    ">
+                                                    <strong
+                                                        >Date of Birth:</strong
+                                                    >
+                                                    {{
+                                                        item.data.sessionData
+                                                            .parsedAnalysis
+                                                            .extracted_fields
+                                                            .date_of_birth
+                                                    }}
+                                                </div>
+                                                <div
+                                                    *ngIf="
+                                                        item.data.sessionData
+                                                            .parsedAnalysis
+                                                            .extracted_fields
+                                                            .issue_date
+                                                    ">
+                                                    <strong>Issue Date:</strong>
+                                                    {{
+                                                        item.data.sessionData
+                                                            .parsedAnalysis
+                                                            .extracted_fields
+                                                            .issue_date
+                                                    }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Legacy fields for backward compatibility -->
+                                <div
+                                    *ngIf="
+                                        item.data?.sessionData?.quality &&
+                                        !item.data?.sessionData?.analysisResult
+                                    ">
                                     <strong>Quality Score:</strong>
                                     {{
                                         item.data.sessionData.quality
                                             | number : '1.0-2'
                                     }}
                                 </div>
-                                <div *ngIf="item.data?.sessionData?.confidence">
+                                <div
+                                    *ngIf="
+                                        item.data?.sessionData?.confidence &&
+                                        !item.data?.sessionData?.analysisResult
+                                    ">
                                     <strong>Confidence:</strong>
                                     {{
                                         item.data.sessionData.confidence

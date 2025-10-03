@@ -13,13 +13,16 @@ import { UserInstructionComponent } from '../pre-call-flow/user-instruction.comp
 import { UserConsentComponent } from '../pre-call-flow/user-consent.component'
 import { HealthCheckComponent } from '../pre-call-flow/health-check.component'
 import { DetectionOverlaysComponent } from '../detection-overlays/detection-overlays.component'
-import { QuestionnaireFormComponent } from '../questionnaire-form/questionnaire-form.component'
+// QuestionnaireFormComponent removed - questionnaire is now handled by agent prompt display
 import { AgentJoinPopupComponent } from '../agent-join-popup/agent-join-popup.component'
 import { MeetingPanelComponent } from '../meeting-panel/meeting-panel.component'
-import { AgentPromptDisplayComponent } from '../agent-prompt-display/agent-prompt-display.component'
+// AgentPromptDisplayComponent removed - using manual step navigation instead
 import { JourneyProgressComponent } from '../journey-progress/journey-progress.component'
+import { QuestionnaireStepComponent } from '../questionnaire-step/questionnaire-step.component'
+import { StepCompletionComponent } from '../step-completion/step-completion.component'
 import { MeetingService } from '../../services/meeting.service'
 import { VkycJourneyService } from '../../services/vkyc-journey.service'
+import { SessionStorageService } from '../../services/session-storage.service'
 import { JourneyData } from '../../models/journey.models'
 
 export interface VkycLayoutState {
@@ -63,11 +66,12 @@ export interface WorkflowStep {
         UserConsentComponent,
         HealthCheckComponent,
         DetectionOverlaysComponent,
-        QuestionnaireFormComponent,
+        // QuestionnaireFormComponent removed
         AgentJoinPopupComponent,
         MeetingPanelComponent,
-        AgentPromptDisplayComponent,
         JourneyProgressComponent,
+        QuestionnaireStepComponent,
+        StepCompletionComponent,
     ],
     templateUrl: './vkyc-session-layout.component.html',
     styleUrls: ['./vkyc-session-layout.component.css'],
@@ -93,12 +97,14 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
 
     // Local mic state management
     isMicMuted: boolean = false
+    isCameraEnabled: boolean = true
     questionnaireAnswers: { [key: string]: any } = {}
     private subscriptions = new Subscription()
 
     constructor(
         private meetingService: MeetingService,
-        private journeyService: VkycJourneyService
+        private journeyService: VkycJourneyService,
+        private sessionStorage: SessionStorageService
     ) {}
 
     ngOnInit(): void {
@@ -129,6 +135,12 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
         response: string
     }>()
     @Output() agentProceed = new EventEmitter<void>()
+    @Output() nextStep = new EventEmitter<void>()
+    @Output() questionnaireCompleted = new EventEmitter<{
+        [key: string]: string
+    }>()
+    @Output() startImageCapture = new EventEmitter<void>()
+    @Output() finishKyc = new EventEmitter<void>()
 
     // Meeting panel event handlers
     onStreamsActive(active: boolean): void {
@@ -172,11 +184,8 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
     }
 
     isCaptureButtonEnabled(): boolean {
-        const currentStep = this.state?.currentStep
-        return (
-            currentStep?.type === 'FRAME_CAPTURE' &&
-            currentStep?.status === 'active'
-        )
+        // Always enable capture button regardless of step type or status
+        return true
     }
 
     onVoiceRecognition(question: any): void {
@@ -201,12 +210,19 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
 
     // Workflow step helper methods
     getStepCircleClass(step: WorkflowStep): string {
+        // Check if this is the current step
+        const isCurrentStep = this.state?.currentStep?.id === step.id
+
         switch (step.status) {
             case 'completed':
                 return 'bg-green-500'
             case 'active':
-                return 'bg-blue-500'
+                return 'bg-blue-600 ring-4 ring-blue-200' // Enhanced blue with ring for current step
             case 'pending':
+                if (isCurrentStep) {
+                    return 'bg-blue-600 ring-4 ring-blue-200' // Highlight current step even if pending
+                }
+                return 'bg-gray-400'
             case 'skipped':
             case 'error':
             default:
@@ -367,5 +383,183 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
         )
         // Emit the capture photo event to the parent component
         this.capturePhoto.emit()
+    }
+
+    // Manual step navigation methods
+    getCurrentStepTitle(): string {
+        const currentStep = this.state?.currentStep
+        if (!currentStep) {
+            return 'Welcome to KYC Verification'
+        }
+
+        switch (currentStep.type) {
+            case 'QUESTIONNAIRE':
+                return 'Questionnaire'
+            case 'FRAME_CAPTURE':
+                if (currentStep.data?.captureType === 'FACE_CAPTURE') {
+                    return 'Take Selfie'
+                } else if (
+                    currentStep.data?.captureType === 'DOCUMENT_CAPTURE'
+                ) {
+                    return 'Document Capture'
+                }
+                return 'Image Capture'
+            default:
+                return currentStep.title || 'Next Step'
+        }
+    }
+
+    getCurrentStepDescription(): string {
+        const currentStep = this.state?.currentStep
+        if (!currentStep) {
+            return 'Click Next to start your KYC verification process'
+        }
+
+        switch (currentStep.type) {
+            case 'QUESTIONNAIRE':
+                return 'Review the verification questions. Click Next to proceed through each question.'
+            case 'FRAME_CAPTURE':
+                if (currentStep.data?.captureType === 'FACE_CAPTURE') {
+                    return 'Take a clear selfie for identity verification. Click Start to open camera.'
+                } else if (
+                    currentStep.data?.captureType === 'DOCUMENT_CAPTURE'
+                ) {
+                    return 'Capture your identity document (PAN/Aadhaar). Click Start to open camera.'
+                }
+                return 'Capture the required image. Click Start to open camera.'
+            default:
+                return (
+                    currentStep.description ||
+                    'Click Next to proceed with this step'
+                )
+        }
+    }
+
+    getNextButtonText(): string {
+        const currentStep = this.state?.currentStep
+        if (!currentStep) {
+            return 'Start KYC'
+        }
+
+        switch (currentStep.type) {
+            case 'QUESTIONNAIRE':
+                return 'Start Questions'
+            case 'FRAME_CAPTURE':
+                if (currentStep.data?.captureType === 'FACE_CAPTURE') {
+                    return 'Take Selfie'
+                } else if (
+                    currentStep.data?.captureType === 'DOCUMENT_CAPTURE'
+                ) {
+                    return 'Capture Document'
+                }
+                return 'Capture Image'
+            default:
+                return 'Next Step'
+        }
+    }
+
+    onNextStep(): void {
+        console.log('🎯 LAYOUT: Next step requested')
+        const currentStep = this.state?.currentStep
+
+        if (!currentStep) {
+            // Start the workflow
+            this.nextStep.emit()
+            return
+        }
+
+        switch (currentStep.type) {
+            case 'QUESTIONNAIRE':
+                // For questionnaire, just mark as completed and move to next
+                console.log('🎯 LAYOUT: Completing questionnaire step')
+                this.nextStep.emit()
+                break
+            case 'FRAME_CAPTURE':
+                // For image capture, trigger the camera
+                console.log('🎯 LAYOUT: Opening camera for capture')
+                this.capturePhoto.emit()
+                break
+            default:
+                // For other steps, just move to next
+                this.nextStep.emit()
+                break
+        }
+    }
+
+    // New event handlers for step components
+    onQuestionnaireCompleted(answers: { [key: string]: string }): void {
+        console.log('🎯 LAYOUT: Questionnaire completed with answers:', answers)
+        this.questionnaireCompleted.emit(answers)
+    }
+
+    onStartImageCapture(): void {
+        console.log('🎯 LAYOUT: Start image capture requested')
+        this.startImageCapture.emit()
+    }
+
+    onFinishKyc(): void {
+        console.log('🎯 LAYOUT: Finish KYC requested')
+        this.finishKyc.emit()
+    }
+
+    // Helper methods for step components
+    isQuestionnaireStep(): boolean {
+        return this.state?.currentStep?.type === 'QUESTIONNAIRE'
+    }
+
+    isImageCaptureStep(): boolean {
+        return this.state?.currentStep?.type === 'FRAME_CAPTURE'
+    }
+
+    getQuestionnaireData(): any {
+        const currentStep = this.state?.currentStep
+        if (!currentStep || currentStep.type !== 'QUESTIONNAIRE') {
+            return null
+        }
+        return currentStep.data?.questionnaire || null
+    }
+
+    getStepCompletionData(): any {
+        const currentStep = this.state?.currentStep
+        if (!currentStep || currentStep.type !== 'FRAME_CAPTURE') {
+            return {
+                stepTitle: '',
+                stepDescription: '',
+                isCompleted: false,
+                isLastStep: false,
+            }
+        }
+
+        // Check if this is the last step
+        const workflowSteps = this.state?.workflowSteps || []
+        const currentStepIndex = workflowSteps.findIndex(
+            (step) => step.id === currentStep.id
+        )
+        const isLastStep = currentStepIndex === workflowSteps.length - 1
+
+        // Check if step is completed (has analysis result or is marked completed)
+        const isCompleted =
+            currentStep.status === 'completed' ||
+            currentStep.analysisResult ||
+            this.isStepDataCompleted(currentStep.id)
+
+        return {
+            stepTitle: currentStep.title || this.getCurrentStepTitle(),
+            stepDescription:
+                currentStep.description || this.getCurrentStepDescription(),
+            isCompleted: isCompleted,
+            isLastStep: isLastStep,
+            analysisResult: currentStep.analysisResult,
+        }
+    }
+
+    private isStepDataCompleted(stepId: string): boolean {
+        try {
+            const stepData = this.sessionStorage.getStepData(stepId)
+            return stepData?.success === true
+        } catch (error) {
+            console.warn('🎯 LAYOUT: Error checking step completion:', error)
+            return false
+        }
     }
 }

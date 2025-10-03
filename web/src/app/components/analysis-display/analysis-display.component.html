@@ -1,0 +1,385 @@
+<div *ngIf="analysisData" class="analysis-results">
+    <div class="analysis-header">
+        <h3 class="analysis-title">
+            <span class="material-symbols-outlined">analytics</span>
+            Analysis Results
+        </h3>
+    </div>
+
+    <div class="analysis-content">
+        <!-- Summary -->
+        <div class="analysis-summary">
+            <p class="summary-text">{{ getAnalysisSummary() }}</p>
+        </div>
+
+        <!-- Detailed Results -->
+        <div class="analysis-details" *ngIf="analysisData.analysisResult">
+            <div class="detail-grid">
+                <!-- Face Analysis -->
+                <div *ngIf="isFaceCapture()" class="detail-section">
+                    <h4 class="detail-title">Face Analysis</h4>
+                    <div class="detail-items">
+                        <div
+                            class="detail-item"
+                            *ngIf="
+                                getParsedAnalysis().face_detected !== undefined
+                            ">
+                            <span class="detail-label">Face Detected:</span>
+                            <span
+                                class="detail-value"
+                                [class.success]="
+                                    getParsedAnalysis().face_detected
+                                ">
+                                {{
+                                    getParsedAnalysis().face_detected
+                                        ? 'Yes'
+                                        : 'No'
+                                }}
+                            </span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="getParsedAnalysis().image_quality">
+                            <span class="detail-label">Quality:</span>
+                            <span class="detail-value">{{
+                                getParsedAnalysis().image_quality
+                            }}</span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="getParsedAnalysis().lighting_quality">
+                            <span class="detail-label">Lighting:</span>
+                            <span class="detail-value">{{
+                                getParsedAnalysis().lighting_quality
+                            }}</span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="getParsedAnalysis().confidence_score">
+                            <span class="detail-label">Confidence:</span>
+                            <span class="detail-value"
+                                >{{
+                                    (
+                                        getParsedAnalysis().confidence_score *
+                                        100
+                                    ).toFixed(1)
+                                }}%</span
+                            >
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="getParsedAnalysis().eyes_open !== undefined">
+                            <span class="detail-label">Eyes Open:</span>
+                            <span
+                                class="detail-value"
+                                [class.success]="getParsedAnalysis().eyes_open">
+                                {{
+                                    getParsedAnalysis().eyes_open ? 'Yes' : 'No'
+                                }}
+                            </span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="
+                                getParsedAnalysis().looking_at_camera !==
+                                undefined
+                            ">
+                            <span class="detail-label">Looking at Camera:</span>
+                            <span
+                                class="detail-value"
+                                [class.success]="
+                                    getParsedAnalysis().looking_at_camera
+                                ">
+                                {{
+                                    getParsedAnalysis().looking_at_camera
+                                        ? 'Yes'
+                                        : 'No'
+                                }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Document Analysis -->
+                <div *ngIf="isDocumentCapture()" class="detail-section">
+                    <h4 class="detail-title">Document Analysis</h4>
+                    <div class="detail-items">
+                        <div
+                            class="detail-item"
+                            *ngIf="
+                                getParsedAnalysis().document_detected !==
+                                undefined
+                            ">
+                            <span class="detail-label">Document Detected:</span>
+                            <span
+                                class="detail-value"
+                                [class.success]="
+                                    getParsedAnalysis().document_detected
+                                ">
+                                {{
+                                    getParsedAnalysis().document_detected
+                                        ? 'Yes'
+                                        : 'No'
+                                }}
+                            </span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="getParsedAnalysis().document_type">
+                            <span class="detail-label">Document Type:</span>
+                            <span class="detail-value">{{
+                                getParsedAnalysis().document_type
+                            }}</span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="getParsedAnalysis().image_quality">
+                            <span class="detail-label">Image Quality:</span>
+                            <span class="detail-value">{{
+                                getParsedAnalysis().image_quality
+                            }}</span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="getParsedAnalysis().lighting_quality">
+                            <span class="detail-label">Lighting Quality:</span>
+                            <span class="detail-value">{{
+                                getParsedAnalysis().lighting_quality
+                            }}</span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="getParsedAnalysis().confidence_score">
+                            <span class="detail-label">Confidence Score:</span>
+                            <span class="detail-value"
+                                >{{
+                                    (
+                                        getParsedAnalysis().confidence_score *
+                                        100
+                                    ).toFixed(1)
+                                }}%</span
+                            >
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="getParsedAnalysis().is_blurry !== undefined">
+                            <span class="detail-label">Is Blurry:</span>
+                            <span
+                                class="detail-value"
+                                [class.error]="getParsedAnalysis().is_blurry">
+                                {{
+                                    getParsedAnalysis().is_blurry ? 'Yes' : 'No'
+                                }}
+                            </span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="
+                                getParsedAnalysis().is_complete !== undefined
+                            ">
+                            <span class="detail-label">Is Complete:</span>
+                            <span
+                                class="detail-value"
+                                [class.success]="
+                                    getParsedAnalysis().is_complete
+                                ">
+                                {{
+                                    getParsedAnalysis().is_complete
+                                        ? 'Yes'
+                                        : 'No'
+                                }}
+                            </span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="
+                                getParsedAnalysis().orientation_correct !==
+                                undefined
+                            ">
+                            <span class="detail-label"
+                                >Orientation Correct:</span
+                            >
+                            <span
+                                class="detail-value"
+                                [class.success]="
+                                    getParsedAnalysis().orientation_correct
+                                ">
+                                {{
+                                    getParsedAnalysis().orientation_correct
+                                        ? 'Yes'
+                                        : 'No'
+                                }}
+                            </span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="getParsedAnalysis().has_glare !== undefined">
+                            <span class="detail-label">Has Glare:</span>
+                            <span
+                                class="detail-value"
+                                [class.error]="getParsedAnalysis().has_glare">
+                                {{
+                                    getParsedAnalysis().has_glare ? 'Yes' : 'No'
+                                }}
+                            </span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="
+                                getParsedAnalysis().corners_visible !==
+                                undefined
+                            ">
+                            <span class="detail-label">Corners Visible:</span>
+                            <span
+                                class="detail-value"
+                                [class.success]="
+                                    getParsedAnalysis().corners_visible
+                                ">
+                                {{
+                                    getParsedAnalysis().corners_visible
+                                        ? 'Yes'
+                                        : 'No'
+                                }}
+                            </span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="getParsedAnalysis().text_clarity">
+                            <span class="detail-label">Text Clarity:</span>
+                            <span class="detail-value">{{
+                                getParsedAnalysis().text_clarity
+                            }}</span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="getParsedAnalysis().is_valid !== undefined">
+                            <span class="detail-label">Is Valid:</span>
+                            <span
+                                class="detail-value"
+                                [class.success]="getParsedAnalysis().is_valid">
+                                {{
+                                    getParsedAnalysis().is_valid ? 'Yes' : 'No'
+                                }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Extracted Fields for Document -->
+                <div
+                    *ngIf="
+                        isDocumentCapture() &&
+                        getParsedAnalysis().extracted_fields
+                    "
+                    class="detail-section">
+                    <h4 class="detail-title">Extracted Information</h4>
+                    <div class="detail-items">
+                        <div
+                            class="detail-item"
+                            *ngIf="
+                                getParsedAnalysis().extracted_fields
+                                    .document_type
+                            ">
+                            <span class="detail-label">Document Type:</span>
+                            <span class="detail-value">{{
+                                getParsedAnalysis().extracted_fields
+                                    .document_type
+                            }}</span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="
+                                getParsedAnalysis().extracted_fields.pan_number
+                            ">
+                            <span class="detail-label">PAN Number:</span>
+                            <span class="detail-value">{{
+                                getParsedAnalysis().extracted_fields.pan_number
+                            }}</span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="getParsedAnalysis().extracted_fields.name">
+                            <span class="detail-label">Name:</span>
+                            <span class="detail-value">{{
+                                getParsedAnalysis().extracted_fields.name
+                            }}</span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="
+                                getParsedAnalysis().extracted_fields.father_name
+                            ">
+                            <span class="detail-label">Father's Name:</span>
+                            <span class="detail-value">{{
+                                getParsedAnalysis().extracted_fields.father_name
+                            }}</span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="
+                                getParsedAnalysis().extracted_fields
+                                    .date_of_birth
+                            ">
+                            <span class="detail-label">Date of Birth:</span>
+                            <span class="detail-value">{{
+                                getParsedAnalysis().extracted_fields
+                                    .date_of_birth
+                            }}</span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="
+                                getParsedAnalysis().extracted_fields.issue_date
+                            ">
+                            <span class="detail-label">Issue Date:</span>
+                            <span class="detail-value">{{
+                                getParsedAnalysis().extracted_fields.issue_date
+                            }}</span>
+                        </div>
+                        <div
+                            class="detail-item"
+                            *ngIf="
+                                getParsedAnalysis().extracted_fields
+                                    .issuing_authority
+                            ">
+                            <span class="detail-label">Issuing Authority:</span>
+                            <span class="detail-value">{{
+                                getParsedAnalysis().extracted_fields
+                                    .issuing_authority
+                            }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recommendations -->
+            <div
+                class="recommendations"
+                *ngIf="getRecommendations().length > 0">
+                <h4 class="recommendations-title">
+                    <span class="material-symbols-outlined">lightbulb</span>
+                    Recommendations
+                </h4>
+                <ul class="recommendations-list">
+                    <li
+                        *ngFor="let rec of getRecommendations()"
+                        class="recommendation-item">
+                        {{ rec }}
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons for Analysis Results -->
+    <div class="analysis-actions" *ngIf="showActions">
+        <button type="button" (click)="onRetake()" class="secondary-button">
+            <span class="material-symbols-outlined">refresh</span>
+            Retake Photo
+        </button>
+        <button type="button" (click)="onContinue()" class="primary-button">
+            <span class="material-symbols-outlined">check</span>
+            Continue
+        </button>
+    </div>
+</div>

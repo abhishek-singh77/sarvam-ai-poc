@@ -92,6 +92,7 @@ export interface WorkflowStep {
     data?: any
     error?: string
     subAction: SubAction
+    analysisResult?: any
 }
 
 export interface WorkflowState {

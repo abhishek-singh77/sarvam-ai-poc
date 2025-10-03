@@ -17,6 +17,40 @@
             "allow_ocr_data_update": false,
             "sub_actions": [
                 {
+                    "type": "QUESTIONNAIRE",
+                    "title": "QUESTIONNAIRE",
+                    "description": "Questions",
+                    "optional": false,
+                    "id_analysis_required": false,
+                    "face_match_obj_type": "none",
+                    "questionnaire": {
+                        "questions": [
+                            {
+                                "title": "What is your name as per the document?",
+                                "validated": false,
+                                "input_type": "text",
+                                "otp_check": false,
+                                "mandatory": true
+                            },
+                            {
+                                "title": "What is your address as per the document?",
+                                "validated": false,
+                                "input_type": "text",
+                                "otp_check": false,
+                                "mandatory": true
+                            },
+                            {
+                                "title": "What is your monthly income?",
+                                "validated": false,
+                                "input_type": "text",
+                                "otp_check": false,
+                                "mandatory": true
+                            }
+                        ]
+                    },
+                    "perform_enrichment": true
+                },
+                {
                     "type": "GEO_TAGGING",
                     "optional": false,
                     "id_analysis_required": false,
@@ -106,40 +140,6 @@
                     "allow_face_match_result_update": true,
                     "sub_action_name": "Details from ID Proof",
                     "image_upload_mode": "FRONT_BACK"
-                },
-                {
-                    "type": "QUESTIONNAIRE",
-                    "title": "QUESTIONNAIRE",
-                    "description": "Questions",
-                    "optional": false,
-                    "id_analysis_required": false,
-                    "face_match_obj_type": "none",
-                    "questionnaire": {
-                        "questions": [
-                            {
-                                "title": "What is your name as per the document?",
-                                "validated": false,
-                                "input_type": "text",
-                                "otp_check": false,
-                                "mandatory": true
-                            },
-                            {
-                                "title": "What is your address as per the document?",
-                                "validated": false,
-                                "input_type": "text",
-                                "otp_check": false,
-                                "mandatory": true
-                            },
-                            {
-                                "title": "What is your monthly income?",
-                                "validated": false,
-                                "input_type": "text",
-                                "otp_check": false,
-                                "mandatory": true
-                            }
-                        ]
-                    },
-                    "perform_enrichment": true
                 }
             ],
             "action_config": {
