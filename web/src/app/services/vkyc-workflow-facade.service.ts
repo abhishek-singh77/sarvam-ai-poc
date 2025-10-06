@@ -28,12 +28,48 @@ export class VkycWorkflowFacadeService {
         await this.runner.startWorkflow()
     }
 
+    async startInCallWorkflow(): Promise<void> {
+        console.log('🎯 WORKFLOW-FACADE: Starting in-call workflow')
+        await this.runner.startInCallWorkflow()
+    }
+
     async completeCurrentStep(): Promise<void> {
-        console.log('🎯 WORKFLOW-FACADE: Completing current step')
+        console.log(
+            '🎯🎯🎯 WORKFLOW-FACADE: ========== completeCurrentStep CALLED =========='
+        )
         const currentState = this.state$.value
-        if (currentState?.currentStep) {
+        console.log(
+            '🎯 WORKFLOW-FACADE: Current state from facade:',
+            currentState
+        )
+
+        // Always try to get the current step from the runner directly (most reliable source)
+        const runnerCurrentStep = this.runner.getCurrentStep()
+        console.log(
+            '🎯 WORKFLOW-FACADE: Current step from runner:',
+            runnerCurrentStep
+        )
+
+        if (runnerCurrentStep) {
+            console.log(
+                '🎯 WORKFLOW-FACADE: Completing current step:',
+                runnerCurrentStep.title,
+                runnerCurrentStep.type
+            )
             await this.runner.completeCurrentStep()
+            console.log('🎯 WORKFLOW-FACADE: Step completion successful')
+        } else {
+            console.error(
+                '🎯 WORKFLOW-FACADE: ❌ No current step found in runner! Cannot complete step.'
+            )
+            console.log(
+                '🎯 WORKFLOW-FACADE: Runner state:',
+                this.runner['currentState']
+            )
         }
+        console.log(
+            '🎯🎯🎯 WORKFLOW-FACADE: ========== completeCurrentStep FINISHED =========='
+        )
     }
 
     retryCurrentStep(): void {
@@ -55,6 +91,7 @@ export class VkycWorkflowFacadeService {
     reset(): void {
         console.log('🎯 WORKFLOW-FACADE: Resetting workflow')
         this.cleanup()
+        this.runner.reset()
         this.state$.next(null)
     }
 }

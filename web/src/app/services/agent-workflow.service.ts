@@ -55,6 +55,19 @@ export class AgentWorkflowService {
             'steps'
         )
 
+        // Log the steps in order to debug
+        console.log(
+            '🎯 AGENT-WORKFLOW: Steps in order:',
+            workflowSteps.map((step, index) => ({
+                index,
+                id: step.id,
+                title: step.title,
+                type: step.type,
+                phase: step.phase || step.sub_action_step,
+                order: step.order,
+            }))
+        )
+
         // Store all workflow steps
         const currentState = this.workflowStateSubject.value
         this.workflowStateSubject.next({
@@ -63,15 +76,25 @@ export class AgentWorkflowService {
             totalSteps: workflowSteps.length,
         })
 
-        // Find the first in-call step
+        // Find the first in-call step - use the properly sorted steps
         const firstInCallStep = workflowSteps.find(
-            (step) => step.sub_action_step === 'in_call'
+            (step) => step.phase === 'in_call'
         )
 
         if (firstInCallStep) {
             const stepNumber = workflowSteps.indexOf(firstInCallStep) + 1
+            console.log('🎯 AGENT-WORKFLOW: First in-call step found:', {
+                id: firstInCallStep.id,
+                title: firstInCallStep.title,
+                type: firstInCallStep.type,
+                stepNumber,
+            })
             this.updateCurrentStep(firstInCallStep, stepNumber)
             this.generateWelcomePrompt(workflowSteps)
+        } else {
+            console.warn(
+                '🎯 AGENT-WORKFLOW: No in-call step found in workflow steps'
+            )
         }
     }
 

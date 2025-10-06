@@ -236,4 +236,101 @@ export class VkycJourneyService extends BaseJourneyService {
         console.log(`🎯 JOURNEY: Manually marking step ${stepId} as completed`)
         this.updateStepStatus(stepId, 'completed', data)
     }
+
+    /**
+     * Get initial steps configuration
+     */
+    private getInitialSteps(): JourneyStep[] {
+        return [
+            // Pre-call steps
+            {
+                id: 'health_check',
+                title: 'Health Check',
+                type: 'pre_call' as const,
+                status: 'pending' as const,
+                description: 'Network speed and device compatibility check',
+                order: 1,
+            },
+            {
+                id: 'consent',
+                title: 'Consent & Permissions',
+                type: 'pre_call' as const,
+                status: 'pending' as const,
+                description: 'Camera, microphone, and data processing consent',
+                order: 2,
+            },
+            {
+                id: 'instructions',
+                title: 'Instructions',
+                type: 'pre_call' as const,
+                status: 'pending' as const,
+                description: 'KYC process overview and guidelines',
+                order: 3,
+            },
+            // In-call steps - Questionnaire moved to first position
+            {
+                id: 'QUESTIONNAIRE-0',
+                title: 'Verification Questions',
+                type: 'in_call' as const,
+                status: 'pending' as const,
+                description: 'Answer questions to verify your identity',
+                order: 4,
+            },
+            {
+                id: 'frame_capture-1',
+                title: 'Selfie Capture',
+                type: 'in_call' as const,
+                status: 'pending' as const,
+                description: 'Capture your selfie for identity verification',
+                order: 5,
+            },
+            {
+                id: 'frame_capture-2',
+                title: 'Document Capture',
+                type: 'in_call' as const,
+                status: 'pending' as const,
+                description: 'Capture your identity document (PAN/Aadhaar)',
+                order: 6,
+            },
+            // Post-call steps
+            {
+                id: 'verification',
+                title: 'Final Verification',
+                type: 'post_call' as const,
+                status: 'pending' as const,
+                description: 'AI-powered identity verification',
+                order: 7,
+            },
+            {
+                id: 'completion',
+                title: 'KYC Completion',
+                type: 'post_call' as const,
+                status: 'pending' as const,
+                description: 'Process completion and result notification',
+                order: 8,
+            },
+        ]
+    }
+
+    /**
+     * Reset the entire journey (for session cleanup)
+     */
+    resetJourney(): void {
+        console.log('🎯 JOURNEY: Resetting entire journey')
+        // Clear the journey data from storage
+        try {
+            sessionStorage.removeItem('vkyc_journey_data')
+            console.log('🎯 JOURNEY: Cleared journey data from storage')
+        } catch (error) {
+            console.warn('🎯 JOURNEY: Failed to clear journey data:', error)
+        }
+
+        // Reinitialize the journey with the original config
+        const config = {
+            storageKey: 'vkyc_journey_data',
+            autoSave: true,
+            steps: this.getInitialSteps(),
+        }
+        this.initializeJourney(config)
+    }
 }

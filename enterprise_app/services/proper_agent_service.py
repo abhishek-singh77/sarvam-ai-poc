@@ -99,10 +99,10 @@ class KYCVoiceAgent(Agent):
             base_instructions = """
         You are a professional KYC (Know Your Customer) Voice Assistant. Your role is to guide users through a smooth identity verification process using natural conversation.
 
-        IMPORTANT: When you first start, you MUST begin with this exact greeting: "Hello! I'm your KYC assistant. Welcome to your identity verification session. I'll guide you through a few simple steps to complete your verification. We'll start by asking you a few verification questions, then take a clear photo of your face, and finally capture your identity documents. Please ensure you have good lighting and your documents ready. Let's begin with the first step."
+        IMPORTANT: When you first start, you MUST begin with this exact greeting: "Hello! I'm your KYC assistant. I'll guide you through your identity verification. We'll start with some questions, then take your photo and documents. Let's begin."
 
         CORE RESPONSIBILITIES:
-        1. Guide users through each verification step conversationally
+        1. Guide users through each step conversationally
         2. Help users capture clear photos of their face and documents
         3. Ask questions naturally and listen to user responses
         4. Provide helpful feedback and guidance throughout the process
@@ -132,6 +132,12 @@ class KYCVoiceAgent(Agent):
         - Keep speech natural, conversational, and user-friendly
         - Only speak what the user needs to hear
         - Your responses should be conversational, not technical
+        - Act as a human who is assisting the user
+        - NEVER repeat the same message unless the user explicitly asks you to repeat
+        - If you've already given instructions, wait for the user to follow them before speaking again
+        - Be patient and give users time to complete actions
+        - Only provide additional guidance if the user seems confused or asks for help
+        - Avoid speaking continuously - let the user take action between your instructions
 
         CAPTURE STEP GUIDANCE:
         - For FACE_CAPTURE steps: Ensure the customer's face is clearly visible, well-lit, and centered in the camera view
@@ -215,7 +221,7 @@ class KYCVoiceAgent(Agent):
                 return
             
             # Send a simple, direct welcome message
-            welcome_message = "Hello! I'm your KYC assistant. I'll help you complete your identity verification. Let's start with the first step."
+            welcome_message = "Hello! I'm your KYC assistant. I'll guide you through your identity verification. Let's begin."
             logger.info(f"🎯 AGENT: Sending welcome message: {welcome_message}")
             
             # Send the welcome message
@@ -431,7 +437,7 @@ class KYCVoiceAgent(Agent):
             return "Hello! I am your KYC Virtual Assistant. I'll help you complete your identity verification. Let's begin!"
 
     def get_all_in_call_steps(self):
-        """Get all workflow steps that the agent should handle"""
+        """Get all workflow steps that the agent should handle - ONLY in-call steps"""
         # Use workflow data from API if available, otherwise use hardcoded fallback
         workflow_data = self.workflow_data or self._get_hardcoded_workflow()
         
@@ -439,7 +445,7 @@ class KYCVoiceAgent(Agent):
             logger.warning("🎯 No workflow data or actionables found")
             return []
         
-        all_steps = []
+        in_call_steps = []
         pre_steps = []
         other_steps = []
         
@@ -448,29 +454,37 @@ class KYCVoiceAgent(Agent):
                 for sub_action in actionable['sub_actions']:
                     step_type = sub_action.get('sub_action_step', 'unknown')
                     step_title = sub_action.get('title', sub_action.get('sub_action_ref', 'Unknown'))
+                    action_type = sub_action.get('type', 'Unknown')
                     
+                    # STRICT FILTERING: Only include steps that are explicitly marked as 'in_call'
                     if step_type == 'in_call':
-                        all_steps.append(sub_action)
-                        logger.debug(f"🎯 AGENT: Including in-call step: {step_title}")
+                        # Additional validation: Only include FRAME_CAPTURE and QUESTIONNAIRE steps
+                        if action_type in ['FRAME_CAPTURE', 'QUESTIONNAIRE']:
+                            in_call_steps.append(sub_action)
+                            logger.debug(f"🎯 AGENT: Including in-call step: {step_title} ({action_type})")
+                        else:
+                            logger.debug(f"🎯 AGENT: Excluding in-call step with unsupported type: {step_title} ({action_type})")
                     elif step_type == 'pre':
                         pre_steps.append(sub_action)
-                        logger.debug(f"🎯 AGENT: Excluding pre-call step: {step_title}")
+                        logger.debug(f"🎯 AGENT: Excluding pre-call step: {step_title} ({action_type})")
                     else:
                         other_steps.append(sub_action)
-                        logger.debug(f"🎯 AGENT: Excluding {step_type} step: {step_title}")
+                        logger.debug(f"🎯 AGENT: Excluding {step_type} step: {step_title} ({action_type})")
         
-        logger.info(f"🎯 AGENT: Step filtering results - In-call: {len(all_steps)}, Pre-call: {len(pre_steps)}, Other: {len(other_steps)}")
-        logger.info(f"🎯 AGENT: Agent will handle {len(all_steps)} in-call steps only")
+        logger.info(f"🎯 AGENT: Step filtering results - In-call: {len(in_call_steps)}, Pre-call: {len(pre_steps)}, Other: {len(other_steps)}")
+        logger.info(f"🎯 AGENT: Agent will handle {len(in_call_steps)} in-call steps only")
         
         # Log the steps that will be handled by the agent
-        if all_steps:
+        if in_call_steps:
             logger.info("🎯 AGENT: In-call steps that agent will handle:")
-            for i, step in enumerate(all_steps, 1):
+            for i, step in enumerate(in_call_steps, 1):
                 step_title = step.get('title', step.get('sub_action_ref', 'Unknown'))
                 step_type = step.get('type', 'Unknown')
                 logger.info(f"🎯 AGENT:   {i}. {step_title} ({step_type})")
+        else:
+            logger.warning("🎯 AGENT: No in-call steps found for agent to handle!")
         
-        return all_steps
+        return in_call_steps
     
     def get_current_step(self):
         """Get the current step from workflow"""
@@ -603,16 +617,16 @@ class KYCVoiceAgent(Agent):
             
             if completed_type == 'FRAME_CAPTURE':
                 if completed_step.get('frame_capture_type') == 'FACE_CAPTURE':
-                    completion_msg = "Excellent! Your selfie has been captured successfully. The image quality is perfect for identity verification. I can clearly see your face and the lighting is good."
+                    completion_msg = "Great! Your selfie is captured successfully."
                 elif completed_step.get('frame_capture_type') == 'DOCUMENT_CAPTURE':
                     doc_type = completed_step.get('strict_validation_type', 'document')
-                    completion_msg = f"Perfect! Your {doc_type.upper()} document has been captured successfully. All the text is clearly visible and readable. The document quality is excellent for verification."
+                    completion_msg = f"Perfect! Your {doc_type.upper()} is captured successfully."
                 else:
-                    completion_msg = f"Great! Your {completed_title} has been captured successfully. The capture quality looks excellent."
+                    completion_msg = f"Great! {completed_title} captured successfully."
             elif completed_type == 'QUESTIONNAIRE':
-                completion_msg = "Thank you for providing those details. Your responses have been recorded successfully and will be used for verification purposes."
+                completion_msg = "Thank you! Your answers are recorded."
             else:
-                completion_msg = f"Excellent! {completed_title} completed successfully. The quality looks great."
+                completion_msg = f"Excellent! {completed_title} completed."
             
             if next_step:
                 next_title = next_step.get('title', 'next step')
@@ -632,12 +646,12 @@ class KYCVoiceAgent(Agent):
             
             if step_type == 'FRAME_CAPTURE':
                 if step.get('frame_capture_type') == 'FACE_CAPTURE':
-                    return f"Now let's take your selfie. Please look directly at the camera, keep your face centered, and ensure good lighting. I'll monitor your positioning and the system will automatically capture when everything looks perfect. Please hold still and look at the camera."
+                    return "Now let's take your selfie. Look at the camera and hold still."
                 else:
                     doc_type = step.get('strict_validation_type', 'document')
-                    return f"Now let's capture your {doc_type}. Please hold the document steady in front of the camera, ensuring all text is clearly visible and the document fills the frame. I'll monitor the positioning and the system will automatically capture when the document is clearly visible. Please hold the document steady."
+                    return f"Now let's capture your {doc_type}. Hold it steady in front of the camera."
             elif step_type == 'QUESTIONNAIRE':
-                return f"Now I have some questions for you. Please answer each question clearly."
+                return "I have some questions for you. Please answer each one clearly."
             else:
                 return f"Let's continue with {step_title.lower()}."
                 
@@ -1660,7 +1674,7 @@ class ProperAgentService:
                 logger.info("🎯 Set session reference on agent")
                 
                 # Send initial greeting directly to ensure it works
-                greeting = "Hello! I'm your KYC assistant. Welcome to your identity verification session. I'll guide you through a few simple steps to complete your verification. Let's begin with the first step."
+                greeting = "Hello! I'm your KYC assistant. I'll guide you through your identity verification. Let's begin."
                 logger.info(f"🎯 Sending initial greeting: {greeting}")
                 await session.say(greeting)
                 logger.info("✅ Initial greeting sent successfully")

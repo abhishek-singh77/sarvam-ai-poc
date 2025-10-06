@@ -122,10 +122,22 @@ export class SubmissionService {
             this.updateSubmissionState(payload.stepRef, result)
 
             // Update journey progress for artifact submission
-            this.journeyService.updateStepStatus(payload.stepRef, 'completed', {
-                artifactId: result.artifactId,
-                artifactType: payload.artifactType,
-            })
+            this.journeyService.updateFrameCaptureStatus(
+                payload.stepRef,
+                'completed',
+                {
+                    artifactId: result.artifactId,
+                    artifactType: payload.artifactType,
+                    analysisResult: result.data,
+                    parsedAnalysis: result.data?.analysis_result,
+                    captureType: payload.metadata?.captureType,
+                    fullImageData: payload.base64Data,
+                    imageData: payload.base64Data.substring(0, 100) + '...', // Preview only
+                    quality: payload.metadata?.quality,
+                    confidence: payload.metadata?.confidence,
+                    timestamp: Date.now(),
+                }
+            )
 
             // Save image data to session storage
             this.saveImageDataToSession(payload, result)
@@ -234,10 +246,15 @@ export class SubmissionService {
             this.updateSubmissionState(payload.stepRef, result)
 
             // Update journey progress for questionnaire submission
-            this.journeyService.updateStepStatus(payload.stepRef, 'completed', {
-                answers: payload.answers,
-                answersCount: Object.keys(payload.answers).length,
-            })
+            this.journeyService.updateQuestionnaireStatus(
+                payload.stepRef,
+                'completed',
+                {
+                    answers: payload.answers,
+                    answersCount: Object.keys(payload.answers).length,
+                    timestamp: Date.now(),
+                }
+            )
 
             console.log(
                 '🎯 SUBMISSION-SERVICE: Questionnaire submitted successfully'

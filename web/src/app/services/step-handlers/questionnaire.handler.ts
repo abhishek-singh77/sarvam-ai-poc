@@ -20,7 +20,8 @@ export class QuestionnaireHandler implements StepHandler {
     ) {}
 
     canHandle(step: WorkflowStep): boolean {
-        return step.type === 'QUESTIONNAIRE'
+        // Only handle in-call questionnaire steps
+        return step.phase === 'in_call' && step.type === 'QUESTIONNAIRE'
     }
 
     start(step: WorkflowStep): Observable<StepHandlerResult> {

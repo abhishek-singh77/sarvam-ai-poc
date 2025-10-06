@@ -54,8 +54,18 @@ export class DetectionOverlaysComponent implements OnInit, OnDestroy {
 
     private startSteadyDetectionMonitoring() {
         setInterval(() => {
+            // Skip if image manipulator is open
+            if (this.isImageManipulatorOpen) {
+                if (this.countdown !== null) {
+                    console.log(
+                        '🎯 DETECTION: Clearing countdown - image manipulator is open'
+                    )
+                    this.clearCountdown()
+                }
+                return
+            }
+
             const isSteady = this.isDetectionSteady()
-            // Steady detection monitoring
 
             if (isSteady) {
                 const now = Date.now()
@@ -69,18 +79,11 @@ export class DetectionOverlaysComponent implements OnInit, OnDestroy {
                     this.STEADY_DURATION_MS
                 ) {
                     // Detection has been steady for required duration, start countdown
-                    if (
-                        this.countdown === null &&
-                        !this.isImageManipulatorOpen
-                    ) {
+                    if (this.countdown === null) {
                         console.log(
                             '🎯 DETECTION: Starting auto-capture countdown'
                         )
                         this.startCountdown()
-                    } else if (this.isImageManipulatorOpen) {
-                        console.log(
-                            '🎯 DETECTION: Auto-capture countdown blocked - image manipulator is open'
-                        )
                     }
                 }
             } else {
@@ -146,13 +149,24 @@ export class DetectionOverlaysComponent implements OnInit, OnDestroy {
     }
 
     private startCountdown() {
+        // Prevent multiple countdowns
+        if (this.countdown !== null || this.countdownInterval !== null) {
+            console.log('🎯 DETECTION: Countdown already in progress, skipping')
+            return
+        }
+
         this.countdown = this.COUNTDOWN_DURATION
+        console.log(`🎯 DETECTION: Starting countdown: ${this.countdown}`)
 
         this.countdownInterval = window.setInterval(() => {
             if (this.countdown && this.countdown > 1) {
                 this.countdown--
+                console.log(`🎯 DETECTION: Countdown: ${this.countdown}`)
             } else {
                 // Countdown finished, trigger auto-capture
+                console.log(
+                    '🎯 DETECTION: Countdown finished, triggering auto-capture'
+                )
                 this.clearCountdown()
                 this.autoCaptureTriggered.emit()
             }

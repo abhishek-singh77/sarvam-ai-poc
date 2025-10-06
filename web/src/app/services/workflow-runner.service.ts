@@ -93,6 +93,7 @@ export interface WorkflowStep {
     error?: string
     subAction: SubAction
     analysisResult?: any
+    order?: number
 }
 
 export interface WorkflowState {
@@ -191,10 +192,19 @@ export class WorkflowRunnerService {
         if (!this.workflowConfig) return
 
         const steps: WorkflowStep[] = []
+        let stepOrder = 0
 
         // Process all actionables and their sub_actions
         for (const actionable of this.workflowConfig.actionables) {
             for (const subAction of actionable.sub_actions) {
+                // Debug: Log sub-action processing
+                console.log('🎯 WORKFLOW-RUNNER: Processing sub-action:', {
+                    type: subAction.type,
+                    title: subAction.title,
+                    sub_action_step: subAction.sub_action_step,
+                    sub_action_ref: subAction.sub_action_ref,
+                })
+
                 const step: WorkflowStep = {
                     id:
                         subAction.sub_action_ref ||
@@ -208,6 +218,7 @@ export class WorkflowRunnerService {
                     status: 'pending',
                     phase: subAction.sub_action_step,
                     subAction: subAction,
+                    order: stepOrder++, // Add explicit order to maintain sequence
                     data: {
                         // Copy relevant data from subAction to step.data
                         frame_capture_type: (subAction as any)
@@ -226,12 +237,41 @@ export class WorkflowRunnerService {
             const phaseDiff = phaseOrder[a.phase] - phaseOrder[b.phase]
             if (phaseDiff !== 0) return phaseDiff
 
-            // Maintain original order within same phase
-            return steps.indexOf(a) - steps.indexOf(b)
+            // For in_call steps, maintain the order: QUESTIONNAIRE first, then FRAME_CAPTURE steps
+            if (a.phase === 'in_call' && b.phase === 'in_call') {
+                // QUESTIONNAIRE should come first
+                if (a.type === 'QUESTIONNAIRE' && b.type !== 'QUESTIONNAIRE')
+                    return -1
+                if (b.type === 'QUESTIONNAIRE' && a.type !== 'QUESTIONNAIRE')
+                    return 1
+
+                // Then FRAME_CAPTURE steps in their original order
+                if (a.type === 'FRAME_CAPTURE' && b.type === 'FRAME_CAPTURE') {
+                    return (a.order || 0) - (b.order || 0)
+                }
+            }
+
+            // Maintain original order within same phase using explicit order
+            return (a.order || 0) - (b.order || 0)
         })
 
+        console.log(
+            '🎯 WORKFLOW-RUNNER: Initialized steps in order:',
+            steps.map((s) => ({
+                id: s.id,
+                title: s.title,
+                type: s.type,
+                phase: s.phase,
+                order: (s as any).order,
+            }))
+        )
+
         this.currentState.steps = steps
-        this.currentState.phase = 'pre'
+
+        // Since we removed pre-call steps, start directly with in_call phase
+        const hasInCallSteps = steps.some((step) => step.phase === 'in_call')
+        this.currentState.phase = hasInCallSteps ? 'in_call' : 'pre'
+
         this.updateState()
     }
 
@@ -246,22 +286,49 @@ export class WorkflowRunnerService {
         }
 
         this.isExecuting = true
-        this.stepIndex = 0
-        this.currentState.phase = 'pre'
         this.currentState.isComplete = false
         this.currentState.error = undefined
 
-        console.log('🎯 WORKFLOW-RUNNER: Starting workflow execution...')
-        await this.executeNextStep()
+        // Since we removed pre-call steps, start directly with in_call workflow
+        if (this.currentState.phase === 'in_call') {
+            console.log(
+                '🎯 WORKFLOW-RUNNER: Starting in-call workflow directly...'
+            )
+            await this.startInCallWorkflow()
+        } else {
+            console.log('🎯 WORKFLOW-RUNNER: Starting workflow execution...')
+            this.stepIndex = 0
+            await this.executeNextStep()
+        }
     }
 
     async executeNextStep(): Promise<void> {
-        if (this.stepIndex >= this.currentState.steps.length) {
+        // Only work with in-call steps
+        const inCallSteps = this.getInCallSteps()
+        console.log(
+            '🎯 WORKFLOW-RUNNER: executeNextStep called:',
+            'Step index:',
+            this.stepIndex,
+            'Total in-call steps:',
+            inCallSteps.length,
+            'In-call steps:',
+            inCallSteps.map((s) => ({
+                id: s.id,
+                title: s.title,
+                type: s.type,
+                status: s.status,
+            }))
+        )
+
+        if (this.stepIndex >= inCallSteps.length) {
+            console.log(
+                '🎯 WORKFLOW-RUNNER: All steps completed, finishing workflow'
+            )
             this.completeWorkflow()
             return
         }
 
-        const step = this.currentState.steps[this.stepIndex]
+        const step = inCallSteps[this.stepIndex]
 
         // Skip if step is already completed
         if (step.status === 'completed') {
@@ -276,12 +343,29 @@ export class WorkflowRunnerService {
 
         this.currentState.currentStep = step
         step.status = 'active'
+        console.log(
+            '🎯 WORKFLOW-RUNNER: Set current step to:',
+            step.title,
+            step.id,
+            'Type:',
+            step.type
+        )
         this.updateState()
+        console.log(
+            '🎯 WORKFLOW-RUNNER: Updated state, current step is now:',
+            this.currentState.currentStep?.title,
+            'Type:',
+            this.currentState.currentStep?.type
+        )
 
         console.log(
-            '🎯 WORKFLOW-RUNNER: Executing step:',
+            '🎯 WORKFLOW-RUNNER: Executing in-call step:',
             step.title,
-            step.type
+            step.type,
+            'Phase:',
+            step.phase,
+            'Step Index:',
+            this.stepIndex
         )
 
         try {
@@ -475,37 +559,90 @@ export class WorkflowRunnerService {
     }
 
     private moveToNextStep(): void {
-        const nextStep = this.getNextStep()
+        console.log(
+            '🎯 WORKFLOW-RUNNER: moveToNextStep called, current step index:',
+            this.stepIndex
+        )
+
+        // Increment step index first
+        this.stepIndex++
+
+        const nextStep = this.getNextInCallStep()
         if (nextStep) {
-            console.log('🎯 WORKFLOW-RUNNER: Moving to next step:', nextStep.id)
+            console.log(
+                '🎯 WORKFLOW-RUNNER: Moving to next in-call step:',
+                nextStep.id,
+                nextStep.title,
+                nextStep.type
+            )
             this.currentState.currentStep = nextStep
-            this.stepIndex++
+            console.log(
+                '🎯 WORKFLOW-RUNNER: Updated step index to:',
+                this.stepIndex,
+                'Current step is now:',
+                this.currentState.currentStep.title,
+                'Type:',
+                this.currentState.currentStep.type
+            )
         } else {
-            console.log('🎯 WORKFLOW-RUNNER: No more steps, workflow complete')
+            console.log(
+                '🎯 WORKFLOW-RUNNER: No more in-call steps, workflow complete'
+            )
             this.currentState.currentStep = null
             this.currentState.isComplete = true
         }
     }
 
     async completeCurrentStep(): Promise<void> {
+        console.log(
+            '🎯 WORKFLOW-RUNNER: completeCurrentStep called, current step:',
+            this.currentState.currentStep?.title,
+            'Type:',
+            this.currentState.currentStep?.type,
+            'Step index:',
+            this.stepIndex
+        )
+
         if (this.currentState.currentStep) {
             const step = this.currentState.currentStep
             step.status = 'completed'
 
+            console.log(
+                '🎯 WORKFLOW-RUNNER: Completing step:',
+                step.title,
+                step.type,
+                'Step index:',
+                this.stepIndex
+            )
+
             // Call backend API to complete the step
             try {
                 await this.callStepCompletionAPI(step)
+                console.log(
+                    '🎯 WORKFLOW-RUNNER: Step completion API call successful'
+                )
 
                 // Notify agent workflow service about step completion
-                const nextStep = this.getNextStep()
+                const nextStep = this.getNextInCallStep()
                 this.agentWorkflowService.handleStepCompletion(step, nextStep)
 
                 // Move to next step and continue execution
                 this.moveToNextStep()
                 this.updateState()
 
+                console.log(
+                    '🎯 WORKFLOW-RUNNER: After moveToNextStep, current step:',
+                    this.currentState.currentStep?.title,
+                    'Type:',
+                    this.currentState.currentStep?.type
+                )
+
                 // Continue with next step if there is one
                 if (this.currentState.currentStep) {
+                    console.log(
+                        '🎯 WORKFLOW-RUNNER: Moving to next step:',
+                        this.currentState.currentStep.title
+                    )
                     // Use setTimeout to avoid blocking the current execution
                     setTimeout(() => {
                         if (this.isExecuting) {
@@ -513,6 +650,9 @@ export class WorkflowRunnerService {
                         }
                     }, 1000)
                 } else {
+                    console.log(
+                        '🎯 WORKFLOW-RUNNER: No more steps, completing workflow'
+                    )
                     this.completeWorkflow()
                 }
             } catch (error) {
@@ -526,7 +666,25 @@ export class WorkflowRunnerService {
                         ? error.message
                         : 'Failed to complete step'
                 this.updateState()
+
+                // Even if API call fails, try to move to next step to keep workflow progressing
+                console.log(
+                    '🎯 WORKFLOW-RUNNER: Attempting to continue workflow despite API error'
+                )
+                this.moveToNextStep()
+                this.updateState()
+
+                if (this.currentState.currentStep) {
+                    setTimeout(() => {
+                        if (this.isExecuting) {
+                            this.executeNextStep()
+                        }
+                    }, 1000)
+                }
             }
+        } else {
+            console.error('🎯 WORKFLOW-RUNNER: No current step to complete!')
+            console.log('🎯 WORKFLOW-RUNNER: Current state:', this.currentState)
         }
     }
 
@@ -534,40 +692,86 @@ export class WorkflowRunnerService {
         // Get session ID from session storage
         const sessionData = this.sessionStorage.getSessionData()
         if (!sessionData?.sessionId) {
+            console.error(
+                '🎯 WORKFLOW-RUNNER: No session ID found in session storage'
+            )
+            console.log('🎯 WORKFLOW-RUNNER: Session data:', sessionData)
             throw new Error('No session ID found')
         }
         const sessionId = sessionData.sessionId
 
-        // Call the correct step completion API endpoint
-        const response = await fetch(
-            `${environment.apiUrl}/kyc/workflow-submissions/steps/${sessionId}/${step.id}/complete`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    step_id: step.id,
-                    data: step.data || {},
-                }),
+        console.log('🎯 WORKFLOW-RUNNER: Calling step completion API:', {
+            sessionId,
+            stepId: step.id,
+            stepType: step.type,
+            stepData: step.data,
+        })
+
+        try {
+            // Call the correct step completion API endpoint
+            const response = await fetch(
+                `${environment.apiUrl}/kyc/workflow-submissions/steps/${sessionId}/${step.id}/complete`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        step_id: step.id,
+                        data: step.data || {},
+                    }),
+                }
+            )
+
+            if (!response.ok) {
+                const errorText = await response.text()
+                console.error(
+                    '🎯 WORKFLOW-RUNNER: Step completion API failed:',
+                    {
+                        status: response.status,
+                        statusText: response.statusText,
+                        errorText,
+                    }
+                )
+                throw new Error(
+                    `Step completion failed: ${response.statusText} - ${errorText}`
+                )
             }
-        )
 
-        if (!response.ok) {
-            throw new Error(`Step completion failed: ${response.statusText}`)
-        }
+            const result = await response.json()
+            console.log(
+                '🎯 WORKFLOW-RUNNER: Step completion API response:',
+                result
+            )
 
-        const result = await response.json()
-        console.log('🎯 WORKFLOW-RUNNER: Step completion API response:', result)
-
-        // Update step data with API response
-        if (result.data) {
-            step.data = { ...step.data, ...result.data }
+            // Update step data with API response
+            if (result.data) {
+                step.data = { ...step.data, ...result.data }
+            }
+        } catch (error) {
+            console.error(
+                '🎯 WORKFLOW-RUNNER: Step completion API call failed:',
+                error
+            )
+            throw error
         }
     }
 
     getStepsByPhase(phase: 'pre' | 'in_call' | 'post'): WorkflowStep[] {
-        return this.currentState.steps.filter((step) => step.phase === phase)
+        const filteredSteps = this.currentState.steps.filter(
+            (step) => step.phase === phase
+        )
+        // Debug: Log filtered steps
+        console.log(
+            `🎯 WORKFLOW-RUNNER: Getting ${phase} steps:`,
+            filteredSteps.map((s) => ({
+                id: s.id,
+                title: s.title,
+                type: s.type,
+                phase: s.phase,
+            }))
+        )
+        return filteredSteps
     }
 
     private getNextStep(): WorkflowStep | null {
@@ -578,12 +782,48 @@ export class WorkflowRunnerService {
         return null
     }
 
+    private getNextInCallStep(): WorkflowStep | null {
+        const inCallSteps = this.getInCallSteps()
+        console.log(
+            '🎯 WORKFLOW-RUNNER: Getting next in-call step:',
+            'Current step index:',
+            this.stepIndex,
+            'Total in-call steps:',
+            inCallSteps.length,
+            'In-call steps:',
+            inCallSteps.map((s) => ({ id: s.id, title: s.title, type: s.type }))
+        )
+        if (this.stepIndex < inCallSteps.length) {
+            const nextStep = inCallSteps[this.stepIndex]
+            console.log(
+                '🎯 WORKFLOW-RUNNER: Found next step:',
+                nextStep.id,
+                nextStep.title,
+                nextStep.type
+            )
+            return nextStep
+        }
+        console.log('🎯 WORKFLOW-RUNNER: No next step found')
+        return null
+    }
+
     getPreCallSteps(): WorkflowStep[] {
         return this.getStepsByPhase('pre')
     }
 
     getInCallSteps(): WorkflowStep[] {
-        return this.getStepsByPhase('in_call')
+        const inCallSteps = this.getStepsByPhase('in_call')
+        // Debug: Log in-call steps
+        console.log(
+            '🎯 WORKFLOW-RUNNER: Getting in-call steps:',
+            inCallSteps.map((s) => ({
+                id: s.id,
+                title: s.title,
+                type: s.type,
+                phase: s.phase,
+            }))
+        )
+        return inCallSteps
     }
 
     getPostCallSteps(): WorkflowStep[] {
@@ -609,7 +849,46 @@ export class WorkflowRunnerService {
         }
     }
 
+    async startInCallWorkflow(): Promise<void> {
+        console.log('🎯 WORKFLOW-RUNNER: Starting in-call workflow')
+
+        // Set phase to in_call
+        this.currentState.phase = 'in_call'
+
+        // Find the first in-call step
+        const inCallSteps = this.getInCallSteps()
+        if (inCallSteps.length === 0) {
+            console.warn('🎯 WORKFLOW-RUNNER: No in-call steps found')
+            return
+        }
+
+        // Set the step index to 0 for in-call steps (since we're only working with in-call steps)
+        this.stepIndex = 0
+        const firstInCallStep = inCallSteps[0]
+
+        console.log(
+            '🎯 WORKFLOW-RUNNER: Starting with in-call step:',
+            firstInCallStep.title,
+            'at in-call index:',
+            this.stepIndex
+        )
+
+        // Update state to emit the phase change
+        this.updateState()
+
+        // Execute the first in-call step
+        await this.executeNextStep()
+    }
+
     private updateState(): void {
+        console.log(
+            '🎯 WORKFLOW-RUNNER: updateState called, current step:',
+            this.currentState.currentStep?.title,
+            'Type:',
+            this.currentState.currentStep?.type,
+            'Step index:',
+            this.stepIndex
+        )
         this.stateSubject.next({ ...this.currentState })
     }
 
@@ -619,6 +898,7 @@ export class WorkflowRunnerService {
 
     reset(): void {
         this.workflowConfig = null
+        this.isWorkflowLoaded = false
         this.currentState = {
             currentStep: null,
             steps: [],

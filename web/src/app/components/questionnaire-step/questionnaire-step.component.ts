@@ -162,8 +162,18 @@ export class QuestionnaireStepComponent implements OnInit {
         const questionKey = `question_${this.currentQuestionIndex + 1}`
         this.answers[questionKey] = 'viewed' // Just mark as viewed
 
+        console.log(
+            '🎯 QUESTIONNAIRE-STEP: Moving to next question, current index:',
+            this.currentQuestionIndex,
+            'isLastQuestion:',
+            this.isLastQuestion
+        )
+
         if (this.isLastQuestion) {
             // All questions completed - add a small delay for UX
+            console.log(
+                '🎯 QUESTIONNAIRE-STEP: All questions completed, emitting questionnaireCompleted'
+            )
             setTimeout(() => {
                 this.questionnaireCompleted.emit(this.answers)
                 this.isSubmitting = false

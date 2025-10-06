@@ -28,7 +28,8 @@ export class FrameCaptureHandler implements StepHandler {
     ) {}
 
     canHandle(step: WorkflowStep): boolean {
-        return step.type === 'FRAME_CAPTURE'
+        // Only handle in-call frame capture steps
+        return step.phase === 'in_call' && step.type === 'FRAME_CAPTURE'
     }
 
     start(step: WorkflowStep): Observable<StepHandlerResult> {

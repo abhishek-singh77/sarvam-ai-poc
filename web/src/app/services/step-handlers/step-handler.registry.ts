@@ -4,8 +4,6 @@ import { StepHandler } from './step-handler.interface'
 import { FrameCaptureHandler } from './frame-capture.handler'
 import { QuestionnaireHandler } from './questionnaire.handler'
 import { PreCallHandler } from './pre-call.handler'
-import { GeoTaggingHandler } from './geo-tagging.handler'
-import { UserInstructionHandler } from './user-instruction.handler'
 
 @Injectable({
     providedIn: 'root',
@@ -16,9 +14,7 @@ export class StepHandlerRegistry {
     constructor(
         private frameCaptureHandler: FrameCaptureHandler,
         private questionnaireHandler: QuestionnaireHandler,
-        private preCallHandler: PreCallHandler,
-        private geoTaggingHandler: GeoTaggingHandler,
-        private userInstructionHandler: UserInstructionHandler
+        private preCallHandler: PreCallHandler
     ) {
         this.registerHandlers()
     }
@@ -28,8 +24,6 @@ export class StepHandlerRegistry {
             this.frameCaptureHandler,
             this.questionnaireHandler,
             this.preCallHandler,
-            this.geoTaggingHandler,
-            this.userInstructionHandler,
         ]
     }
 

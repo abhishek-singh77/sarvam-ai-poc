@@ -179,8 +179,40 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
     }
 
     isCaptureButtonEnabled(): boolean {
-        // Always enable capture button regardless of step type or status
-        return true
+        // Only enable capture button for FRAME_CAPTURE steps
+        const currentStep = this.state?.currentStep
+        if (!currentStep) {
+            return false
+        }
+
+        // Enable for FRAME_CAPTURE steps only
+        return currentStep.type === 'FRAME_CAPTURE'
+    }
+
+    getCaptureButtonClasses(): string {
+        const captureType = this.state?.captureType
+        if (captureType === 'FACE_CAPTURE') {
+            return 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 animate-glow'
+        } else if (captureType === 'DOCUMENT_CAPTURE') {
+            return 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 animate-glow'
+        } else {
+            return 'bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 animate-glow'
+        }
+    }
+
+    getCaptureButtonTitle(): string {
+        if (!this.isCaptureButtonEnabled()) {
+            return 'Capture not available for current step'
+        }
+
+        const captureType = this.state?.captureType
+        if (captureType === 'FACE_CAPTURE') {
+            return 'Capture Selfie'
+        } else if (captureType === 'DOCUMENT_CAPTURE') {
+            return 'Capture Document'
+        } else {
+            return 'Capture Photo'
+        }
     }
 
     onVoiceRecognition(question: any): void {

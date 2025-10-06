@@ -398,16 +398,11 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
                 // Save analysis data to session storage for accordion display
                 this.saveAnalysisData(subActionId, uploadResponse)
 
-                // Complete the workflow step (don't let this fail the upload)
-                try {
-                    await this.completeWorkflowStep(subActionId, uploadResponse)
-                } catch (stepError) {
-                    console.warn(
-                        '🎯 IMAGE-MANIPULATOR: Step completion failed, but upload was successful:',
-                        stepError
-                    )
-                    // Don't throw here - the image upload was successful
-                }
+                // Don't complete the workflow step automatically - wait for user to click "Done" or "Continue"
+                // The step will be completed when the user clicks "Continue" in the analysis display
+                console.log(
+                    '🎯 IMAGE-MANIPULATOR: Upload successful, waiting for user to continue'
+                )
 
                 // Don't close dialog immediately - show analysis results first
                 // User will click Continue to close and see results in accordion
@@ -603,8 +598,25 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
             return
         }
 
-        // Just close the dialog without triggering any additional API calls
-        // The upload and step completion were already handled during the initial upload
+        // Complete the workflow step now that user has reviewed the analysis
+        if (this.uploadSuccess && this.config.subActionId) {
+            try {
+                await this.completeWorkflowStep(
+                    this.config.subActionId,
+                    this.uploadResponse
+                )
+                console.log(
+                    '🎯 IMAGE-MANIPULATOR: Workflow step completed after user continued'
+                )
+            } catch (error) {
+                console.warn(
+                    '🎯 IMAGE-MANIPULATOR: Failed to complete workflow step:',
+                    error
+                )
+            }
+        }
+
+        // Close the dialog
         this.closeDialog(false)
     }
 

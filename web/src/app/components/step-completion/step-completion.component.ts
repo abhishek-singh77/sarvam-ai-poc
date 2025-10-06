@@ -16,14 +16,16 @@ export interface StepCompletionData {
     standalone: true,
     imports: [CommonModule],
     template: `
-        <div class="bg-white rounded-xl p-4 sm:p-6 shadow-lg">
+        <div class="bg-white rounded-xl p-4 sm:p-6 shadow-lg glass-card">
             <div class="text-center">
                 <!-- Step Header -->
                 <div class="mb-6">
                     <div
-                        class="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center"
+                        class="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center shadow-modern"
                         [ngClass]="
-                            data.isCompleted ? 'bg-green-100' : 'bg-blue-100'
+                            data.isCompleted
+                                ? 'bg-gradient-to-r from-green-100 to-emerald-100 animate-glow'
+                                : 'bg-gradient-to-r from-blue-100 to-indigo-100'
                         ">
                         <svg
                             *ngIf="data.isCompleted"
@@ -137,7 +139,7 @@ export interface StepCompletionData {
                     <button
                         *ngIf="!data.isCompleted && !data.isLoading"
                         (click)="onStartStep()"
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                        class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl btn-modern">
                         Start {{ data.stepTitle }}
                     </button>
 
@@ -174,7 +176,7 @@ export interface StepCompletionData {
                             !data.isLoading
                         "
                         (click)="onNextStep()"
-                        class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                        class="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl btn-modern">
                         Next Step
                     </button>
 
@@ -185,7 +187,7 @@ export interface StepCompletionData {
                             !data.isLoading
                         "
                         (click)="onFinish()"
-                        class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                        class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl btn-modern animate-glow">
                         Finish KYC
                     </button>
                 </div>
