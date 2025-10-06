@@ -94,6 +94,8 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
 
     @Output() imageProcessed = new EventEmitter<UploadCroppedImageResponse>()
     @Output() error = new EventEmitter<string>()
+    @Output() imageRetake = new EventEmitter<void>()
+    @Output() imageClosed = new EventEmitter<void>()
 
     constructor(
         @Optional() @Inject(MAT_DIALOG_DATA) public dialogData: any,
@@ -586,6 +588,7 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
         if (!this.canRetake) {
             return
         }
+        this.imageRetake.emit()
         this.closeDialog(false)
     }
 
@@ -676,6 +679,9 @@ export class ImageManipulatorComponent implements OnInit, OnDestroy {
 
         // Emit event for parent components
         this.imageProcessed.emit(data)
+
+        // Emit close event for auto-restart
+        this.imageClosed.emit()
 
         if (this.dialogRef) {
             this.dialogRef.close(data)

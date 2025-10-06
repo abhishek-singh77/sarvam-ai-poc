@@ -5,7 +5,6 @@ import { StepHandler, StepHandlerResult } from './step-handler.interface'
 import {
     EnhancedDetectionService,
     DetectionResult,
-    DocumentDetectionResult,
 } from '../enhanced-detection.service'
 import {
     SubmissionService,
@@ -19,9 +18,7 @@ import { VkycJourneyService } from '../vkyc-journey.service'
 })
 export class FrameCaptureHandler implements StepHandler {
     private currentStep: WorkflowStep | null = null
-    private detectionResult = new BehaviorSubject<
-        DetectionResult | DocumentDetectionResult | null
-    >(null)
+    private detectionResult = new BehaviorSubject<DetectionResult | null>(null)
     private isCapturing = false
 
     constructor(
@@ -113,54 +110,24 @@ export class FrameCaptureHandler implements StepHandler {
         step: WorkflowStep
     ): Observable<StepHandlerResult> {
         return new Observable((observer) => {
-            // Use default document constraints for now
-            // TODO: Implement document type specific constraints if needed
-            const constraints =
-                this.detectionService.getDefaultDocumentConstraints()
+            console.log(
+                '🎯 FRAME-CAPTURE-HANDLER: Document capture step started - manual capture only'
+            )
 
-            // Start document detection
-            this.detectionService
-                .startDocumentDetection(this.getVideoElement())
-                .then(() => {
-                    console.log(
-                        '🎯 FRAME-CAPTURE-HANDLER: Document detection started, waiting for capture'
-                    )
-
-                    // Subscribe to detection results
-                    const subscription =
-                        this.detectionService.documentDetection$.subscribe(
-                            (result) => {
-                                this.detectionResult.next(result)
-
-                                // Don't auto-capture here - let the UI handle capture
-                                // The step will be completed when the user captures or auto-capture is triggered
-                            }
-                        )
-
-                    // Return success immediately - the step is now active and waiting for capture
-                    observer.next({
-                        success: true,
-                        data: { stepStarted: true },
-                        shouldProceed: false, // Don't auto-proceed, wait for capture
-                    })
-                    observer.complete()
-
-                    // Cleanup subscription when observable completes
-                    observer.add(() => subscription.unsubscribe())
-                })
-                .catch((error) => {
-                    observer.next({
-                        success: false,
-                        error: error.message,
-                    })
-                    observer.complete()
-                })
+            // Document capture is manual only - no detection needed
+            // Return success immediately - the step is now active and waiting for manual capture
+            observer.next({
+                success: true,
+                data: { stepStarted: true },
+                shouldProceed: false, // Don't auto-proceed, wait for manual capture
+            })
+            observer.complete()
         })
     }
 
     private async performCapture(
         step: WorkflowStep,
-        detectionResult: DetectionResult | DocumentDetectionResult
+        detectionResult: DetectionResult
     ): Promise<StepHandlerResult> {
         if (this.isCapturing) {
             return { success: false, error: 'Capture already in progress' }

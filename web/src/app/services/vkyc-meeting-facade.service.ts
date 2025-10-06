@@ -217,8 +217,9 @@ export class VkycMeetingFacadeService {
                 )
             }
 
-            // Load workflow from assets
-            const workflow = await this.loadWorkflowFromAssets()
+            // Use workflow from session data (loaded from API)
+            const workflow =
+                sessionData.workflow || (await this.loadWorkflowFromAssets())
 
             const request = this.joinAgentService.createJoinAgentRequest(
                 sessionData.roomId,

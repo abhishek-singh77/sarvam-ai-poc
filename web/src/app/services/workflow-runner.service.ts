@@ -326,11 +326,12 @@ export class WorkflowRunnerService {
         const handler = this.stepHandlerRegistry.getHandler(step)
 
         if (!handler) {
-            console.warn(
-                '🎯 WORKFLOW-RUNNER: No handler found for step type:',
-                step.type
-            )
-            return
+            const errorMessage = `No handler found for step type: ${step.type}`
+            console.error('🎯 WORKFLOW-RUNNER:', errorMessage)
+            step.status = 'error'
+            step.error = errorMessage
+            this.updateState()
+            throw new Error(errorMessage)
         }
 
         this.currentHandler = handler
@@ -491,8 +492,6 @@ export class WorkflowRunnerService {
             const step = this.currentState.currentStep
             step.status = 'completed'
 
-            console.log('🎯 WORKFLOW-RUNNER: Completed step:', step.id)
-
             // Call backend API to complete the step
             try {
                 await this.callStepCompletionAPI(step)
@@ -507,10 +506,6 @@ export class WorkflowRunnerService {
 
                 // Continue with next step if there is one
                 if (this.currentState.currentStep) {
-                    console.log(
-                        '🎯 WORKFLOW-RUNNER: Continuing to next step:',
-                        this.currentState.currentStep.id
-                    )
                     // Use setTimeout to avoid blocking the current execution
                     setTimeout(() => {
                         if (this.isExecuting) {
@@ -518,9 +513,6 @@ export class WorkflowRunnerService {
                         }
                     }, 1000)
                 } else {
-                    console.log(
-                        '🎯 WORKFLOW-RUNNER: No more steps, workflow complete'
-                    )
                     this.completeWorkflow()
                 }
             } catch (error) {

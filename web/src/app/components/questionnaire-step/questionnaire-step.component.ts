@@ -162,15 +162,9 @@ export class QuestionnaireStepComponent implements OnInit {
         const questionKey = `question_${this.currentQuestionIndex + 1}`
         this.answers[questionKey] = 'viewed' // Just mark as viewed
 
-        console.log('🎯 QUESTIONNAIRE-STEP: Question viewed:', questionKey)
-
         if (this.isLastQuestion) {
             // All questions completed - add a small delay for UX
             setTimeout(() => {
-                console.log(
-                    '🎯 QUESTIONNAIRE-STEP: All questions completed:',
-                    this.answers
-                )
                 this.questionnaireCompleted.emit(this.answers)
                 this.isSubmitting = false
             }, 1000)
@@ -179,16 +173,11 @@ export class QuestionnaireStepComponent implements OnInit {
             setTimeout(() => {
                 this.currentQuestionIndex++
                 this.isSubmitting = false
-                console.log(
-                    '🎯 QUESTIONNAIRE-STEP: Moving to question:',
-                    this.currentQuestionIndex + 1
-                )
             }, 500)
         }
     }
 
     onEndKyc(): void {
-        console.log('🎯 QUESTIONNAIRE-STEP: End KYC requested')
         this.endKyc.emit()
     }
 }

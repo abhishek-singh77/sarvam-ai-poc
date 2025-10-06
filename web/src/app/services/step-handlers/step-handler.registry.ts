@@ -4,9 +4,11 @@ import { StepHandler } from './step-handler.interface'
 import { FrameCaptureHandler } from './frame-capture.handler'
 import { QuestionnaireHandler } from './questionnaire.handler'
 import { PreCallHandler } from './pre-call.handler'
+import { GeoTaggingHandler } from './geo-tagging.handler'
+import { UserInstructionHandler } from './user-instruction.handler'
 
 @Injectable({
-    providedIn: 'root'
+    providedIn: 'root',
 })
 export class StepHandlerRegistry {
     private handlers: StepHandler[] = []
@@ -14,7 +16,9 @@ export class StepHandlerRegistry {
     constructor(
         private frameCaptureHandler: FrameCaptureHandler,
         private questionnaireHandler: QuestionnaireHandler,
-        private preCallHandler: PreCallHandler
+        private preCallHandler: PreCallHandler,
+        private geoTaggingHandler: GeoTaggingHandler,
+        private userInstructionHandler: UserInstructionHandler
     ) {
         this.registerHandlers()
     }
@@ -23,7 +27,9 @@ export class StepHandlerRegistry {
         this.handlers = [
             this.frameCaptureHandler,
             this.questionnaireHandler,
-            this.preCallHandler
+            this.preCallHandler,
+            this.geoTaggingHandler,
+            this.userInstructionHandler,
         ]
     }
 
@@ -31,7 +37,7 @@ export class StepHandlerRegistry {
      * Get the appropriate handler for a step
      */
     getHandler(step: WorkflowStep): StepHandler | null {
-        return this.handlers.find(handler => handler.canHandle(step)) || null
+        return this.handlers.find((handler) => handler.canHandle(step)) || null
     }
 
     /**

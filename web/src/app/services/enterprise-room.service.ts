@@ -277,8 +277,9 @@ export class EnterpriseRoomService {
             this.setStatus('Joining agent...')
             this.appendLog('🤖 Starting KYC agent...')
 
-            // Load workflow from assets
-            const workflow = await this.loadWorkflowFromAssets()
+            // Use workflow from session data (loaded from API)
+            const workflow =
+                session.workflow || (await this.loadWorkflowFromAssets())
 
             // Use the join-agent endpoint like the old backend
             const agentResponse = await this.enterpriseApi

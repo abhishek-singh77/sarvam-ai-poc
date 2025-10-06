@@ -7,6 +7,7 @@ export interface SessionData {
     agentParticipantId: string
     clientToken: string
     participantId: string
+    workflow?: any // Workflow configuration loaded from API
     timestamp: number
 }
 

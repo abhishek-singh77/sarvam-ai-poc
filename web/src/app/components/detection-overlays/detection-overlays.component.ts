@@ -9,7 +9,6 @@ import {
 import { CommonModule } from '@angular/common'
 import {
     DetectionResult,
-    DocumentDetectionResult,
     MultipleFaceDetectionResult,
 } from '../../services/enhanced-detection.service'
 
@@ -24,13 +23,14 @@ export class DetectionOverlaysComponent implements OnInit, OnDestroy {
     @Input() detectionResult: DetectionResult | null = null
     @Input() multipleFaceDetectionResult: MultipleFaceDetectionResult | null =
         null
-    @Input() documentDetectionResult: DocumentDetectionResult | null = null
+    // Document detection removed - only manual capture for documents
     @Input() captureType:
         | 'FACE_CAPTURE'
         | 'DOCUMENT_CAPTURE'
         | 'QUESTIONNAIRE'
         | null = null
     @Input() showMultipleFaces: boolean = true
+    @Input() isImageManipulatorOpen: boolean = false
     @Output() autoCaptureTriggered = new EventEmitter<void>()
 
     // Countdown state
@@ -39,11 +39,13 @@ export class DetectionOverlaysComponent implements OnInit, OnDestroy {
     private lastSteadyTime: number = 0
     private readonly STEADY_DURATION_MS = 500 // 0.5 second of steady detection before countdown (reduced for better UX)
     private readonly COUNTDOWN_DURATION = 3 // 3 second countdown
-    private readonly MIN_CONFIDENCE_THRESHOLD = 0.6 // Minimum confidence for auto-capture (increased for better quality)
+    private readonly MIN_CONFIDENCE_THRESHOLD = 0.6 // Minimum confidence for auto-capture (optimized for better UX)
 
     ngOnInit() {
         // Start monitoring for steady detection
         this.startSteadyDetectionMonitoring()
+
+        // Component initialized
     }
 
     ngOnDestroy() {
@@ -53,6 +55,7 @@ export class DetectionOverlaysComponent implements OnInit, OnDestroy {
     private startSteadyDetectionMonitoring() {
         setInterval(() => {
             const isSteady = this.isDetectionSteady()
+            // Steady detection monitoring
 
             if (isSteady) {
                 const now = Date.now()
@@ -66,11 +69,18 @@ export class DetectionOverlaysComponent implements OnInit, OnDestroy {
                     this.STEADY_DURATION_MS
                 ) {
                     // Detection has been steady for required duration, start countdown
-                    if (this.countdown === null) {
+                    if (
+                        this.countdown === null &&
+                        !this.isImageManipulatorOpen
+                    ) {
                         console.log(
                             '🎯 DETECTION: Starting auto-capture countdown'
                         )
                         this.startCountdown()
+                    } else if (this.isImageManipulatorOpen) {
+                        console.log(
+                            '🎯 DETECTION: Auto-capture countdown blocked - image manipulator is open'
+                        )
                     }
                 }
             } else {
@@ -94,83 +104,41 @@ export class DetectionOverlaysComponent implements OnInit, OnDestroy {
             const hasGoodConfidence = this.hasGoodConfidence()
             const confidence = faceResult?.confidence || 0
 
-            // For auto-capture, we only need good confidence, not necessarily steady
-            // This makes auto-capture more responsive
+            // Face detection steady check
+
+            // For auto-capture, we only need good confidence and single face
+            // No steady condition needed - immediate capture when conditions are met
             if (
                 hasGoodConfidence &&
-                confidence >= this.MIN_CONFIDENCE_THRESHOLD
+                confidence >= this.MIN_CONFIDENCE_THRESHOLD &&
+                this.multipleFaceDetectionResult?.totalFaces === 1
             ) {
-                if (this.lastSteadyTime === 0) {
-                    this.lastSteadyTime = currentTime
-                    console.log(
-                        `🎯 DETECTION: Face detected with good confidence=${confidence.toFixed(
-                            2
-                        )}, starting steady timer`
-                    )
-                }
-                return (
-                    currentTime - this.lastSteadyTime >= this.STEADY_DURATION_MS
-                )
+                return true
             } else {
-                if (this.lastSteadyTime !== 0) {
-                    console.log(
-                        `🎯 DETECTION: Face confidence too low=${confidence.toFixed(
-                            2
-                        )}, resetting timer`
-                    )
-                }
-                this.lastSteadyTime = 0
+                return false
             }
         } else if (this.captureType === 'DOCUMENT_CAPTURE') {
-            const hasGoodConfidence = this.hasGoodConfidence()
-            const confidence = this.documentDetectionResult?.confidence || 0
-
-            // For auto-capture, we only need good confidence, not necessarily steady
-            if (
-                hasGoodConfidence &&
-                confidence >= this.MIN_CONFIDENCE_THRESHOLD
-            ) {
-                if (this.lastSteadyTime === 0) {
-                    this.lastSteadyTime = currentTime
-                    console.log(
-                        `🎯 DETECTION: Document detected with good confidence=${confidence.toFixed(
-                            2
-                        )}, starting steady timer`
-                    )
-                }
-                return (
-                    currentTime - this.lastSteadyTime >= this.STEADY_DURATION_MS
-                )
-            } else {
-                if (this.lastSteadyTime !== 0) {
-                    console.log(
-                        `🎯 DETECTION: Document confidence too low=${confidence.toFixed(
-                            2
-                        )}, resetting timer`
-                    )
-                }
-                this.lastSteadyTime = 0
-            }
+            // Document capture is manual only - no auto-capture
+            return false
         }
         return false
     }
 
     private hasGoodConfidence(): boolean {
-        // Check confidence levels for better auto-capture quality
+        // Simplified confidence check for immediate auto-capture
         if (this.captureType === 'FACE_CAPTURE') {
             const faceResult =
                 this.multipleFaceDetectionResult?.primaryFace ||
                 this.detectionResult
             if (faceResult?.confidence) {
-                return faceResult.confidence >= this.MIN_CONFIDENCE_THRESHOLD
+                const hasGoodConfidence =
+                    faceResult.confidence >= this.MIN_CONFIDENCE_THRESHOLD
+                // Confidence check
+                return hasGoodConfidence
             }
         } else if (this.captureType === 'DOCUMENT_CAPTURE') {
-            if (this.documentDetectionResult?.confidence) {
-                return (
-                    this.documentDetectionResult.confidence >=
-                    this.MIN_CONFIDENCE_THRESHOLD
-                )
-            }
+            // Document capture is manual only - no auto-capture
+            return false
         }
 
         // If no confidence data, assume good quality

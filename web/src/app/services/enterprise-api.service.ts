@@ -20,6 +20,7 @@ export interface SessionResponse {
     status: string
     workflow_type: string
     agent_type: string
+    workflow?: any // Workflow configuration loaded from API
     created_at?: string
     expires_at?: string
     agent: {

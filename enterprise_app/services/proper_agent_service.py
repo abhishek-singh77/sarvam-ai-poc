@@ -52,10 +52,27 @@ class KYCVoiceAgent(Agent):
         self.completed_steps = []
         self.session_ended = False
         
+        # Parse workflow JSON if provided
+        if workflow_json:
+            try:
+                import json
+                self.workflow_data = json.loads(workflow_json)
+                logger.info("🎯 AGENT: Successfully parsed workflow JSON from API")
+            except json.JSONDecodeError as e:
+                logger.error(f"🎯 AGENT: Failed to parse workflow JSON: {e}")
+                self.workflow_data = None
+            except Exception as e:
+                logger.error(f"🎯 AGENT: Error processing workflow JSON: {e}")
+                self.workflow_data = None
+        else:
+            logger.info("🎯 AGENT: No workflow JSON provided, will use hardcoded fallback")
+        
         # Initialize workflow data
         logger.info("🎯 AGENT: Initializing KYC Voice Agent")
-        self.workflow_data = self._get_hardcoded_workflow()
-        logger.info("🎯 AGENT: Workflow data loaded successfully")
+        if self.workflow_data:
+            logger.info("🎯 AGENT: Using workflow data from API")
+        else:
+            logger.info("🎯 AGENT: Using hardcoded workflow fallback")
         
         # Get workflow steps for context
         workflow_steps = self.get_all_in_call_steps()
@@ -90,6 +107,8 @@ class KYCVoiceAgent(Agent):
         3. Ask questions naturally and listen to user responses
         4. Provide helpful feedback and guidance throughout the process
         5. Be patient, friendly, and professional at all times
+        6. Monitor user visibility during capture steps and provide guidance
+        7. Ensure users are properly positioned before capture begins
 
         CONVERSATION STYLE:
         - Speak naturally and conversationally, like a helpful assistant
@@ -113,6 +132,14 @@ class KYCVoiceAgent(Agent):
         - Keep speech natural, conversational, and user-friendly
         - Only speak what the user needs to hear
         - Your responses should be conversational, not technical
+
+        CAPTURE STEP GUIDANCE:
+        - For FACE_CAPTURE steps: Ensure the customer's face is clearly visible, well-lit, and centered in the camera view
+        - For DOCUMENT_CAPTURE steps: Ensure the document is clearly visible, all text is readable, and the document fills the frame properly
+        - Monitor visibility every 2-3 seconds and provide guidance if positioning needs adjustment
+        - Give clear instructions on how to position themselves or their documents
+        - Provide positive feedback when positioning is correct
+        - The system will automatically capture when conditions are optimal
 
         Always be helpful, patient, and professional. Guide users through each step clearly and provide encouragement throughout the process.
 
@@ -405,8 +432,8 @@ class KYCVoiceAgent(Agent):
 
     def get_all_in_call_steps(self):
         """Get all workflow steps that the agent should handle"""
-        # Always use hardcoded workflow for consistent behavior
-        workflow_data = self._get_hardcoded_workflow()
+        # Use workflow data from API if available, otherwise use hardcoded fallback
+        workflow_data = self.workflow_data or self._get_hardcoded_workflow()
         
         if not workflow_data or not workflow_data.get('actionables'):
             logger.warning("🎯 No workflow data or actionables found")
@@ -605,10 +632,10 @@ class KYCVoiceAgent(Agent):
             
             if step_type == 'FRAME_CAPTURE':
                 if step.get('frame_capture_type') == 'FACE_CAPTURE':
-                    return f"Now let's take your selfie. Please look directly at the camera and keep your face centered with good lighting."
+                    return f"Now let's take your selfie. Please look directly at the camera, keep your face centered, and ensure good lighting. I'll monitor your positioning and the system will automatically capture when everything looks perfect. Please hold still and look at the camera."
                 else:
                     doc_type = step.get('strict_validation_type', 'document')
-                    return f"Now let's capture your {doc_type}. Please hold the document steady in front of the camera, ensuring all text is clearly visible."
+                    return f"Now let's capture your {doc_type}. Please hold the document steady in front of the camera, ensuring all text is clearly visible and the document fills the frame. I'll monitor the positioning and the system will automatically capture when the document is clearly visible. Please hold the document steady."
             elif step_type == 'QUESTIONNAIRE':
                 return f"Now I have some questions for you. Please answer each question clearly."
             else:

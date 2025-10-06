@@ -45,6 +45,9 @@ export interface VkycLayoutState {
     isMicMuted?: boolean
     currentPrompt?: any
     isWaitingForResponse?: boolean
+    showCaptureLabel?: boolean
+    captureLabel?: string
+    showImageManipulator?: boolean
 }
 
 export interface WorkflowStep {
@@ -111,7 +114,6 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
         // Subscribe to mic state changes from the meeting service
         this.subscriptions.add(
             this.meetingService.micState$.subscribe((isMicEnabled: boolean) => {
-                console.log('🎯 LAYOUT: Mic state changed to:', isMicEnabled)
                 this.isMicMuted = !isMicEnabled
             })
         )
@@ -144,33 +146,27 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
 
     // Meeting panel event handlers
     onStreamsActive(active: boolean): void {
-        console.log('🎯 LAYOUT: Streams active:', active)
         // Note: Face detection is now handled directly in the vkyc-session component
         // No need to emit startCall here as it would cause infinite loops
     }
 
     onEndCall(): void {
-        console.log('🎯 LAYOUT: End call requested')
         this.endSession.emit()
     }
 
     onChatToggle(): void {
-        console.log('🎯 LAYOUT: Chat toggle requested')
         this.chatToggle.emit()
     }
 
     onCameraToggle(): void {
-        console.log('🎯 LAYOUT: Camera toggle requested')
         this.cameraToggle.emit()
     }
 
     onMicToggle(): void {
-        console.log('🎯 LAYOUT: Mic toggle requested')
         // Directly call the meeting service to toggle mic
         this.meetingService
             .toggleLocalMic()
             .then((isMicEnabled: boolean) => {
-                console.log('🎯 LAYOUT: Mic toggled, enabled:', isMicEnabled)
                 // The mic state will be updated via the subscription in ngOnInit
             })
             .catch((error: any) => {
@@ -179,7 +175,6 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
     }
 
     onCapturePhoto(): void {
-        console.log('🎯 LAYOUT: Capture photo requested')
         this.capturePhoto.emit()
     }
 
@@ -197,12 +192,10 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
     }
 
     onQuestionnaireRetry(): void {
-        console.log('🎯 LAYOUT: Questionnaire retry requested')
         this.questionnaireRetry.emit()
     }
 
     onQuestionnaireSubmit(answers: { [key: string]: any }): void {
-        console.log('🎯 LAYOUT: Questionnaire submitted with answers:', answers)
         // Store answers in component state for access by parent
         this.questionnaireAnswers = answers
         this.questionnaireSubmit.emit()
@@ -214,12 +207,6 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
         const isCurrentStep = this.state?.currentStep?.id === step.id
         // Debug logging (can be removed in production)
         if (step.type === 'QUESTIONNAIRE') {
-            console.log('🎯 LAYOUT: Questionnaire step highlighting:', {
-                stepId: step.id,
-                currentStepId: this.state?.currentStep?.id,
-                isCurrentStep: isCurrentStep,
-                stepStatus: step.status,
-            })
         }
 
         switch (step.status) {
@@ -326,14 +313,6 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
             return 0
         })
 
-        // Debug logging (can be removed in production)
-        console.log(
-            '🎯 LAYOUT: In-call steps count:',
-            sortedSteps.length,
-            'Current step:',
-            this.state?.currentStep?.id
-        )
-
         return sortedSteps
     }
 
@@ -365,7 +344,6 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
         questionId: string
         response: string
     }): void {
-        console.log('🎯 LAYOUT: Agent response submitted:', event)
         this.agentResponseSubmitted.emit(event)
     }
 
@@ -373,12 +351,10 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
         questionId: string
         response: string
     }): void {
-        console.log('🎯 LAYOUT: Agent response updated:', event)
         this.agentResponseUpdated.emit(event)
     }
 
     onAgentProceed(): void {
-        console.log('🎯 LAYOUT: Agent proceed button clicked')
         this.agentProceed.emit()
     }
 
@@ -497,6 +473,11 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
                 (step: any) => step.phase === 'in_call'
             )
 
+            // If no steps are loaded yet, return false (workflow not started)
+            if (inCallSteps.length === 0) {
+                return false
+            }
+
             // Check if all in-call steps are completed
             return inCallSteps.every((step: any) => {
                 if (step.type === 'QUESTIONNAIRE') {
@@ -526,13 +507,11 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
     }
 
     onNextStep(): void {
-        console.log('🎯 LAYOUT: Next step requested')
         const currentStep = this.state?.currentStep
 
         if (!currentStep) {
             // Check if all steps are completed
             if (this.areAllStepsCompleted()) {
-                console.log('🎯 LAYOUT: All steps completed, ending KYC')
                 this.finishKyc.emit()
                 return
             }
@@ -545,13 +524,14 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
         switch (currentStep.type) {
             case 'QUESTIONNAIRE':
                 // For questionnaire, just mark as completed and move to next
-                console.log('🎯 LAYOUT: Completing questionnaire step')
                 this.nextStep.emit()
                 break
             case 'FRAME_CAPTURE':
-                // For image capture, trigger the camera
-                console.log('🎯 LAYOUT: Opening camera for capture')
-                this.capturePhoto.emit()
+                // For image capture, trigger the start image capture
+                console.log(
+                    '🎯 LAYOUT: Triggering start image capture for FRAME_CAPTURE step'
+                )
+                this.startImageCapture.emit()
                 break
             default:
                 // For other steps, just move to next
@@ -562,17 +542,14 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
 
     // New event handlers for step components
     onQuestionnaireCompleted(answers: { [key: string]: string }): void {
-        console.log('🎯 LAYOUT: Questionnaire completed with answers:', answers)
         this.questionnaireCompleted.emit(answers)
     }
 
     onStartImageCapture(): void {
-        console.log('🎯 LAYOUT: Start image capture requested')
         this.startImageCapture.emit()
     }
 
     onFinishKyc(): void {
-        console.log('🎯 LAYOUT: Finish KYC requested')
         this.finishKyc.emit()
     }
 

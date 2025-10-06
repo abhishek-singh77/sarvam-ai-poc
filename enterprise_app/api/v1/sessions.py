@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from utils.logger import get_logger
 from services.videosdk_service import register_room_with_tokens
 from services.proper_agent_service import proper_agent_service
+from services.workflow_service import workflow_service
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -79,6 +80,15 @@ async def create_session(request: CreateSessionRequest) -> Dict[str, Any]:
         # Create VideoSDK room with tokens
         room_data = await register_room_with_tokens(auto_close_minutes=60)
         
+        # Load workflow configuration
+        try:
+            workflow_data = workflow_service.load_workflow(request.workflow_type)
+            logger.info(f"🎯 SESSION: Loaded workflow for type: {request.workflow_type}")
+        except Exception as e:
+            logger.warning(f"🎯 SESSION: Failed to load workflow for type {request.workflow_type}: {e}")
+            # Use default workflow if loading fails
+            workflow_data = workflow_service.load_workflow("kyc")
+        
         # Create session response in the format expected by the frontend
         response = {
             "roomId": room_data["roomId"],
@@ -95,6 +105,7 @@ async def create_session(request: CreateSessionRequest) -> Dict[str, Any]:
             "session_id": room_data["customRoomId"],
             "workflow_type": request.workflow_type,
             "agent_type": request.agent_type,
+            "workflow": workflow_data,  # Include workflow data in response
             "status": "created"
         }
         

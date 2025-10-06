@@ -68,6 +68,29 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     showErrorModal = false
     errorMessage = ''
 
+    // Simple capture label state
+    captureLabel = ''
+    showCaptureLabel = false
+
+    // Auto-capture prevention
+    private autoCaptureTriggered = false
+    private isAutoCaptureInProgress = false
+    private autoRestartTimeout: any = null
+    private isImageManipulatorOpen = false
+    private hasCapturedImage = false
+
+    // Countdown monitoring
+    private countdownInterval: any = null
+    private isCountdownActive = false
+    private currentCountdownStep = 0
+    private countdownMessages: string[] = []
+    private detectionFailureCount = 0
+    private readonly MAX_DETECTION_FAILURES = 3 // Allow 3 consecutive failures before stopping
+    private detectionFailureTimeout: any = null
+
+    // Workflow initialization prevention
+    private isInitializingWorkflow = false
+
     // Image manipulator data
     capturedImageBlob: Blob | null = null
     capturedImageBase64: string = ''
@@ -121,9 +144,7 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         private router: Router,
         private notificationService: NotificationService,
         private journeyService: VkycJourneyService
-    ) {
-        console.log('🎯 VKYC-SESSION: Component initialized')
-    }
+    ) {}
 
     ngOnInit(): void {
         console.log('🎯 VKYC-SESSION: ngOnInit called')
@@ -147,6 +168,9 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     ngOnDestroy(): void {
         console.log('🎯 VKYC-SESSION: Component destroying, cleaning up...')
+
+        // Clean up countdown first to prevent memory leaks
+        this.stopCountdown()
 
         // Unsubscribe from all subscriptions
         this.subscriptions.unsubscribe()
@@ -220,6 +244,11 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         // Initialize face detection and auto-capture
         this.initializeFaceDetection()
 
+        // Ensure auto-capture is enabled by default
+        if (!this.captureFacade.isAutoCaptureEnabled$.value) {
+            this.captureFacade.toggleAutoCapture()
+        }
+
         // Don't initialize workflow here - wait for agent stream to be ready
         // this.workflowFacade.init()
     }
@@ -234,33 +263,94 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                 )
                 this.updateLayoutState({
                     multipleFaceDetectionResult: result,
+                    detectionResult: result?.primaryFace || null,
                 })
 
-                // Auto-capture if primary face is detected and auto-capture is enabled
-                if (
-                    result?.primaryFace &&
-                    result.primaryFace.confidence > 0.7 && // Lowered threshold
-                    result.primaryFace.steady &&
-                    this.captureFacade.isAutoCaptureEnabled$.value &&
-                    this.layoutState?.currentStep?.type === 'FRAME_CAPTURE'
-                ) {
+                // Updated layout state with detection result
+
+                // Check if countdown is active and monitor detection quality
+                if (this.isCountdownActive) {
+                    this.monitorDetectionDuringCountdown(result, 'FACE_CAPTURE')
+                    return
+                }
+
+                // CRITICAL: Immediate guard to prevent auto-capture if image manipulator is open
+                if (this.isImageManipulatorOpen || this.hasCapturedImage) {
                     console.log(
-                        '🎯 VKYC-SESSION: Auto-capture conditions met, triggering capture'
+                        '🎯 VKYC-SESSION: Face detection blocked - image manipulator open or image captured'
                     )
-                    this.performAutoCapture()
-                } else {
+                    return
+                }
+
+                // Auto-capture if primary face is detected and conditions are met
+                const currentStep = this.layoutState?.currentStep
+                const captureType =
+                    currentStep?.data?.captureType ||
+                    currentStep?.data?.frame_capture_type
+
+                // Current step and capture type determined
+
+                const canAutoCapture =
+                    result?.primaryFace &&
+                    result.primaryFace.confidence > 0.6 && // Reduced from 0.7 to 0.6 for better UX
+                    result.totalFaces === 1 && // Only 1 face detected
+                    captureType === 'FACE_CAPTURE' && // Only for face capture steps
+                    this.captureFacade.isAutoCaptureEnabled$.value &&
+                    currentStep?.type === 'FRAME_CAPTURE' &&
+                    !this.captureFacade.isCapturing$.value &&
+                    !this.autoCaptureTriggered && // Prevent multiple triggers
+                    !this.isAutoCaptureInProgress && // Prevent if already in progress
+                    !this.isImageManipulatorOpen && // Prevent if image manipulator is open
+                    !this.hasCapturedImage // Prevent if image has already been captured
+
+                // CRITICAL: Add comprehensive debug logging
+                console.log(
+                    '🎯 VKYC-SESSION: Face detection auto-capture check:',
+                    {
+                        hasPrimaryFace: !!result?.primaryFace,
+                        confidence: result?.primaryFace?.confidence,
+                        totalFaces: result?.totalFaces,
+                        captureType: captureType,
+                        isAutoCaptureEnabled:
+                            this.captureFacade.isAutoCaptureEnabled$.value,
+                        currentStepType: currentStep?.type,
+                        isCapturing: this.captureFacade.isCapturing$.value,
+                        autoCaptureTriggered: this.autoCaptureTriggered,
+                        isAutoCaptureInProgress: this.isAutoCaptureInProgress,
+                        isImageManipulatorOpen: this.isImageManipulatorOpen,
+                        hasCapturedImage: this.hasCapturedImage,
+                        canAutoCapture: canAutoCapture,
+                        currentStep: currentStep,
+                        layoutState: this.layoutState,
+                    }
+                )
+
+                if (canAutoCapture) {
                     console.log(
-                        '🎯 VKYC-SESSION: Auto-capture conditions not met:',
+                        '🎯 VKYC-SESSION: Face auto-capture conditions met, triggering capture'
+                    )
+                    this.autoCaptureTriggered = true
+                    this.isAutoCaptureInProgress = true
+                    this.performAutoCapture()
+                } else if (
+                    result?.primaryFace &&
+                    result.primaryFace.confidence > 0.7
+                ) {
+                    // Log why auto-capture was blocked
+                    console.log(
+                        '🎯 VKYC-SESSION: Face detected but auto-capture blocked:',
                         {
-                            hasResult: !!result,
-                            hasPrimaryFace: !!result?.primaryFace,
-                            confidence: result?.primaryFace?.confidence,
-                            steady: result?.primaryFace?.steady,
-                            autoCaptureEnabled:
+                            captureType: captureType,
+                            isAutoCaptureEnabled:
                                 this.captureFacade.isAutoCaptureEnabled$.value,
                             currentStepType:
                                 this.layoutState?.currentStep?.type,
-                            totalFaces: result?.totalFaces,
+                            isCapturing: this.captureFacade.isCapturing$.value,
+                            autoCaptureTriggered: this.autoCaptureTriggered,
+                            isAutoCaptureInProgress:
+                                this.isAutoCaptureInProgress,
+                            isImageManipulatorOpen: this.isImageManipulatorOpen,
+                            hasCapturedImage: this.hasCapturedImage,
                         }
                     )
                 }
@@ -272,7 +362,14 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             this.captureFacade.detectionError$.subscribe((error) => {
                 if (error) {
                     console.error('🎯 VKYC-SESSION: Detection error:', error)
-                    this.showErrorNotification(`Face detection error: ${error}`)
+
+                    // Stop countdown if active during error
+                    if (this.isCountdownActive) {
+                        this.stopCountdown()
+                        this.resetAutoCaptureFlags()
+                    }
+
+                    this.showErrorNotification(`Detection error: ${error}`)
                 }
             })
         )
@@ -282,42 +379,29 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             this.captureFacade.detectionStatus$.subscribe((status) => {
                 console.log('🎯 VKYC-SESSION: Detection status:', status)
                 if (status === 'error') {
+                    // Stop countdown if active during status error
+                    if (this.isCountdownActive) {
+                        this.stopCountdown()
+                        this.resetAutoCaptureFlags()
+                    }
+
                     this.showErrorNotification(
-                        'Face detection failed to initialize'
+                        'Detection service encountered an error. Please try again.'
                     )
+                } else if (status === 'idle' && this.isCountdownActive) {
+                    // Detection was stopped while countdown was active
+                    this.stopCountdown()
+                    this.resetAutoCaptureFlags()
                 }
             })
         )
 
-        // Subscribe to document detection results
-        this.subscriptions.add(
-            this.captureFacade.documentDetection$.subscribe((result) => {
-                this.updateLayoutState({
-                    documentDetectionResult: result,
-                })
-
-                // Auto-capture if document is detected and auto-capture is enabled
-                if (
-                    result &&
-                    result.confidence > 0.8 &&
-                    result.steady &&
-                    this.captureFacade.isAutoCaptureEnabled$.value &&
-                    this.layoutState?.currentStep?.type === 'FRAME_CAPTURE'
-                ) {
-                    this.performAutoCapture()
-                }
-            })
-        )
+        // Document detection removed - only manual capture for documents
     }
 
     private performAutoCapture(): void {
-        console.log('🎯 VKYC-SESSION: Performing auto-capture')
-
         // Prevent multiple auto-captures
         if (this.captureFacade.isCapturing$.value) {
-            console.log(
-                '🎯 VKYC-SESSION: Already capturing, skipping auto-capture'
-            )
             return
         }
 
@@ -327,9 +411,6 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             currentStep?.type !== 'FRAME_CAPTURE' ||
             currentStep?.status !== 'active'
         ) {
-            console.log(
-                '🎯 VKYC-SESSION: Not on active FRAME_CAPTURE step, skipping auto-capture'
-            )
             return
         }
 
@@ -338,6 +419,199 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
         this.captureFacade.setCapturing(true)
 
+        // Show simple capture label and execute capture
+        this.showSimpleCaptureLabel(currentStep)
+    }
+
+    private showSimpleCaptureLabel(currentStep: any): void {
+        const captureType =
+            currentStep?.data?.captureType ||
+            currentStep?.data?.frame_capture_type
+
+        // Start 3-2-1 countdown
+        this.startCountdown(captureType)
+    }
+
+    private startCountdown(captureType: string): void {
+        const countdownMessages = {
+            FACE_CAPTURE: [
+                'Face detected!',
+                'Capturing photo in 3...',
+                'Capturing photo in 2...',
+                'Capturing photo in 1...',
+                'Capturing now!',
+            ],
+            DOCUMENT_CAPTURE: [
+                'Document detected!',
+                'Capturing document in 3...',
+                'Capturing document in 2...',
+                'Capturing document in 1...',
+                'Capturing now!',
+            ],
+        }
+
+        this.countdownMessages =
+            countdownMessages[captureType as keyof typeof countdownMessages] ||
+            countdownMessages.FACE_CAPTURE
+
+        this.currentCountdownStep = 0
+        this.isCountdownActive = true
+
+        // Start the countdown with monitoring
+        this.startCountdownWithMonitoring(captureType)
+    }
+
+    private startCountdownWithMonitoring(captureType: string): void {
+        if (!this.isCountdownActive) {
+            return
+        }
+
+        // Show current countdown message
+        if (this.currentCountdownStep < this.countdownMessages.length) {
+            this.captureLabel =
+                this.countdownMessages[this.currentCountdownStep]
+            this.showCaptureLabel = true
+            this.updateLayoutState({
+                showCaptureLabel: this.showCaptureLabel,
+                captureLabel: this.captureLabel,
+            })
+            this.cdRef.detectChanges()
+
+            this.currentCountdownStep++
+
+            // Set up next step with monitoring
+            this.countdownInterval = setTimeout(() => {
+                if (this.isCountdownActive) {
+                    this.startCountdownWithMonitoring(captureType)
+                }
+            }, 1000)
+        } else {
+            // Countdown complete - execute capture
+            this.isCountdownActive = false
+            setTimeout(() => {
+                this.executeCapture()
+            }, 500)
+        }
+    }
+
+    private stopCountdown(): void {
+        this.isCountdownActive = false
+
+        // Clear countdown interval
+        if (this.countdownInterval) {
+            clearTimeout(this.countdownInterval)
+            this.countdownInterval = null
+        }
+
+        // Clear detection failure timeout
+        if (this.detectionFailureTimeout) {
+            clearTimeout(this.detectionFailureTimeout)
+            this.detectionFailureTimeout = null
+        }
+
+        // Reset countdown state
+        this.currentCountdownStep = 0
+        this.countdownMessages = []
+        this.detectionFailureCount = 0
+
+        // Hide capture label
+        this.showCaptureLabel = false
+        this.captureLabel = ''
+        this.updateLayoutState({
+            showCaptureLabel: this.showCaptureLabel,
+            captureLabel: this.captureLabel,
+        })
+        this.cdRef.detectChanges()
+    }
+
+    private monitorDetectionDuringCountdown(
+        result: any,
+        captureType: string
+    ): void {
+        // Double-check countdown is still active to prevent race conditions
+        if (!this.isCountdownActive) {
+            return
+        }
+
+        // Check if detection conditions are still met
+        let detectionStillValid = false
+
+        if (captureType === 'FACE_CAPTURE') {
+            detectionStillValid =
+                result?.primaryFace &&
+                result.primaryFace.confidence > 0.7 &&
+                result.totalFaces === 1
+        } else if (captureType === 'DOCUMENT_CAPTURE') {
+            detectionStillValid =
+                result && result.confidence > 0.7 && result.steady
+        }
+
+        // Handle detection failure with debouncing
+        if (!detectionStillValid) {
+            this.detectionFailureCount++
+
+            // Clear any existing failure timeout
+            if (this.detectionFailureTimeout) {
+                clearTimeout(this.detectionFailureTimeout)
+            }
+
+            // Only stop countdown after consecutive failures
+            if (this.detectionFailureCount >= this.MAX_DETECTION_FAILURES) {
+                this.stopCountdown()
+                this.resetAutoCaptureFlags()
+                this.detectionFailureCount = 0
+
+                // Show message that detection was lost
+                this.captureLabel = 'Detection lost, please position properly'
+                this.showCaptureLabel = true
+                this.updateLayoutState({
+                    showCaptureLabel: this.showCaptureLabel,
+                    captureLabel: this.captureLabel,
+                })
+                this.cdRef.detectChanges()
+
+                // Hide the message after 2 seconds
+                setTimeout(() => {
+                    // Double-check component is still active
+                    if (this.showCaptureLabel) {
+                        this.showCaptureLabel = false
+                        this.captureLabel = ''
+                        this.updateLayoutState({
+                            showCaptureLabel: this.showCaptureLabel,
+                            captureLabel: this.captureLabel,
+                        })
+                        this.cdRef.detectChanges()
+                    }
+                }, 2000)
+            } else {
+                // Set timeout to reset failure count if detection recovers
+                this.detectionFailureTimeout = setTimeout(() => {
+                    this.detectionFailureCount = 0
+                }, 1000) // Reset after 1 second of no failures
+            }
+        } else {
+            // Detection is valid, reset failure count
+            this.detectionFailureCount = 0
+            if (this.detectionFailureTimeout) {
+                clearTimeout(this.detectionFailureTimeout)
+                this.detectionFailureTimeout = null
+            }
+        }
+    }
+
+    private executeCapture(): void {
+        // Stop countdown if active
+        this.stopCountdown()
+
+        // Hide capture label
+        this.showCaptureLabel = false
+        this.captureLabel = ''
+        this.updateLayoutState({
+            showCaptureLabel: this.showCaptureLabel,
+            captureLabel: this.captureLabel,
+        })
+        this.cdRef.detectChanges()
+
         // Get the video element from the meeting panel
         const videoElement = document.querySelector('video') as HTMLVideoElement
         if (
@@ -345,6 +619,11 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             videoElement.videoWidth > 0 &&
             videoElement.videoHeight > 0
         ) {
+            console.log('🎯 VKYC-SESSION: Video element ready for capture', {
+                videoWidth: videoElement.videoWidth,
+                videoHeight: videoElement.videoHeight,
+            })
+
             // Create canvas to capture frame
             const canvas = document.createElement('canvas')
             const ctx = canvas.getContext('2d')
@@ -359,26 +638,78 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                     (blob) => {
                         if (blob) {
                             console.log(
-                                '🎯 VKYC-SESSION: Auto-capture successful, submitting image'
+                                '🎯 VKYC-SESSION: Capture successful, submitting image',
+                                {
+                                    blobSize: blob.size,
+                                    blobType: blob.type,
+                                }
                             )
                             this.submitCapture(blob)
+                        } else {
+                            console.error(
+                                '🎯 VKYC-SESSION: Failed to create blob from canvas'
+                            )
                         }
                         this.captureFacade.setCapturing(false)
+                        this.autoCaptureTriggered = false // Reset flag after capture
+                        this.isAutoCaptureInProgress = false // Reset progress flag
                     },
                     'image/jpeg',
                     0.9
                 )
             } else {
+                console.error('🎯 VKYC-SESSION: Failed to get canvas context')
                 this.captureFacade.setCapturing(false)
+                this.autoCaptureTriggered = false // Reset flag after error
+                this.isAutoCaptureInProgress = false // Reset progress flag
             }
         } else {
-            console.log('🎯 VKYC-SESSION: Video element not ready for capture')
+            console.log(
+                '🎯 VKYC-SESSION: Video element not ready for capture',
+                {
+                    hasVideoElement: !!videoElement,
+                    videoWidth: videoElement?.videoWidth,
+                    videoHeight: videoElement?.videoHeight,
+                }
+            )
             this.captureFacade.setCapturing(false)
+            this.autoCaptureTriggered = false // Reset flag after error
+            this.isAutoCaptureInProgress = false // Reset progress flag
         }
     }
 
     private submitCapture(blob: Blob): void {
-        console.log('🎯 VKYC-SESSION: Submitting capture')
+        console.log(
+            '🎯 VKYC-SESSION: submitCapture called - immediately setting flags'
+        )
+
+        // IMMEDIATELY set flags to prevent auto-capture
+        this.isImageManipulatorOpen = true
+        this.hasCapturedImage = true
+        this.showImageManipulator = true
+
+        // CRITICAL: Log flag setting in submitCapture
+        console.log(
+            '🎯 VKYC-SESSION: submitCapture - Setting flags to prevent auto-capture:',
+            {
+                showImageManipulator: this.showImageManipulator,
+                isImageManipulatorOpen: this.isImageManipulatorOpen,
+                hasCapturedImage: this.hasCapturedImage,
+                isAutoCaptureEnabled:
+                    this.captureFacade.isAutoCaptureEnabled$.value,
+            }
+        )
+
+        // Stop any ongoing countdown to prevent race conditions
+        this.stopCountdown()
+
+        // Temporarily disable auto-capture to prevent interference
+        if (this.captureFacade.isAutoCaptureEnabled$.value) {
+            this.captureFacade.toggleAutoCapture()
+            console.log(
+                '🎯 VKYC-SESSION: submitCapture - Auto-capture disabled'
+            )
+        }
 
         // Store the captured image
         this.capturedImageBlob = blob
@@ -387,9 +718,9 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         const reader = new FileReader()
         reader.onload = () => {
             this.capturedImageBase64 = reader.result as string
-            // Show the image manipulator
-            this.showImageManipulator = true
-            console.log('🎯 VKYC-SESSION: Image manipulator opened')
+            console.log(
+                '🎯 VKYC-SESSION: Image manipulator ready with base64 data'
+            )
         }
         reader.readAsDataURL(blob)
     }
@@ -545,13 +876,10 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                 )
             }
 
-            // Initialize workflow immediately after call starts
-            if (!this.workflowInitialized) {
-                console.log('🎯 VKYC-SESSION: Initializing workflow...')
-                this.workflowInitialized = true
-                this.workflowFacade.init()
-                this.initializeAgentWorkflow()
-            }
+            // Don't auto-initialize workflow - let user click "Start KYC" button
+            console.log(
+                '🎯 VKYC-SESSION: Video call started, waiting for user to click "Start KYC"'
+            )
 
             // Pass health check data to join-agent API
             if (this.healthCheckData) {
@@ -569,7 +897,8 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                     'video'
                 ) as HTMLVideoElement
                 if (videoElement) {
-                    this.startFaceDetectionOnVideo(videoElement)
+                    // Start appropriate detection based on current step
+                    this.startDetectionForCurrentStep()
                 }
             }, 2000) // Wait for video to be ready
         } catch (error: any) {
@@ -600,14 +929,56 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     }
 
     private handleFrameCaptureStep(step: any): void {
-        const video = this.userVideoRef?.nativeElement
-        if (!video) return
+        console.log('🎯 VKYC-SESSION: Handling frame capture step:', {
+            stepId: step.id,
+            captureType:
+                step.data?.captureType || step.data?.frame_capture_type,
+            stepData: step.data,
+        })
 
-        const captureType = step.data?.captureType
+        const video = this.userVideoRef?.nativeElement
+        if (!video) {
+            console.warn(
+                '🎯 VKYC-SESSION: Video element not available for frame capture step'
+            )
+            return
+        }
+
+        const captureType =
+            step.data?.captureType || step.data?.frame_capture_type
+        console.log(
+            '🎯 VKYC-SESSION: Starting detection for capture type:',
+            captureType
+        )
+
+        // Stop any existing detection first
+        this.captureFacade.stopDetection()
+
         if (captureType === 'FACE_CAPTURE') {
-            this.captureFacade.startFaceDetection(video)
+            console.log(
+                '🎯 VKYC-SESSION: Starting face detection for FACE_CAPTURE step'
+            )
+            this.captureFacade.startFaceDetection(video).catch((error) => {
+                console.error(
+                    '🎯 VKYC-SESSION: Failed to start face detection:',
+                    error
+                )
+            })
         } else if (captureType === 'DOCUMENT_CAPTURE') {
-            this.captureFacade.startDocumentDetection(video)
+            console.log(
+                '🎯 VKYC-SESSION: Document capture step - manual capture only (no auto-detection)'
+            )
+            // Document capture is manual only - no detection needed
+        } else {
+            console.log(
+                '🎯 VKYC-SESSION: Unknown capture type, defaulting to face detection'
+            )
+            this.captureFacade.startFaceDetection(video).catch((error) => {
+                console.error(
+                    '🎯 VKYC-SESSION: Failed to start face detection:',
+                    error
+                )
+            })
         }
 
         // Start auto-capture timeout for FRAME_CAPTURE steps
@@ -677,6 +1048,37 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             this.autoCaptureTimeout = null
         }
         this.autoCaptureStartTime = null
+    }
+
+    private scheduleAutoRestart(): void {
+        // Clear any existing timeout
+        if (this.autoRestartTimeout) {
+            clearTimeout(this.autoRestartTimeout)
+        }
+
+        // Schedule auto-restart after 5 seconds
+        this.autoRestartTimeout = setTimeout(() => {
+            console.log(
+                '🎯 VKYC-SESSION: Auto-restarting capture after 5 seconds'
+            )
+            this.resetAutoCaptureFlags()
+            this.startDetectionForCurrentStep()
+        }, 5000)
+    }
+
+    private resetAutoCaptureFlags(): void {
+        this.autoCaptureTriggered = false
+        this.isAutoCaptureInProgress = false
+        this.captureFacade.setCapturing(false)
+        // Stop countdown if active
+        this.stopCountdown()
+
+        // Re-enable auto-capture if it was disabled
+        if (!this.captureFacade.isAutoCaptureEnabled$.value) {
+            this.captureFacade.toggleAutoCapture()
+        }
+
+        // Note: Don't reset isImageManipulatorOpen here as it should only be reset when manipulator is actually closed
     }
 
     private showManualCaptureNotification(): void {
@@ -908,10 +1310,16 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         // This is a successful submission
         console.log('🎯 VKYC-SESSION: Image submitted successfully')
 
+        // Stop countdown if active
+        this.stopCountdown()
+
         // Clean up image manipulator first
         this.showImageManipulator = false
         this.capturedImageBlob = null
         this.capturedImageBase64 = ''
+        // Reset image manipulator flag but keep captured flag (image was approved)
+        this.isImageManipulatorOpen = false
+        // Note: Don't reset hasCapturedImage here as the image was successfully approved
 
         // Upload the selfie to backend and wait for completion
         try {
@@ -1243,6 +1651,18 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             await this.workflowFacade.completeCurrentStep()
             console.log('🎯 VKYC-SESSION: Current step completed in workflow')
 
+            // Reset captured flag for next step ONLY if image manipulator is closed
+            if (!this.isImageManipulatorOpen) {
+                this.hasCapturedImage = false
+                console.log(
+                    '🎯 VKYC-SESSION: Reset captured flag for next step'
+                )
+            } else {
+                console.log(
+                    '🎯 VKYC-SESSION: Image manipulator still open, keeping captured flag'
+                )
+            }
+
             // Notify the agent about step completion
             await this.notifyAgentStepCompletion()
 
@@ -1323,8 +1743,19 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         this.showImageManipulator = false
         this.capturedImageBlob = null
         this.capturedImageBase64 = ''
+        // Stop countdown if active
+        this.stopCountdown()
+        // Reset flags
+        this.isImageManipulatorOpen = false
+        this.hasCapturedImage = false
 
-        // Analysis data is now integrated into the KYC journey progress accordion
+        // Re-enable auto-capture
+        if (!this.captureFacade.isAutoCaptureEnabled$.value) {
+            this.captureFacade.toggleAutoCapture()
+        }
+
+        // Schedule auto-restart after 5 seconds
+        this.scheduleAutoRestart()
     }
 
     onImageManipulatorRetake(): void {
@@ -1337,12 +1768,106 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
         // Close the image manipulator popup
         this.showImageManipulator = false
+        // Stop countdown if active
+        this.stopCountdown()
+        // Reset flags
+        this.isImageManipulatorOpen = false
+        this.hasCapturedImage = false
+
+        // Re-enable auto-capture
+        if (!this.captureFacade.isAutoCaptureEnabled$.value) {
+            this.captureFacade.toggleAutoCapture()
+        }
+
+        // Schedule auto-restart after 5 seconds
+        this.scheduleAutoRestart()
 
         // The user can now capture a new image by clicking the capture button again
         console.log('🎯 VKYC-SESSION: Ready for new capture')
     }
 
+    onImageRetake(): void {
+        console.log('🎯 VKYC-SESSION: Image retake requested via event')
+
+        // Close the image manipulator
+        this.showImageManipulator = false
+        this.isImageManipulatorOpen = false
+
+        // Clear captured image data
+        this.capturedImageBlob = null
+        this.capturedImageBase64 = ''
+        this.hasCapturedImage = false
+
+        // Clear cached config to force regeneration
+        this._cachedImageManipulatorConfig = null
+        this._lastConfigHash = ''
+
+        // Stop countdown if active
+        this.stopCountdown()
+
+        // Re-enable auto-capture
+        if (!this.captureFacade.isAutoCaptureEnabled$.value) {
+            this.captureFacade.toggleAutoCapture()
+        }
+
+        // Schedule auto-restart after 5 seconds
+        this.scheduleAutoRestart()
+
+        console.log(
+            '🎯 VKYC-SESSION: Image retake completed, ready for new capture'
+        )
+    }
+
+    onImageClosed(): void {
+        console.log('🎯 VKYC-SESSION: Image manipulator closed via event')
+        this.showImageManipulator = false
+        this.capturedImageBlob = null
+        this.capturedImageBase64 = ''
+        // Stop countdown if active
+        this.stopCountdown()
+        // Reset flags
+        this.isImageManipulatorOpen = false
+        this.hasCapturedImage = false
+
+        // Re-enable auto-capture
+        if (!this.captureFacade.isAutoCaptureEnabled$.value) {
+            this.captureFacade.toggleAutoCapture()
+        }
+
+        // Schedule auto-restart after 5 seconds
+        this.scheduleAutoRestart()
+    }
+
+    onImageApproved(): void {
+        console.log('🎯 VKYC-SESSION: Image approved, closing manipulator')
+        this.showImageManipulator = false
+        this.capturedImageBlob = null
+        this.capturedImageBase64 = ''
+        // Stop countdown if active
+        this.stopCountdown()
+        // Reset flags
+        this.isImageManipulatorOpen = false
+        this.hasCapturedImage = false
+
+        // Re-enable auto-capture
+        if (!this.captureFacade.isAutoCaptureEnabled$.value) {
+            this.captureFacade.toggleAutoCapture()
+        }
+
+        // Don't schedule auto-restart for approved images - proceed to next step
+        console.log('🎯 VKYC-SESSION: Image approved, proceeding to next step')
+    }
+
+    // Cache the image manipulator config to prevent excessive logging
+    private _cachedImageManipulatorConfig: any = null
+    private _lastConfigHash: string = ''
+
     getImageManipulatorConfig(): any {
+        // Early return if image manipulator is not shown
+        if (!this.showImageManipulator) {
+            return null
+        }
+
         // Get the current step
         const currentStep = this.layoutState?.currentStep
 
@@ -1360,29 +1885,64 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             currentStep?.data?.sub_action_ref ||
             'unknown-step'
 
-        console.log('🎯 VKYC-SESSION: Image manipulator config:', {
-            currentStep: currentStep,
-            captureType: captureType,
-            stepId: stepId,
-            layoutState: this.layoutState,
-        })
+        // Create a hash to check if config has changed
+        const configHash = `${stepId}-${captureType}-${
+            this.showImageManipulator
+        }-${!!this.capturedImageBase64}`
 
-        // Validate that we have a step ID
-        if (!stepId || stepId === 'unknown-step') {
-            console.error(
-                '🎯 VKYC-SESSION: No valid step ID found for image manipulator'
-            )
-            throw new Error(
-                'No valid step ID found. Please ensure you are in an active capture step.'
-            )
+        // Return cached config if nothing has changed
+        if (
+            this._cachedImageManipulatorConfig &&
+            this._lastConfigHash === configHash
+        ) {
+            return this._cachedImageManipulatorConfig
         }
 
-        return {
+        // Validate required data before creating config
+        if (!this.capturedImageBase64) {
+            console.warn(
+                '🎯 VKYC-SESSION: No base64 image data available for image manipulator'
+            )
+            return null
+        }
+
+        if (!stepId || stepId === 'unknown-step') {
+            console.warn(
+                '🎯 VKYC-SESSION: No valid step ID for image manipulator'
+            )
+            return null
+        }
+
+        if (!captureType) {
+            console.warn(
+                '🎯 VKYC-SESSION: No capture type for image manipulator'
+            )
+            return null
+        }
+
+        // Create new config
+        const config = {
             base64: this.capturedImageBase64,
             subActionId: stepId,
             mode: captureType === 'FACE_CAPTURE' ? 'selfie' : 'document',
             frontImage: this.capturedImageBlob || new Blob(),
+            currentStep: currentStep,
+            captureType: captureType,
+            stepId: stepId,
+            layoutState: this.layoutState,
         }
+
+        // Cache the config and hash
+        this._cachedImageManipulatorConfig = config
+        this._lastConfigHash = configHash
+
+        // Only log when config actually changes
+        console.log(
+            '🎯 VKYC-SESSION: Image manipulator config updated:',
+            config
+        )
+
+        return config
     }
 
     // Template helper methods (removed getLogMessage as it's no longer needed)
@@ -1496,10 +2056,31 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         const byteArray = new Uint8Array(byteNumbers)
         this.capturedImageBlob = new Blob([byteArray], { type: 'image/jpeg' })
 
-        // Show the image manipulator
+        // Show the image manipulator and set flags
         this.showImageManipulator = true
+        this.isImageManipulatorOpen = true
+        this.hasCapturedImage = true
+
+        // CRITICAL: Log flag setting
+        console.log('🎯 VKYC-SESSION: Setting flags to prevent auto-capture:', {
+            showImageManipulator: this.showImageManipulator,
+            isImageManipulatorOpen: this.isImageManipulatorOpen,
+            hasCapturedImage: this.hasCapturedImage,
+            isAutoCaptureEnabled:
+                this.captureFacade.isAutoCaptureEnabled$.value,
+        })
+
+        // Stop any ongoing countdown to prevent race conditions
+        this.stopCountdown()
+
+        // Temporarily disable auto-capture to prevent interference
+        if (this.captureFacade.isAutoCaptureEnabled$.value) {
+            this.captureFacade.toggleAutoCapture()
+            console.log('🎯 VKYC-SESSION: Auto-capture disabled')
+        }
+
         console.log(
-            '🎯 VKYC-SESSION: Image manipulator opened from capture button'
+            '🎯 VKYC-SESSION: Image captured and manipulator opened from capture button'
         )
     }
 
@@ -1532,6 +2113,8 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         // Subscribe to workflow steps to initialize agent workflow
         this.subscriptions.add(
             this.workflowFacade.state$.subscribe((state: any) => {
+                console.log('🎯 VKYC-SESSION: Received workflow state:', state)
+
                 if (state?.steps && state.steps.length > 0) {
                     console.log(
                         '🎯 VKYC-SESSION: Initializing agent workflow with steps:',
@@ -1558,6 +2141,12 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                     console.log(
                         '🎯 VKYC-SESSION: Updated layout state with current step:',
                         state.currentStep
+                    )
+                } else {
+                    console.log(
+                        '🎯 VKYC-SESSION: No steps available yet, waiting...',
+                        'State:',
+                        state
                     )
                 }
             })
@@ -1658,17 +2247,87 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         }
     }
 
-    onNextStep(): void {
+    async onNextStep(): Promise<void> {
         console.log('🎯 VKYC-SESSION: Next step requested from layout')
+        this.debugWorkflowState() // Debug the current state
         const currentStep = this.layoutState?.currentStep
 
         if (!currentStep) {
             // Start the workflow if no current step
             console.log('🎯 VKYC-SESSION: Starting workflow')
-            if (!this.workflowInitialized) {
+            if (!this.workflowInitialized && !this.isInitializingWorkflow) {
+                this.isInitializingWorkflow = true
                 this.workflowInitialized = true
-                this.workflowFacade.init()
-                this.initializeAgentWorkflow()
+                try {
+                    console.log(
+                        '🎯 VKYC-SESSION: Initializing workflow facade...'
+                    )
+                    await this.workflowFacade.init()
+                    console.log(
+                        '🎯 VKYC-SESSION: Workflow facade initialized, setting up agent workflow...'
+                    )
+                    this.initializeAgentWorkflow()
+
+                    // Add a small delay to ensure workflow is fully initialized
+                    await new Promise((resolve) => setTimeout(resolve, 500))
+
+                    // Wait a moment for the workflow to be fully initialized
+                    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+                    // Check if we now have a current step
+                    if (this.layoutState?.currentStep) {
+                        console.log(
+                            '🎯 VKYC-SESSION: Workflow initialized successfully, current step:',
+                            this.layoutState.currentStep
+                        )
+                    } else {
+                        console.warn(
+                            '🎯 VKYC-SESSION: Workflow initialized but no current step found'
+                        )
+                        // Try to get the current state from the workflow facade
+                        const currentState = this.workflowFacade.state$.value
+                        console.log(
+                            '🎯 VKYC-SESSION: Current workflow state:',
+                            currentState
+                        )
+
+                        // If we still don't have a current step, try to manually trigger the first step
+                        if (
+                            currentState?.steps &&
+                            currentState.steps.length > 0 &&
+                            !currentState.currentStep
+                        ) {
+                            console.log(
+                                '🎯 VKYC-SESSION: Manually setting first step as current step'
+                            )
+                            const firstStep = currentState.steps[0]
+                            this.updateLayoutState({
+                                workflowSteps: currentState.steps,
+                                currentStep: firstStep,
+                                captureType:
+                                    firstStep?.data?.captureType ||
+                                    firstStep?.data?.frame_capture_type ||
+                                    (firstStep as any)?.frame_capture_type,
+                            })
+                        }
+                    }
+                } catch (error) {
+                    console.error(
+                        '🎯 VKYC-SESSION: Failed to initialize workflow:',
+                        error
+                    )
+                    this.showErrorNotification(
+                        'Failed to start KYC session. Please try again.'
+                    )
+                    this.isInitializingWorkflow = false
+                    this.workflowInitialized = false
+                } finally {
+                    this.isInitializingWorkflow = false
+                }
+            } else if (this.isInitializingWorkflow) {
+                console.log(
+                    '🎯 VKYC-SESSION: Workflow is already initializing, please wait...'
+                )
             }
             return
         }
@@ -1712,11 +2371,6 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     }
 
     onQuestionnaireCompleted(answers: { [key: string]: string }): void {
-        console.log(
-            '🎯 VKYC-SESSION: Questionnaire completed with answers:',
-            answers
-        )
-
         try {
             // Store the questionnaire completion in session storage
             this.sessionStorage.saveStepData({
@@ -1727,12 +2381,8 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                 success: true,
             })
 
-            // Complete the questionnaire step manually
+            // Complete the questionnaire step and move to next step
             this.workflowFacade.completeCurrentStep()
-
-            console.log(
-                '🎯 VKYC-SESSION: Questionnaire step completed manually, moving to next step'
-            )
         } catch (error) {
             console.error(
                 '🎯 VKYC-SESSION: Failed to complete questionnaire:',
@@ -1745,8 +2395,137 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     }
 
     onStartImageCapture(): void {
-        console.log('🎯 VKYC-SESSION: Start image capture requested')
-        this.onCapturePhoto()
+        console.log('🎯 VKYC-SESSION: Starting image capture detection')
+
+        // Ensure workflow is initialized first
+        if (!this.workflowInitialized) {
+            console.log(
+                '🎯 VKYC-SESSION: Workflow not initialized, initializing now...'
+            )
+            this.initializeWorkflowIfNeeded()
+                .then(() => {
+                    this.startDetectionForCurrentStep()
+                })
+                .catch((error) => {
+                    console.error(
+                        '🎯 VKYC-SESSION: Failed to initialize workflow:',
+                        error
+                    )
+                })
+        } else {
+            this.startDetectionForCurrentStep()
+        }
+    }
+
+    private async initializeWorkflowIfNeeded(): Promise<void> {
+        if (this.workflowInitialized || this.isInitializingWorkflow) {
+            return
+        }
+
+        this.isInitializingWorkflow = true
+        try {
+            console.log('🎯 VKYC-SESSION: Initializing workflow facade...')
+            await this.workflowFacade.init()
+            console.log(
+                '🎯 VKYC-SESSION: Workflow facade initialized, setting up agent workflow...'
+            )
+            this.initializeAgentWorkflow()
+            this.workflowInitialized = true
+
+            // Add a small delay to ensure workflow is fully initialized
+            await new Promise((resolve) => setTimeout(resolve, 500))
+
+            console.log('🎯 VKYC-SESSION: Workflow initialization completed')
+        } catch (error) {
+            console.error(
+                '🎯 VKYC-SESSION: Failed to initialize workflow:',
+                error
+            )
+            throw error
+        } finally {
+            this.isInitializingWorkflow = false
+        }
+    }
+
+    private startDetectionForCurrentStep(): void {
+        const currentStep = this.layoutState?.currentStep
+        if (!currentStep) {
+            console.warn(
+                '🎯 VKYC-SESSION: No current step available for detection'
+            )
+            return
+        }
+
+        if (currentStep.type !== 'FRAME_CAPTURE') {
+            console.warn(
+                '🎯 VKYC-SESSION: Current step is not FRAME_CAPTURE, cannot start detection. Current step type:',
+                currentStep.type
+            )
+            return
+        }
+
+        const video = this.userVideoRef?.nativeElement
+        if (!video) {
+            console.warn(
+                '🎯 VKYC-SESSION: Video element not available for detection'
+            )
+            return
+        }
+
+        const captureType =
+            currentStep?.data?.captureType ||
+            currentStep?.data?.frame_capture_type
+
+        // Reset auto-capture flags for new step
+        this.autoCaptureTriggered = false
+        this.isAutoCaptureInProgress = false
+        // Stop countdown if active
+        this.stopCountdown()
+
+        // Stop any existing detection first
+        this.captureFacade.stopDetection()
+
+        if (captureType === 'FACE_CAPTURE') {
+            console.log(
+                '🎯 VKYC-SESSION: Starting face detection for FACE_CAPTURE step'
+            )
+            this.captureFacade
+                .startFaceDetection(video)
+                .then(() => {
+                    console.log(
+                        '🎯 VKYC-SESSION: Face detection started successfully'
+                    )
+                })
+                .catch((error) => {
+                    console.error(
+                        '🎯 VKYC-SESSION: Failed to start face detection:',
+                        error
+                    )
+                })
+        } else if (captureType === 'DOCUMENT_CAPTURE') {
+            console.log(
+                '🎯 VKYC-SESSION: Document capture step - manual capture only (no auto-detection)'
+            )
+            // Document capture is manual only - no detection needed
+        } else {
+            console.log(
+                '🎯 VKYC-SESSION: Starting face detection for unknown capture type:',
+                captureType
+            )
+            this.captureFacade
+                .startFaceDetection(video)
+                .then(() => {
+                    console.log(
+                        '🎯 VKYC-SESSION: Face detection started successfully for unknown type'
+                    )
+                })
+                .catch((error) => {
+                    console.error(
+                        '🎯 VKYC-SESSION: Failed to start face detection:',
+                        error
+                    )
+                })
+        }
     }
 
     onFinishKyc(): void {
@@ -1760,6 +2539,29 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                 'Please complete all required steps before finishing.'
             )
         }
+    }
+
+    // Debug method to check workflow state
+    debugWorkflowState(): void {
+        console.log('🎯 VKYC-SESSION: === WORKFLOW DEBUG INFO ===')
+        console.log(
+            '🎯 VKYC-SESSION: Workflow initialized:',
+            this.workflowInitialized
+        )
+        console.log(
+            '🎯 VKYC-SESSION: Is initializing workflow:',
+            this.isInitializingWorkflow
+        )
+        console.log('🎯 VKYC-SESSION: Layout state:', this.layoutState)
+        console.log(
+            '🎯 VKYC-SESSION: Current step:',
+            this.layoutState?.currentStep
+        )
+        console.log(
+            '🎯 VKYC-SESSION: Workflow facade state:',
+            this.workflowFacade.state$.value
+        )
+        console.log('🎯 VKYC-SESSION: === END DEBUG INFO ===')
     }
 
     private validateAllStepsCompleted(): boolean {
