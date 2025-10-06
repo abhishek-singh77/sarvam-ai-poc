@@ -91,30 +91,6 @@
                     "allow_fuzzy_match_result_update": true,
                     "allow_face_match_result_update": true,
                     "sub_action_name": "Details from ID Proof"
-                },
-                {
-                    "type": "FRAME_CAPTURE",
-                    "title": "Aadhaar Upload",
-                    "sub_action_ref": "frame_capture-3",
-                    "description": "Capture Aadhaar image (with flip camera option)",
-                    "optional": true,
-                    "id_analysis_required": true,
-                    "strict_validation_type": "aadhaar",
-                    "face_match_obj_type": "match_required",
-                    "perform_enrichment": true,
-                    "sub_action_step": "in_call",
-                    "allow_ocr_data_update": false,
-                    "frame_capture_type": "DOCUMENT_CAPTURE",
-                    "perform_liveness_check": false,
-                    "face_match_sources": [
-                        "ai_assisted_video-1:frame_capture-1"
-                    ],
-                    "perform_face_match_in_sync": true,
-                    "perform_central_db_check_in_sync": false,
-                    "allow_fuzzy_match_result_update": true,
-                    "allow_face_match_result_update": true,
-                    "sub_action_name": "Details from ID Proof",
-                    "image_upload_mode": "FRONT_BACK"
                 }
             ],
             "action_config": {

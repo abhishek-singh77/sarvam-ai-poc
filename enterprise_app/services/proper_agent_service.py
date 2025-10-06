@@ -165,7 +165,7 @@ class KYCVoiceAgent(Agent):
                 fallback_context += "        No specific workflow steps provided. Use your general KYC knowledge to guide the user through:\n"
                 fallback_context += "        - Basic questionnaire about personal information\n"
                 fallback_context += "        - Face capture for identity verification\n"
-                fallback_context += "        - Document capture (PAN card, Aadhaar, etc.)\n"
+                fallback_context += "        - Document capture (PAN card etc.)\n"
                 
                 return base_instructions + fallback_context
                 
@@ -334,16 +334,6 @@ class KYCVoiceAgent(Agent):
                             "sub_action_step": "in_call",
                             "frame_capture_type": "DOCUMENT_CAPTURE",
                             "strict_validation_type": "pan",
-                            "sub_action_name": "Details from ID Proof"
-                        },
-                        {
-                            "type": "FRAME_CAPTURE",
-                            "title": "Aadhaar Upload",
-                            "sub_action_ref": "frame_capture-3",
-                            "description": "Capture Aadhaar image (with flip camera option)",
-                            "sub_action_step": "in_call",
-                            "frame_capture_type": "DOCUMENT_CAPTURE",
-                            "strict_validation_type": "aadhaar",
                             "sub_action_name": "Details from ID Proof"
                         }
                     ]

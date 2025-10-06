@@ -231,7 +231,7 @@ export class AgentJoinPopupComponent {
     @Input() isLoading = true
     @Input() isReady = false
     @Input() currentStep = 0
-    @Input() title = 'AI Agent Joining...'
+    @Input() title = 'Virtual Agent Joining...'
     @Input() description =
         'Please wait while we initialize your AI agent and connect to the video stream.'
     @Input() agentInfo: any = null
