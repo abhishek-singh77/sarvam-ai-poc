@@ -51,31 +51,6 @@
                     "perform_enrichment": true
                 },
                 {
-                    "type": "GEO_TAGGING",
-                    "optional": false,
-                    "id_analysis_required": false,
-                    "face_match_obj_type": "none",
-                    "perform_enrichment": true,
-                    "sub_action_step": "in_call",
-                    "check_distance_from_input_address": true,
-                    "input_address": "request:request_details:Address"
-                },
-                {
-                    "type": "USER_INSTRUCTION",
-                    "title": "Documents preparation",
-                    "sub_action_ref": "user_instruction-2",
-                    "description": "Keep your PAN Card ready before starting the process",
-                    "optional": false,
-                    "id_analysis_required": false,
-                    "face_match_obj_type": "none",
-                    "perform_enrichment": true,
-                    "sub_action_step": "in_call",
-                    "allow_ocr_data_update": false,
-                    "perform_liveness_check": false,
-                    "perform_face_match_in_sync": false,
-                    "perform_central_db_check_in_sync": false
-                },
-                {
                     "type": "FRAME_CAPTURE",
                     "title": "Customer Selfie",
                     "sub_action_ref": "frame_capture-1",

@@ -76,6 +76,7 @@
         <div
             class="absolute inset-0 flex items-center justify-center"
             *ngIf="
+                captureType === 'FACE_CAPTURE' &&
                 (multipleFaceDetectionResult?.primaryFace || detectionResult)
                     ?.steady
             ">
@@ -122,9 +123,9 @@
     <!-- Status Message -->
     <div
         *ngIf="
-            detectionResult ||
-            documentDetectionResult ||
-            multipleFaceDetectionResult
+            (detectionResult && captureType === 'FACE_CAPTURE') ||
+            (documentDetectionResult && captureType === 'DOCUMENT_CAPTURE') ||
+            (multipleFaceDetectionResult && captureType === 'FACE_CAPTURE')
         "
         class="absolute top-4 left-4 right-4">
         <div
@@ -182,18 +183,19 @@
                 </span>
             </div>
 
-            <!-- Steady detection indicator (when not counting down) -->
+            <!-- Detection indicator (when not counting down) -->
             <div
                 *ngIf="
-                    ((detectionResult || documentDetectionResult)?.steady ||
-                        multipleFaceDetectionResult?.primaryFace?.steady) &&
+                    (detectionResult ||
+                        documentDetectionResult ||
+                        multipleFaceDetectionResult?.primaryFace) &&
                     countdown === null
                 "
                 class="mt-2 flex items-center justify-center space-x-2">
                 <div
                     class="animate-spin w-4 h-4 border-2 border-green-300 border-t-transparent rounded-full"></div>
                 <span class="text-xs text-green-300 font-medium"
-                    >Hold steady for auto-capture...</span
+                    >Position detected, auto-capture ready...</span
                 >
             </div>
         </div>

@@ -291,20 +291,6 @@ class KYCVoiceAgent(Agent):
                     "title": "AI Video Verification",
                     "description": "Please do AI-assisted Video KYC",
                     "sub_actions": [
-                        # Pre-call steps (ignored by agent)
-                        {
-                            "type": "GEO_TAGGING",
-                            "sub_action_step": "pre",
-                            "title": "Location Verification",
-                            "description": "Verifying your location"
-                        },
-                        {
-                            "type": "USER_INSTRUCTION",
-                            "title": "Documents preparation",
-                            "sub_action_ref": "user_instruction-2",
-                            "description": "Keep your PAN Card ready before starting the process",
-                            "sub_action_step": "pre"
-                        },
                         # In-call steps (handled by agent) - Questionnaire moved to first position
                         {
                             "type": "QUESTIONNAIRE",

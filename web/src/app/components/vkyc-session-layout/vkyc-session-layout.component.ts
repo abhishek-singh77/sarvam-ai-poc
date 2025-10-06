@@ -23,6 +23,7 @@ import { StepCompletionComponent } from '../step-completion/step-completion.comp
 import { MeetingService } from '../../services/meeting.service'
 import { VkycJourneyService } from '../../services/vkyc-journey.service'
 import { SessionStorageService } from '../../services/session-storage.service'
+import { VkycCaptureFacadeService } from '../../services/vkyc-capture-facade.service'
 import { JourneyData } from '../../models/journey.models'
 
 export interface VkycLayoutState {
@@ -99,12 +100,14 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
     isMicMuted: boolean = false
     isCameraEnabled: boolean = true
     questionnaireAnswers: { [key: string]: any } = {}
+    isCapturing: boolean = false
     private subscriptions = new Subscription()
 
     constructor(
         private meetingService: MeetingService,
         private journeyService: VkycJourneyService,
-        private sessionStorage: SessionStorageService
+        private sessionStorage: SessionStorageService,
+        private captureFacade: VkycCaptureFacadeService
     ) {}
 
     ngOnInit(): void {
@@ -114,6 +117,19 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
                 console.log('🎯 LAYOUT: Mic state changed to:', isMicEnabled)
                 this.isMicMuted = !isMicEnabled
             })
+        )
+
+        // Subscribe to capturing state changes from the capture facade
+        this.subscriptions.add(
+            this.captureFacade.isCapturing$.subscribe(
+                (isCapturing: boolean) => {
+                    console.log(
+                        '🎯 LAYOUT: Capturing state changed to:',
+                        isCapturing
+                    )
+                    this.isCapturing = isCapturing
+                }
+            )
         )
     }
 

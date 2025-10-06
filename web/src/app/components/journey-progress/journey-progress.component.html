@@ -36,147 +36,7 @@
 
     <!-- Progress Content - Mobile First -->
     <div class="p-3 sm:p-6 space-y-4 sm:space-y-6" *ngIf="journeyData">
-        <!-- Pre-call Steps -->
-        <div *ngIf="journeyData.preCallSteps.length > 0">
-            <h4
-                class="text-sm sm:text-md font-medium text-gray-800 mb-2 sm:mb-3 flex items-center">
-                <span
-                    class="w-3 h-3 bg-blue-500 rounded-full mr-2 animate-pulse"></span>
-                <span class="flex items-center space-x-2">
-                    <span>Pre-call Setup</span>
-                    <span
-                        class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                        {{ getCompletedPreCallStepsCount() }}/{{
-                            journeyData.preCallSteps.length
-                        }}
-                    </span>
-                </span>
-            </h4>
-            <app-accordion
-                [items]="getPreCallAccordionItems()"
-                [allowMultiple]="true"
-                [showIcons]="true"
-                [customContentTemplate]="preCallContentTemplate"
-                (itemToggled)="onAccordionItemToggled($event)">
-                <ng-template #preCallContentTemplate let-item>
-                    <div class="space-y-3">
-                        <!-- Health Check Data -->
-                        <div
-                            *ngIf="
-                                item.data?.sessionData?.location ||
-                                item.data?.sessionData?.networkSpeed
-                            ">
-                            <h6
-                                class="text-xs font-semibold text-gray-700 mb-2">
-                                Health Check Results:
-                            </h6>
-                            <div class="space-y-2 text-xs text-gray-600">
-                                <div *ngIf="item.data?.sessionData?.location">
-                                    <strong>Location:</strong>
-                                    <span
-                                        *ngIf="
-                                            item.data.sessionData.location
-                                                .latitude
-                                        ">
-                                        {{
-                                            item.data.sessionData.location
-                                                .latitude | number : '1.4-4'
-                                        }},
-                                        {{
-                                            item.data.sessionData.location
-                                                .longitude | number : '1.4-4'
-                                        }}
-                                    </span>
-                                </div>
-                                <div
-                                    *ngIf="
-                                        item.data?.sessionData?.networkSpeed
-                                    ">
-                                    <strong>Network Speed:</strong>
-                                    <span
-                                        *ngIf="
-                                            item.data.sessionData.networkSpeed
-                                                .downloadSpeed
-                                        ">
-                                        Download:
-                                        {{
-                                            item.data.sessionData.networkSpeed
-                                                .downloadSpeed
-                                                | number : '1.0-2'
-                                        }}
-                                        Mbps
-                                    </span>
-                                </div>
-                                <div
-                                    *ngIf="
-                                        item.data?.sessionData?.vpnDetected !==
-                                        undefined
-                                    ">
-                                    <strong>VPN Detected:</strong>
-                                    <span
-                                        [class]="
-                                            item.data.sessionData.vpnDetected
-                                                ? 'text-red-600'
-                                                : 'text-green-600'
-                                        ">
-                                        {{
-                                            item.data.sessionData.vpnDetected
-                                                ? 'Yes'
-                                                : 'No'
-                                        }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Consent Data -->
-                        <div *ngIf="item.data?.sessionData?.consentData">
-                            <h6
-                                class="text-xs font-semibold text-gray-700 mb-2">
-                                Consent Details:
-                            </h6>
-                            <div class="text-xs text-gray-600">
-                                <div
-                                    *ngIf="
-                                        item.data.sessionData.consentData.agreed
-                                    ">
-                                    <span class="text-green-600"
-                                        >✓ Consent Given</span
-                                    >
-                                </div>
-                                <div
-                                    *ngIf="
-                                        item.data.sessionData.consentData
-                                            .timestamp
-                                    ">
-                                    <strong>Timestamp:</strong>
-                                    {{
-                                        item.data.sessionData.consentData
-                                            .timestamp | date : 'short'
-                                    }}
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Raw Data (for debugging) -->
-                        <div *ngIf="item.data?.sessionData" class="mt-3">
-                            <details class="text-xs">
-                                <summary
-                                    class="cursor-pointer text-gray-500 hover:text-gray-700">
-                                    View Raw Data
-                                </summary>
-                                <pre
-                                    class="mt-2 p-2 bg-gray-100 rounded text-xs overflow-auto max-h-32"
-                                    >{{ item.data.sessionData | json }}</pre
-                                >
-                            </details>
-                        </div>
-                    </div>
-                </ng-template>
-            </app-accordion>
-        </div>
-
-        <!-- In-call Steps -->
+        <!-- In-call Steps Only -->
         <div *ngIf="journeyData.inCallSteps.length > 0">
             <h4
                 class="text-sm sm:text-md font-medium text-gray-800 mb-2 sm:mb-3 flex items-center">
@@ -200,346 +60,54 @@
                 (itemToggled)="onAccordionItemToggled($event)">
                 <ng-template #inCallContentTemplate let-item>
                     <div class="space-y-3">
-                        <!-- Image Capture Data with Analysis Results -->
-                        <div
-                            *ngIf="
-                                item.data?.sessionData?.fullImageData ||
-                                item.data?.sessionData?.imageData ||
-                                item.data?.sessionData?.analysisResult
-                            ">
+                        <!-- Frame Capture Data -->
+                        <div *ngIf="item.data?.sessionData?.captureType">
                             <h6
                                 class="text-xs font-semibold text-gray-700 mb-2">
-                                Captured Image & Analysis:
+                                Capture Details:
                             </h6>
-                            <div class="space-y-3 text-xs text-gray-600">
-                                <!-- Captured Image -->
-                                <div
-                                    *ngIf="
-                                        item.data?.sessionData?.fullImageData
-                                    ">
-                                    <img
-                                        [src]="
-                                            'data:image/jpeg;base64,' +
-                                            item.data.sessionData.fullImageData
-                                        "
-                                        alt="Captured Image"
-                                        class="w-full max-w-xs rounded border shadow-sm" />
-                                </div>
-
-                                <!-- Analysis Results -->
-                                <div
-                                    *ngIf="
-                                        item.data?.sessionData?.analysisResult
-                                    ">
-                                    <h6
-                                        class="text-xs font-semibold text-gray-700 mb-2 block">
-                                        Analysis Results:
-                                    </h6>
-
-                                    <!-- Face Analysis -->
-                                    <div
-                                        *ngIf="
-                                            item.data?.sessionData
-                                                ?.captureType ===
-                                                'FACE_CAPTURE' &&
-                                            item.data?.sessionData
-                                                ?.parsedAnalysis
-                                        "
-                                        class="space-y-2">
-                                        <div class="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <strong>Face Detected:</strong>
-                                                {{
-                                                    item.data.sessionData
-                                                        .parsedAnalysis
-                                                        .face_detected
-                                                        ? 'Yes'
-                                                        : 'No'
-                                                }}
-                                            </div>
-                                            <div>
-                                                <strong>Quality:</strong>
-                                                {{
-                                                    item.data.sessionData
-                                                        .parsedAnalysis
-                                                        .image_quality ||
-                                                        'Unknown'
-                                                }}
-                                            </div>
-                                            <div>
-                                                <strong>Lighting:</strong>
-                                                {{
-                                                    item.data.sessionData
-                                                        .parsedAnalysis
-                                                        .lighting_quality ||
-                                                        'Unknown'
-                                                }}
-                                            </div>
-                                            <div>
-                                                <strong>Confidence:</strong>
-                                                {{
-                                                    (
-                                                        item.data.sessionData
-                                                            .parsedAnalysis
-                                                            .confidence_score *
-                                                        100
-                                                    ).toFixed(1) || 'Unknown'
-                                                }}%
-                                            </div>
-                                            <div>
-                                                <strong>Eyes Open:</strong>
-                                                {{
-                                                    item.data.sessionData
-                                                        .parsedAnalysis
-                                                        .eyes_open
-                                                        ? 'Yes'
-                                                        : 'No'
-                                                }}
-                                            </div>
-                                            <div>
-                                                <strong
-                                                    >Looking at Camera:</strong
-                                                >
-                                                {{
-                                                    item.data.sessionData
-                                                        .parsedAnalysis
-                                                        .looking_at_camera
-                                                        ? 'Yes'
-                                                        : 'No'
-                                                }}
-                                            </div>
-                                        </div>
-
-                                        <!-- Recommendations -->
-                                        <div
-                                            *ngIf="
-                                                item.data.sessionData
-                                                    .parsedAnalysis
-                                                    .recommendations?.length > 0
-                                            "
-                                            class="mt-2">
-                                            <strong>Recommendations:</strong>
-                                            <ul
-                                                class="list-disc list-inside space-y-1 mt-1">
-                                                <li
-                                                    *ngFor="
-                                                        let rec of item.data
-                                                            .sessionData
-                                                            .parsedAnalysis
-                                                            .recommendations
-                                                    ">
-                                                    {{ rec }}
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-
-                                    <!-- Document Analysis -->
-                                    <div
-                                        *ngIf="
-                                            item.data?.sessionData
-                                                ?.captureType ===
-                                                'DOCUMENT_CAPTURE' &&
-                                            item.data?.sessionData
-                                                ?.parsedAnalysis
-                                        "
-                                        class="space-y-2">
-                                        <div class="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <strong
-                                                    >Document Detected:</strong
-                                                >
-                                                {{
-                                                    item.data.sessionData
-                                                        .parsedAnalysis
-                                                        .document_detected
-                                                        ? 'Yes'
-                                                        : 'No'
-                                                }}
-                                            </div>
-                                            <div>
-                                                <strong>Document Type:</strong>
-                                                {{
-                                                    item.data.sessionData
-                                                        .parsedAnalysis
-                                                        .document_type ||
-                                                        'Unknown'
-                                                }}
-                                            </div>
-                                            <div>
-                                                <strong>Image Quality:</strong>
-                                                {{
-                                                    item.data.sessionData
-                                                        .parsedAnalysis
-                                                        .image_quality ||
-                                                        'Unknown'
-                                                }}
-                                            </div>
-                                            <div>
-                                                <strong
-                                                    >Confidence Score:</strong
-                                                >
-                                                {{
-                                                    (
-                                                        item.data.sessionData
-                                                            .parsedAnalysis
-                                                            .confidence_score *
-                                                        100
-                                                    ).toFixed(1) || 'Unknown'
-                                                }}%
-                                            </div>
-                                            <div>
-                                                <strong>Is Valid:</strong>
-                                                {{
-                                                    item.data.sessionData
-                                                        .parsedAnalysis.is_valid
-                                                        ? 'Yes'
-                                                        : 'No'
-                                                }}
-                                            </div>
-                                            <div>
-                                                <strong>Text Clarity:</strong>
-                                                {{
-                                                    item.data.sessionData
-                                                        .parsedAnalysis
-                                                        .text_clarity ||
-                                                        'Unknown'
-                                                }}
-                                            </div>
-                                        </div>
-
-                                        <!-- Extracted Fields -->
-                                        <div
-                                            *ngIf="
-                                                item.data.sessionData
-                                                    .parsedAnalysis
-                                                    .extracted_fields
-                                            "
-                                            class="mt-2">
-                                            <strong
-                                                >Extracted Information:</strong
-                                            >
-                                            <div class="space-y-1 mt-1">
-                                                <div
-                                                    *ngIf="
-                                                        item.data.sessionData
-                                                            .parsedAnalysis
-                                                            .extracted_fields
-                                                            .pan_number
-                                                    ">
-                                                    <strong>PAN Number:</strong>
-                                                    {{
-                                                        item.data.sessionData
-                                                            .parsedAnalysis
-                                                            .extracted_fields
-                                                            .pan_number
-                                                    }}
-                                                </div>
-                                                <div
-                                                    *ngIf="
-                                                        item.data.sessionData
-                                                            .parsedAnalysis
-                                                            .extracted_fields
-                                                            .name
-                                                    ">
-                                                    <strong>Name:</strong>
-                                                    {{
-                                                        item.data.sessionData
-                                                            .parsedAnalysis
-                                                            .extracted_fields
-                                                            .name
-                                                    }}
-                                                </div>
-                                                <div
-                                                    *ngIf="
-                                                        item.data.sessionData
-                                                            .parsedAnalysis
-                                                            .extracted_fields
-                                                            .father_name
-                                                    ">
-                                                    <strong
-                                                        >Father's Name:</strong
-                                                    >
-                                                    {{
-                                                        item.data.sessionData
-                                                            .parsedAnalysis
-                                                            .extracted_fields
-                                                            .father_name
-                                                    }}
-                                                </div>
-                                                <div
-                                                    *ngIf="
-                                                        item.data.sessionData
-                                                            .parsedAnalysis
-                                                            .extracted_fields
-                                                            .date_of_birth
-                                                    ">
-                                                    <strong
-                                                        >Date of Birth:</strong
-                                                    >
-                                                    {{
-                                                        item.data.sessionData
-                                                            .parsedAnalysis
-                                                            .extracted_fields
-                                                            .date_of_birth
-                                                    }}
-                                                </div>
-                                                <div
-                                                    *ngIf="
-                                                        item.data.sessionData
-                                                            .parsedAnalysis
-                                                            .extracted_fields
-                                                            .issue_date
-                                                    ">
-                                                    <strong>Issue Date:</strong>
-                                                    {{
-                                                        item.data.sessionData
-                                                            .parsedAnalysis
-                                                            .extracted_fields
-                                                            .issue_date
-                                                    }}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Legacy fields for backward compatibility -->
-                                <div
-                                    *ngIf="
-                                        item.data?.sessionData?.quality &&
-                                        !item.data?.sessionData?.analysisResult
-                                    ">
-                                    <strong>Quality Score:</strong>
-                                    {{
-                                        item.data.sessionData.quality
-                                            | number : '1.0-2'
-                                    }}
-                                </div>
-                                <div
-                                    *ngIf="
-                                        item.data?.sessionData?.confidence &&
-                                        !item.data?.sessionData?.analysisResult
-                                    ">
-                                    <strong>Confidence:</strong>
-                                    {{
-                                        item.data.sessionData.confidence
-                                            | number : '1.0-2'
-                                    }}
-                                </div>
-                                <div
-                                    *ngIf="
-                                        item.data?.sessionData?.artifactType
-                                    ">
+                            <div class="space-y-2 text-xs text-gray-600">
+                                <div>
                                     <strong>Type:</strong>
-                                    {{
-                                        item.data.sessionData.artifactType
-                                            | titlecase
-                                    }}
+                                    {{ item.data.sessionData.captureType }}
                                 </div>
-                                <div *ngIf="item.data?.sessionData?.artifactId">
-                                    <strong>Artifact ID:</strong>
-                                    {{ item.data.sessionData.artifactId }}
+                                <div *ngIf="item.data.sessionData.qualityScore">
+                                    <strong>Quality Score:</strong>
+                                    <span
+                                        [class]="
+                                            item.data.sessionData
+                                                .qualityScore >= 0.7
+                                                ? 'text-green-600'
+                                                : item.data.sessionData
+                                                      .qualityScore >= 0.5
+                                                ? 'text-yellow-600'
+                                                : 'text-red-600'
+                                        ">
+                                        {{
+                                            item.data.sessionData.qualityScore
+                                                | number : '1.2-2'
+                                        }}
+                                    </span>
+                                </div>
+                                <div
+                                    *ngIf="
+                                        item.data.sessionData.analysisResult
+                                    ">
+                                    <strong>Analysis Status:</strong>
+                                    <span
+                                        [class]="
+                                            item.data.sessionData.analysisResult
+                                                .status === 200
+                                                ? 'text-green-600'
+                                                : 'text-red-600'
+                                        ">
+                                        {{
+                                            item.data.sessionData.analysisResult
+                                                .status === 200
+                                                ? 'Success'
+                                                : 'Failed'
+                                        }}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -580,93 +148,15 @@
             </app-accordion>
         </div>
 
-        <!-- Post-call Steps -->
-        <div *ngIf="journeyData.postCallSteps.length > 0">
-            <h4
-                class="text-sm sm:text-md font-medium text-gray-800 mb-2 sm:mb-3 flex items-center">
-                <span class="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
-                Finalization
-            </h4>
-            <app-accordion
-                [items]="getPostCallAccordionItems()"
-                [allowMultiple]="true"
-                [showIcons]="true"
-                [customContentTemplate]="postCallContentTemplate"
-                (itemToggled)="onAccordionItemToggled($event)">
-                <ng-template #postCallContentTemplate let-item>
-                    <div class="space-y-3">
-                        <!-- Final Verification Data -->
-                        <div *ngIf="item.data?.sessionData">
-                            <h6
-                                class="text-xs font-semibold text-gray-700 mb-2">
-                                Verification Results:
-                            </h6>
-                            <div class="space-y-2 text-xs text-gray-600">
-                                <div
-                                    *ngIf="
-                                        item.data.sessionData.verificationStatus
-                                    ">
-                                    <strong>Status:</strong>
-                                    <span
-                                        [class]="
-                                            item.data.sessionData
-                                                .verificationStatus ===
-                                            'approved'
-                                                ? 'text-green-600'
-                                                : 'text-red-600'
-                                        ">
-                                        {{
-                                            item.data.sessionData
-                                                .verificationStatus | titlecase
-                                        }}
-                                    </span>
-                                </div>
-                                <div *ngIf="item.data.sessionData.confidence">
-                                    <strong>Confidence:</strong>
-                                    {{
-                                        item.data.sessionData.confidence
-                                            | number : '1.0-2'
-                                    }}
-                                </div>
-                                <div
-                                    *ngIf="
-                                        item.data.sessionData.verificationId
-                                    ">
-                                    <strong>Verification ID:</strong>
-                                    {{ item.data.sessionData.verificationId }}
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Raw Data (for debugging) -->
-                        <div *ngIf="item.data?.sessionData" class="mt-3">
-                            <details class="text-xs">
-                                <summary
-                                    class="cursor-pointer text-gray-500 hover:text-gray-700">
-                                    View Raw Data
-                                </summary>
-                                <pre
-                                    class="mt-2 p-2 bg-gray-100 rounded text-xs overflow-auto max-h-32"
-                                    >{{ item.data.sessionData | json }}</pre
-                                >
-                            </details>
-                        </div>
-                    </div>
-                </ng-template>
-            </app-accordion>
-        </div>
-
         <!-- No steps message -->
         <div
-            *ngIf="
-                journeyData.preCallSteps.length === 0 &&
-                journeyData.inCallSteps.length === 0 &&
-                journeyData.postCallSteps.length === 0
-            "
+            *ngIf="journeyData.inCallSteps.length === 0"
             class="text-center py-8 text-gray-500">
             <div class="text-lg mb-2">📋</div>
-            <div>No steps available yet</div>
-            <div class="text-sm">Journey will be populated as you progress</div>
+            <div>No verification steps available yet</div>
+            <div class="text-sm">
+                Verification process will be populated as you progress
+            </div>
         </div>
     </div>
 

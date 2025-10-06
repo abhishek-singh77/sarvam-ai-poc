@@ -402,7 +402,7 @@ export class EnhancedDetectionService {
                         ? prediction.probability[0]
                         : prediction.probability,
                     boundingBox: transformedBbox,
-                    steady: false,
+                    steady: false, // Will be set by validateFaceDetection
                     faceId: `blazeface_face_${this.faceIdCounter++}`,
                     message: `Face ${i + 1} detected`,
                 }
@@ -568,10 +568,10 @@ export class EnhancedDetectionService {
             constraints.steadyFrames
         )
 
-        result.steady = steadyCount >= constraints.steadyFrames
-        result.message = result.steady
-            ? `Face detected and steady (${steadyCount}/${constraints.steadyFrames})`
-            : `Face detected, hold steady (${steadyCount}/${constraints.steadyFrames})`
+        result.steady = false // Not using steady logic anymore
+        result.message = `Face detected (confidence: ${(
+            result.confidence * 100
+        ).toFixed(1)}%)`
 
         return result
     }
@@ -637,11 +637,11 @@ export class EnhancedDetectionService {
 
     public getDefaultFaceConstraints(): DetectionConstraints {
         return {
-            minConfidence: 0.7, // Lowered for better detection
+            minConfidence: 0.4, // Lowered for better auto-capture responsiveness
             minSize: 0.1, // 10% of frame
             maxSize: 0.6, // 60% of frame
-            centerThreshold: 0.2, // 20% offset from center
-            steadyFrames: 3, // Very fast auto-capture
+            centerThreshold: 0.3, // 30% offset from center (more lenient)
+            steadyFrames: 1, // Not used anymore, but kept for compatibility
         }
     }
 

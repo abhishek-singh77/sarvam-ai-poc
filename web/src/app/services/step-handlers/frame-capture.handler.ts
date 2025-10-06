@@ -334,7 +334,7 @@ export class FrameCaptureHandler implements StepHandler {
             detectionResult: this.detectionResult.value,
             isCapturing: this.isCapturing,
             canRetry: !this.isCapturing,
-            showManualCapture: !this.detectionResult.value?.steady,
+            showManualCapture: true, // Always show manual capture option
         }
     }
 

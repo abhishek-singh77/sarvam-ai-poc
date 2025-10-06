@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
     
     # Pipeline Configuration
-    pipeline_type: str = Field(default="cascading", alias="PIPELINE_TYPE")  # "cascading" or "realtime"
+    pipeline_type: str = Field(default="realtime", alias="PIPELINE_TYPE")  # "cascading" or "realtime"
     
     # Simli Avatar Configuration
     simli_api_key: Optional[str] = Field(default=None, alias="SIMLI_API_KEY")
