@@ -43,7 +43,29 @@ export class DetectionOverlaysComponent
     private countdownInterval: number | null = null
     private monitoringInterval: number | null = null
     private readonly COUNTDOWN_DURATION = 3 // 3 second countdown
-    private readonly CAPTURE_THRESHOLD = 0.6 // Confidence threshold for auto-capture
+    private readonly CAPTURE_THRESHOLD = 0.6 // Confidence threshold for auto-capture (increased for better accuracy)
+
+    // Helper getters for template
+    get primaryFaceConfidence(): number {
+        return (
+            (
+                this.multipleFaceDetectionResult?.primaryFace ||
+                this.detectionResult
+            )?.confidence || 0
+        )
+    }
+
+    get hasHighConfidence(): boolean {
+        return this.primaryFaceConfidence >= this.CAPTURE_THRESHOLD
+    }
+
+    get documentConfidence(): number {
+        return this.documentDetectionResult?.confidence || 0
+    }
+
+    get hasHighDocumentConfidence(): boolean {
+        return this.documentConfidence >= this.CAPTURE_THRESHOLD
+    }
 
     ngOnInit() {
         // Only start monitoring for confidence threshold if capture type is appropriate
@@ -54,23 +76,13 @@ export class DetectionOverlaysComponent
             this.startConfidenceMonitoring()
         }
 
-        // Debug: Log detection state changes
-        console.log('🎯 DETECTION-OVERLAYS: Component initialized', {
-            captureType: this.captureType,
-            hasDetectionResult: !!this.detectionResult,
-            hasMultipleFaceResult: !!this.multipleFaceDetectionResult,
-            hasDocumentResult: !!this.documentDetectionResult,
-            captureThreshold: this.CAPTURE_THRESHOLD,
-        })
+        // Debug logs removed for production
     }
 
     ngOnChanges(changes: SimpleChanges): void {
         // Handle capture type changes
         if (changes['captureType']) {
-            console.log(
-                '🎯 DETECTION-OVERLAYS: Capture type changed to:',
-                this.captureType
-            )
+            // Debug logs removed
 
             // Clear any existing monitoring and countdown
             this.clearCountdown()
@@ -95,11 +107,6 @@ export class DetectionOverlaysComponent
         this.monitoringInterval = window.setInterval(() => {
             // Don't start auto-capture if already capturing or image manipulator is open
             if (this.isCapturing) {
-                if (this.countdown !== null) {
-                    console.log(
-                        '🎯 DETECTION: Already capturing, clearing countdown'
-                    )
-                }
                 this.clearCountdown()
                 return
             }
@@ -109,18 +116,10 @@ export class DetectionOverlaysComponent
             if (meetsThreshold) {
                 // Confidence meets threshold, start countdown if not already started
                 if (this.countdown === null) {
-                    console.log(
-                        '🎯 DETECTION: Confidence threshold met, starting auto-capture countdown'
-                    )
                     this.startCountdown()
                 }
             } else {
                 // Confidence below threshold, clear countdown
-                if (this.countdown !== null) {
-                    console.log(
-                        '🎯 DETECTION: Confidence below threshold, clearing countdown'
-                    )
-                }
                 this.clearCountdown()
             }
         }, 100) // Check every 100ms
@@ -136,18 +135,7 @@ export class DetectionOverlaysComponent
             const confidence = faceResult?.confidence || 0
 
             // Debug: Log detection state every 5 seconds
-            if (
-                Math.floor(currentTime / 5000) !==
-                Math.floor((currentTime - 100) / 5000)
-            ) {
-                console.log('🎯 DETECTION: Face detection state', {
-                    captureType: this.captureType,
-                    hasFaceResult: !!faceResult,
-                    confidence: confidence.toFixed(2),
-                    threshold: this.CAPTURE_THRESHOLD,
-                    meetsThreshold: confidence >= this.CAPTURE_THRESHOLD,
-                })
-            }
+            // Periodic debug logs removed
 
             // Simple threshold check - no steady logic needed
             return confidence >= this.CAPTURE_THRESHOLD
@@ -155,18 +143,7 @@ export class DetectionOverlaysComponent
             const confidence = this.documentDetectionResult?.confidence || 0
 
             // Debug: Log detection state every 5 seconds
-            if (
-                Math.floor(currentTime / 5000) !==
-                Math.floor((currentTime - 100) / 5000)
-            ) {
-                console.log('🎯 DETECTION: Document detection state', {
-                    captureType: this.captureType,
-                    hasDocumentResult: !!this.documentDetectionResult,
-                    confidence: confidence.toFixed(2),
-                    threshold: this.CAPTURE_THRESHOLD,
-                    meetsThreshold: confidence >= this.CAPTURE_THRESHOLD,
-                })
-            }
+            // Periodic debug logs removed
 
             // Simple threshold check - no steady logic needed
             return confidence >= this.CAPTURE_THRESHOLD

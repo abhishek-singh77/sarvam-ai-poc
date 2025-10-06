@@ -7,12 +7,10 @@
         "
         class="absolute border-4 rounded-lg transition-all duration-300 shadow-2xl"
         [ngClass]="{
-            'border-green-500 bg-green-500 bg-opacity-20 shadow-green-500/50': (
-                multipleFaceDetectionResult?.primaryFace || detectionResult
-            )?.steady,
+            'border-green-500 bg-opacity-20 shadow-green-500/50':
+                hasHighConfidence,
             'border-yellow-500 bg-yellow-500 bg-opacity-20 shadow-yellow-500/50':
-                !(multipleFaceDetectionResult?.primaryFace || detectionResult)
-                    ?.steady
+                !hasHighConfidence
         }"
         [style.left.px]="
             (multipleFaceDetectionResult?.primaryFace || detectionResult)
@@ -34,52 +32,32 @@
         <div
             class="absolute -top-2 -left-2 w-4 h-4 border-t-3 border-l-3 border-white rounded-tl shadow-lg"
             [ngClass]="{
-                'border-green-300': (
-                    multipleFaceDetectionResult?.primaryFace || detectionResult
-                )?.steady,
-                'border-yellow-300': !(
-                    multipleFaceDetectionResult?.primaryFace || detectionResult
-                )?.steady
+                'border-green-300': hasHighConfidence,
+                'border-yellow-300': !hasHighConfidence
             }"></div>
         <div
             class="absolute -top-2 -right-2 w-4 h-4 border-t-3 border-r-3 border-white rounded-tr shadow-lg"
             [ngClass]="{
-                'border-green-300': (
-                    multipleFaceDetectionResult?.primaryFace || detectionResult
-                )?.steady,
-                'border-yellow-300': !(
-                    multipleFaceDetectionResult?.primaryFace || detectionResult
-                )?.steady
+                'border-green-300': hasHighConfidence,
+                'border-yellow-300': !hasHighConfidence
             }"></div>
         <div
             class="absolute -bottom-2 -left-2 w-4 h-4 border-b-3 border-l-3 border-white rounded-bl shadow-lg"
             [ngClass]="{
-                'border-green-300': (
-                    multipleFaceDetectionResult?.primaryFace || detectionResult
-                )?.steady,
-                'border-yellow-300': !(
-                    multipleFaceDetectionResult?.primaryFace || detectionResult
-                )?.steady
+                'border-green-300': hasHighConfidence,
+                'border-yellow-300': !hasHighConfidence
             }"></div>
         <div
             class="absolute -bottom-2 -right-2 w-4 h-4 border-b-3 border-r-3 border-white rounded-br shadow-lg"
             [ngClass]="{
-                'border-green-300': (
-                    multipleFaceDetectionResult?.primaryFace || detectionResult
-                )?.steady,
-                'border-yellow-300': !(
-                    multipleFaceDetectionResult?.primaryFace || detectionResult
-                )?.steady
+                'border-green-300': hasHighConfidence,
+                'border-yellow-300': !hasHighConfidence
             }"></div>
 
         <!-- Face detection indicator in center -->
         <div
             class="absolute inset-0 flex items-center justify-center"
-            *ngIf="
-                captureType === 'FACE_CAPTURE' &&
-                (multipleFaceDetectionResult?.primaryFace || detectionResult)
-                    ?.steady
-            ">
+            *ngIf="captureType === 'FACE_CAPTURE' && hasHighConfidence">
             <div
                 class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg animate-pulse">
                 <svg
@@ -101,9 +79,9 @@
         class="absolute border-3 rounded-lg transition-all duration-300 shadow-lg"
         [ngClass]="{
             'border-green-400 bg-green-400 bg-opacity-10':
-                documentDetectionResult.steady,
+                hasHighDocumentConfidence,
             'border-yellow-400 bg-yellow-400 bg-opacity-10':
-                !documentDetectionResult.steady
+                !hasHighDocumentConfidence
         }"
         [style.left.px]="documentDetectionResult.boundingBox.x"
         [style.top.px]="documentDetectionResult.boundingBox.y"
@@ -136,37 +114,23 @@
                         multipleFaceDetectionResult?.primaryFace ||
                         detectionResult
                     ">
-                    <span
-                        *ngIf="
-                            (
-                                multipleFaceDetectionResult?.primaryFace ||
-                                detectionResult
-                            )?.steady
-                        "
-                        class="text-green-300">
+                    <span *ngIf="hasHighConfidence" class="text-green-300">
                         ✅ Face detected - Auto-capturing now!
                     </span>
-                    <span
-                        *ngIf="
-                            !(
-                                multipleFaceDetectionResult?.primaryFace ||
-                                detectionResult
-                            )?.steady
-                        "
-                        class="text-yellow-300">
-                        📷 Face detected - Hold steady...
+                    <span *ngIf="!hasHighConfidence" class="text-yellow-300">
+                        📷 Face detected - Position yourself better...
                     </span>
                 </span>
                 <span *ngIf="documentDetectionResult">
                     <span
-                        *ngIf="documentDetectionResult.steady"
+                        *ngIf="hasHighDocumentConfidence"
                         class="text-green-300">
                         ✅ Document detected - Auto-capturing now!
                     </span>
                     <span
-                        *ngIf="!documentDetectionResult.steady"
+                        *ngIf="!hasHighDocumentConfidence"
                         class="text-yellow-300">
-                        📄 Document detected - Hold steady...
+                        📄 Document detected - Position better...
                     </span>
                 </span>
             </p>

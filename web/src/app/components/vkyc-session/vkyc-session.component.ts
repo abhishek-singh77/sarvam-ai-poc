@@ -366,16 +366,6 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         reader.readAsDataURL(blob)
     }
 
-    private startFaceDetectionOnVideo(videoElement: HTMLVideoElement): void {
-        console.log(
-            '🎯 VKYC-SESSION: Starting continuous face detection on video element'
-        )
-
-        // Start continuous face detection regardless of current step
-        // This allows users to see face detection throughout the call
-        this.captureFacade.startFaceDetection(videoElement)
-    }
-
     private initializeAgentLoading(healthCheckData?: {
         locationData: any
         networkSpeed: any
@@ -486,6 +476,10 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     // Start call method - called when user clicks "Start Call" button
     async startCall(): Promise<void> {
+        console.log(
+            '🎯 VKYC-SESSION: startCall() called - Start Video Call button clicked!'
+        )
+
         // Prevent multiple startCall calls
         if (this.startCallInProgress) {
             console.log(
@@ -535,15 +529,10 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
             this.initializeAgentLoading(this.healthCheckData || undefined)
 
-            // Start face detection when video is ready
-            setTimeout(() => {
-                const videoElement = document.querySelector(
-                    'video'
-                ) as HTMLVideoElement
-                if (videoElement) {
-                    this.startFaceDetectionOnVideo(videoElement)
-                }
-            }, 2000) // Wait for video to be ready
+            // Don't start face detection automatically - it will be started when needed for FACE_CAPTURE steps
+            console.log(
+                '🎯 VKYC-SESSION: Call started - face detection will be started when needed for capture steps'
+            )
         } catch (error: any) {
             console.error('🎯 VKYC-SESSION: Failed to start call:', error)
             // Reset the flag so user can try again
@@ -572,7 +561,7 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     }
 
     private handleFrameCaptureStep(step: any): void {
-        const video = this.userVideoRef?.nativeElement
+        const video = document.querySelector('video') as HTMLVideoElement
         if (!video) return
 
         const captureType = step.data?.captureType
@@ -623,7 +612,7 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         this.autoCaptureStartTime = Date.now()
 
         // Set timeout for manual capture notification (15 seconds)
-        setTimeout(() => {
+        ;(this as any).manualCaptureNotificationTimeout = setTimeout(() => {
             if (
                 this.layoutState?.currentStep?.id === step.id &&
                 this.layoutState?.currentStep?.status === 'active'
@@ -648,6 +637,10 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             clearTimeout(this.autoCaptureTimeout)
             this.autoCaptureTimeout = null
         }
+        if ((this as any).manualCaptureNotificationTimeout) {
+            clearTimeout((this as any).manualCaptureNotificationTimeout)
+            ;(this as any).manualCaptureNotificationTimeout = null
+        }
         this.autoCaptureStartTime = null
     }
 
@@ -664,62 +657,58 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
         this.captureFacade.stopDetection()
     }
 
-    private restartAutoCapture(): void {
+    private async waitForActiveVideoElement(
+        maxWaitMs: number = 3000,
+        pollMs: number = 100
+    ): Promise<HTMLVideoElement | null> {
+        const start = Date.now()
+        while (Date.now() - start < maxWaitMs) {
+            const video = document.querySelector(
+                'video'
+            ) as HTMLVideoElement | null
+            if (video && video.readyState >= 2) {
+                return video
+            }
+            await new Promise((r) => setTimeout(r, pollMs))
+        }
+        return null
+    }
+
+    private async restartAutoCapture(): Promise<void> {
         console.log('🎯 VKYC-SESSION: Restarting auto-capture')
 
         // Reset capturing state to allow new auto-capture
         this.captureFacade.setCapturing(false)
 
-        // Restart face detection for current step
+        // Restart face/document detection for current step
         const currentStep = this.layoutState?.currentStep
-        console.log('🎯 VKYC-SESSION: Current step for auto-capture restart:', {
-            stepType: currentStep?.type,
-            stepStatus: currentStep?.status,
-            captureType: currentStep?.data?.captureType,
-            stepId: currentStep?.id,
-        })
-
         if (
-            currentStep?.type === 'FRAME_CAPTURE' &&
-            currentStep?.status === 'active'
+            currentStep?.type !== 'FRAME_CAPTURE' ||
+            currentStep?.status !== 'active'
         ) {
-            const video = this.userVideoRef?.nativeElement
-            if (video) {
-                const captureType = currentStep.data?.captureType
-                console.log(
-                    '🎯 VKYC-SESSION: Restarting detection for capture type:',
-                    captureType
-                )
-
-                if (captureType === 'FACE_CAPTURE') {
-                    this.captureFacade.startFaceDetection(video)
-                    console.log('🎯 VKYC-SESSION: Face detection restarted')
-                } else if (captureType === 'DOCUMENT_CAPTURE') {
-                    this.captureFacade.startDocumentDetection(video)
-                    console.log('🎯 VKYC-SESSION: Document detection restarted')
-                }
-            } else {
-                console.warn(
-                    '🎯 VKYC-SESSION: Video element not found for detection restart'
-                )
-            }
-
-            // Restart auto-capture timeout
-            this.startAutoCaptureTimeout(currentStep)
-            console.log('🎯 VKYC-SESSION: Auto-capture timeout restarted')
-        } else {
-            console.log(
-                '🎯 VKYC-SESSION: Not restarting auto-capture - step conditions not met:',
-                {
-                    isFrameCapture: currentStep?.type === 'FRAME_CAPTURE',
-                    isActive: currentStep?.status === 'active',
-                }
-            )
+            return
         }
+
+        // Ensure any previous loop is stopped cleanly
+        this.captureFacade.stopDetection()
+
+        const video = await this.waitForActiveVideoElement(3000, 100)
+        if (!video) {
+            console.warn('🎯 VKYC-SESSION: Video element not ready for restart')
+            return
+        }
+
+        const captureType = currentStep.data?.captureType
+        if (captureType === 'FACE_CAPTURE') {
+            this.captureFacade.startFaceDetection(video)
+        } else if (captureType === 'DOCUMENT_CAPTURE') {
+            this.captureFacade.startDocumentDetection(video)
+        }
+
+        this.startAutoCaptureTimeout(currentStep)
     }
 
     private showManualCaptureNotification(): void {
-        console.log('🎯 VKYC-SESSION: Showing manual capture notification')
         this.showErrorNotification(
             'Auto-capture is taking longer than expected. You can capture manually using the camera button below.',
             'info'
@@ -727,11 +716,6 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
     }
 
     private handleAutoCaptureTimeout(step: any): void {
-        console.log(
-            '🎯 VKYC-SESSION: Auto-capture timeout reached for step:',
-            step.id
-        )
-
         this.showErrorNotification(
             'Auto-capture timed out. Please use the camera button to capture manually.',
             'warning'
@@ -1379,8 +1363,9 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     onImageManipulatorRetake(): void {
         console.log(
-            '🎯 VKYC-SESSION: Retake button clicked - clearing image and closing popup'
+            '🎯 VKYC-SESSION: Retake button clicked - restarting auto-capture'
         )
+
         // Clear the captured image data
         this.capturedImageBlob = null
         this.capturedImageBase64 = ''
@@ -1390,10 +1375,6 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
         // Restart auto-capture when retake is requested
         this.restartAutoCapture()
-
-        console.log(
-            '🎯 VKYC-SESSION: Ready for new capture - auto-capture restarted'
-        )
     }
 
     getImageManipulatorConfig(): any {
@@ -1718,15 +1699,29 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
 
     onNextStep(): void {
         console.log('🎯 VKYC-SESSION: Next step requested from layout')
+        console.log(
+            '🎯 VKYC-SESSION: Current step:',
+            this.layoutState?.currentStep
+        )
+        console.log(
+            '🎯 VKYC-SESSION: Workflow initialized:',
+            this.workflowInitialized
+        )
+
         const currentStep = this.layoutState?.currentStep
 
         if (!currentStep) {
             // Start the workflow if no current step
-            console.log('🎯 VKYC-SESSION: Starting workflow')
+            console.log('🎯 VKYC-SESSION: No current step - Starting workflow')
             if (!this.workflowInitialized) {
+                console.log('🎯 VKYC-SESSION: Initializing workflow facade')
                 this.workflowInitialized = true
                 this.workflowFacade.init()
                 this.initializeAgentWorkflow()
+            } else {
+                console.log(
+                    '🎯 VKYC-SESSION: Workflow already initialized, but no current step'
+                )
             }
             return
         }
@@ -1774,6 +1769,10 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             '🎯 VKYC-SESSION: Questionnaire completed with answers:',
             answers
         )
+        console.log(
+            '🎯 VKYC-SESSION: Current step before completion:',
+            this.layoutState?.currentStep
+        )
 
         try {
             // Store the questionnaire completion in session storage
@@ -1786,10 +1785,17 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             })
 
             // Complete the questionnaire step manually
+            console.log(
+                '🎯 VKYC-SESSION: Calling workflowFacade.completeCurrentStep()'
+            )
             this.workflowFacade.completeCurrentStep()
 
             console.log(
                 '🎯 VKYC-SESSION: Questionnaire step completed manually, moving to next step'
+            )
+            console.log(
+                '🎯 VKYC-SESSION: Current step after completion:',
+                this.layoutState?.currentStep
             )
         } catch (error) {
             console.error(

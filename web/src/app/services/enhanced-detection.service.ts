@@ -96,23 +96,18 @@ export class EnhancedDetectionService {
         this.detectionStatusSubject.next('initializing')
 
         try {
-            console.log(
-                '🎯 ENHANCED-DETECTION: Initializing detection models...'
-            )
+            // Initialization logs reduced for production
 
             // Initialize TensorFlow.js backend
             await tf.ready()
-            console.log('🎯 ENHANCED-DETECTION: TensorFlow.js ready')
+            // console.log('🎯 ENHANCED-DETECTION: TensorFlow.js ready')
 
             // Initialize BlazeFace model (fallback for face detection)
             try {
                 this.blazefaceModel = await blazeface.load()
-                console.log('🎯 ENHANCED-DETECTION: BlazeFace model loaded')
+                // console.log('🎯 ENHANCED-DETECTION: BlazeFace model loaded')
             } catch (blazeError) {
-                console.warn(
-                    '🎯 ENHANCED-DETECTION: BlazeFace model failed to load:',
-                    blazeError
-                )
+                // console.warn('🎯 ENHANCED-DETECTION: BlazeFace model failed to load:', blazeError)
                 this.detectionErrorSubject.next(
                     'BlazeFace model failed to load. Using MediaPipe only.'
                 )
@@ -134,14 +129,9 @@ export class EnhancedDetectionService {
                         runningMode: 'VIDEO',
                     }
                 )
-                console.log(
-                    '🎯 ENHANCED-DETECTION: MediaPipe Face Detector loaded'
-                )
+                // console.log('🎯 ENHANCED-DETECTION: MediaPipe Face Detector loaded')
             } catch (mediapipeError) {
-                console.warn(
-                    '🎯 ENHANCED-DETECTION: MediaPipe model failed to load:',
-                    mediapipeError
-                )
+                // console.warn('🎯 ENHANCED-DETECTION: MediaPipe model failed to load:', mediapipeError)
                 this.detectionErrorSubject.next(
                     'MediaPipe model failed to load. Using BlazeFace only.'
                 )
@@ -155,9 +145,7 @@ export class EnhancedDetectionService {
             this.isInitialized = true
             this.initializationError = null
             this.detectionStatusSubject.next('idle')
-            console.log(
-                '🎯 ENHANCED-DETECTION: Detection models initialized successfully'
-            )
+            // console.log('🎯 ENHANCED-DETECTION: Detection models initialized successfully')
         } catch (error) {
             const errorMessage = `Failed to initialize face detection: ${
                 error instanceof Error ? error.message : 'Unknown error'
@@ -182,13 +170,12 @@ export class EnhancedDetectionService {
             throw new Error(this.initializationError)
         }
 
+        // Stop any existing detection first
+        this.stopDetection()
+
         this.currentVideo = video
         this.isDetecting = true
         this.detectionStatusSubject.next('detecting')
-
-        console.log(
-            '🎯 ENHANCED-DETECTION: Starting continuous face detection...'
-        )
 
         // Start detection loop
         this.detectFaces(constraints)
@@ -206,11 +193,12 @@ export class EnhancedDetectionService {
             throw new Error(this.initializationError)
         }
 
+        // Stop any existing detection first
+        this.stopDetection()
+
         this.currentVideo = video
         this.isDetecting = true
         this.detectionStatusSubject.next('detecting')
-
-        console.log('🎯 ENHANCED-DETECTION: Starting document detection...')
 
         // For now, simulate document detection
         // In a real implementation, you would use MediaPipe Document Scanner
@@ -231,13 +219,15 @@ export class EnhancedDetectionService {
         this.multipleFaceDetectionSubject.next(null)
         this.documentDetectionSubject.next(null)
 
-        console.log('🎯 ENHANCED-DETECTION: Detection stopped')
+        // Detection stopped
     }
 
     private async detectFaces(
         constraints: DetectionConstraints
     ): Promise<void> {
-        if (!this.isDetecting || !this.currentVideo) return
+        if (!this.isDetecting || !this.currentVideo) {
+            return
+        }
 
         const now = performance.now()
 
@@ -682,10 +672,7 @@ export class EnhancedDetectionService {
         // Emit result
         this.documentDetectionSubject.next(mockResult)
 
-        console.log(
-            '🎯 ENHANCED-DETECTION: Document detection simulated:',
-            mockResult
-        )
+        // Document detection simulated
     }
 
     private updateDocumentHistory(

@@ -25,36 +25,22 @@ export class VkycCaptureFacadeService {
     constructor(private detectionService: EnhancedDetectionService) {
         // Subscribe to detection service results and forward them
         this.detectionService.faceDetection$.subscribe((result) => {
-            console.log(
-                '🎯 CAPTURE-FACADE: Forwarding face detection result:',
-                result
-            )
             this.faceDetection$.next(result)
         })
 
         this.detectionService.multipleFaceDetection$.subscribe((result) => {
-            console.log(
-                '🎯 CAPTURE-FACADE: Forwarding multiple face detection result:',
-                result
-            )
             this.multipleFaceDetection$.next(result)
         })
 
         this.detectionService.documentDetection$.subscribe((result) => {
-            console.log(
-                '🎯 CAPTURE-FACADE: Forwarding document detection result:',
-                result
-            )
             this.documentDetection$.next(result)
         })
 
         this.detectionService.detectionError$.subscribe((error) => {
-            console.log('🎯 CAPTURE-FACADE: Detection error:', error)
             this.detectionError$.next(error)
         })
 
         this.detectionService.detectionStatus$.subscribe((status) => {
-            console.log('🎯 CAPTURE-FACADE: Detection status:', status)
             this.detectionStatus$.next(status)
         })
     }

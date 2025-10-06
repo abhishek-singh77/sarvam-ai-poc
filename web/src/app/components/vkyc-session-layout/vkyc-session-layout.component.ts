@@ -228,15 +228,7 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
     getStepCircleClass(step: WorkflowStep): string {
         // Check if this is the current step
         const isCurrentStep = this.state?.currentStep?.id === step.id
-        // Debug logging (can be removed in production)
-        if (step.type === 'QUESTIONNAIRE') {
-            console.log('🎯 LAYOUT: Questionnaire step highlighting:', {
-                stepId: step.id,
-                currentStepId: this.state?.currentStep?.id,
-                isCurrentStep: isCurrentStep,
-                stepStatus: step.status,
-            })
-        }
+        // Debug logging removed for production
 
         switch (step.status) {
             case 'completed':
@@ -342,13 +334,7 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
             return 0
         })
 
-        // Debug logging (can be removed in production)
-        console.log(
-            '🎯 LAYOUT: In-call steps count:',
-            sortedSteps.length,
-            'Current step:',
-            this.state?.currentStep?.id
-        )
+        // Debug logging removed for production cleanliness
 
         return sortedSteps
     }
