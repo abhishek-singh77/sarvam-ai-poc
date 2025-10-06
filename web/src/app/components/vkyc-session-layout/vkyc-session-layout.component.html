@@ -35,8 +35,8 @@
         <app-user-consent
             *ngIf="state?.preCallStep === 'consent'"
             [consentItems]="preCallFlowService?.getConsentItems() || []"
-            [userName]="'Akash Kumar'"
-            [vcipId]="'123456'"
+            [userName]="'User'"
+            [vcipId]="'VCP071025'"
             (proceed)="consentProceed.emit()"
             (cancel)="consentCancel.emit()">
         </app-user-consent>

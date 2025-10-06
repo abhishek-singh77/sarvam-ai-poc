@@ -43,7 +43,8 @@ export class DetectionOverlaysComponent
     private countdownInterval: number | null = null
     private monitoringInterval: number | null = null
     private readonly COUNTDOWN_DURATION = 3 // 3 second countdown
-    private readonly CAPTURE_THRESHOLD = 0.6 // Confidence threshold for auto-capture (increased for better accuracy)
+    private readonly CAPTURE_THRESHOLD = 0.6 // Face threshold
+    private readonly DOC_CAPTURE_THRESHOLD = 0.5 // Accept lower confidence for document auto-capture per request
 
     // Helper getters for template
     get primaryFaceConfidence(): number {
@@ -64,7 +65,7 @@ export class DetectionOverlaysComponent
     }
 
     get hasHighDocumentConfidence(): boolean {
-        return this.documentConfidence >= this.CAPTURE_THRESHOLD
+        return this.documentConfidence >= this.DOC_CAPTURE_THRESHOLD
     }
 
     ngOnInit() {

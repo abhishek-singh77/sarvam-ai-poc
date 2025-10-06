@@ -1395,12 +1395,12 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
             currentStep?.data?.sub_action_ref ||
             'unknown-step'
 
-        console.log('🎯 VKYC-SESSION: Image manipulator config:', {
-            currentStep: currentStep,
-            captureType: captureType,
-            stepId: stepId,
-            layoutState: this.layoutState,
-        })
+        // console.log('🎯 VKYC-SESSION: Image manipulator config:', {
+        //     currentStep: currentStep,
+        //     captureType: captureType,
+        //     stepId: stepId,
+        //     layoutState: this.layoutState,
+        // })
 
         // Validate that we have a step ID
         if (!stepId || stepId === 'unknown-step') {

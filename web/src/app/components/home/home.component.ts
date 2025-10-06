@@ -4,6 +4,7 @@ import { Router, RouterModule } from '@angular/router'
 import { Subscription } from 'rxjs'
 import { EnterpriseRoomService } from '../../services/enterprise-room.service'
 import { NotificationComponent } from '../notification/notification.component'
+import { SessionStorageService } from 'src/app/services/session-storage.service'
 
 @Component({
     selector: 'app-home',
@@ -21,7 +22,8 @@ export class HomeComponent implements OnInit, OnDestroy {
 
     constructor(
         private roomService: EnterpriseRoomService,
-        private router: Router
+        private router: Router,
+        private sessionStorage: SessionStorageService
     ) {}
 
     ngOnInit(): void {
@@ -37,6 +39,18 @@ export class HomeComponent implements OnInit, OnDestroy {
         this.isLoading = true
 
         try {
+            try {
+                this.sessionStorage.clearAll()
+                console.log(
+                    '🎯 VKYC-SESSION: Session storage cleared (including journey data)'
+                )
+            } catch (error) {
+                console.warn(
+                    '🎯 VKYC-SESSION: Error clearing session storage:',
+                    error
+                )
+            }
+
             console.log('🏠 HOME: Starting KYC session initialization...')
             // First, initialize the KYC session (this calls the /create API)
             const result = await this.roomService.initializeKYCSession()

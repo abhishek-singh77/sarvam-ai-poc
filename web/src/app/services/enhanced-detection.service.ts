@@ -5,6 +5,7 @@ import { BehaviorSubject, Observable } from 'rxjs'
 import { FaceDetector, FilesetResolver } from '@mediapipe/tasks-vision'
 import * as blazeface from '@tensorflow-models/blazeface'
 import * as tf from '@tensorflow/tfjs-core'
+import '@tensorflow/tfjs-backend-cpu'
 import '@tensorflow/tfjs-backend-webgl'
 
 export interface DetectionResult {
@@ -57,6 +58,7 @@ export interface DetectionConstraints {
 export class EnhancedDetectionService {
     private faceDetector: FaceDetector | null = null
     private blazefaceModel: blazeface.BlazeFaceModel | null = null
+    private cocoSsdModel: any | null = null
     private isInitialized = false
     private initializationError: string | null = null
     private detectionHistory: Map<string, DetectionResult[]> = new Map()
@@ -68,7 +70,7 @@ export class EnhancedDetectionService {
     private currentVideo: HTMLVideoElement | null = null
     private faceIdCounter = 0
     private lastDetectionTime = 0
-    private detectionInterval = 100 // Detect every 100ms for smooth experience
+    private detectionInterval = 150 // Slightly slower to reduce load and stabilize results
 
     // Observables for detection results
     private faceDetectionSubject = new BehaviorSubject<DetectionResult | null>(
@@ -200,9 +202,35 @@ export class EnhancedDetectionService {
         this.isDetecting = true
         this.detectionStatusSubject.next('detecting')
 
-        // For now, simulate document detection
-        // In a real implementation, you would use MediaPipe Document Scanner
-        this.simulateDocumentDetection(constraints)
+        // Prefer WebGL if available to avoid CPU fallback; ensure backends are registered
+        try {
+            if (tf.getBackend() !== 'webgl') {
+                await (tf as any).setBackend('webgl')
+            }
+        } catch (_) {
+            // Ignore backend switch errors; coco-ssd will try available backends
+        }
+
+        // Attempt to lazy-load coco-ssd; if unavailable, fall back to heuristic
+        try {
+            if (!this.cocoSsdModel) {
+                const cocoModule: any = await import(
+                    /* webpackChunkName: "coco-ssd" */ '@tensorflow-models/coco-ssd'
+                )
+                // Use the light base for better perf on browsers
+                this.cocoSsdModel = await cocoModule.load({
+                    base: 'lite_mobilenet_v2',
+                })
+            }
+
+            this.detectDocumentWithCoco(constraints)
+        } catch (e) {
+            console.warn(
+                '🎯 ENHANCED-DETECTION: coco-ssd not available, using heuristic. Ensure @tensorflow/tfjs and @tensorflow-models/coco-ssd are installed.',
+                e
+            )
+            this.detectDocumentHeuristic(constraints)
+        }
     }
 
     stopDetection(): void {
@@ -222,6 +250,252 @@ export class EnhancedDetectionService {
         // Detection stopped
     }
 
+    private async detectDocumentWithCoco(
+        constraints: DetectionConstraints
+    ): Promise<void> {
+        if (!this.isDetecting || !this.currentVideo) {
+            return
+        }
+
+        const now = performance.now()
+        if (now - this.lastDetectionTime < this.detectionInterval) {
+            this.detectionLoop = requestAnimationFrame(() =>
+                this.detectDocumentWithCoco(constraints)
+            )
+            return
+        }
+
+        this.lastDetectionTime = now
+
+        try {
+            if (!this.cocoSsdModel || !this.currentVideo) {
+                this.documentDetectionSubject.next(null)
+            } else {
+                const predictions: any[] = await this.cocoSsdModel.detect(
+                    this.currentVideo
+                )
+
+                const videoWidth = this.currentVideo.videoWidth || 640
+                const videoHeight = this.currentVideo.videoHeight || 480
+
+                // Choose best rectangular candidate by confidence and constraints
+                let best: { pred: any; score: number } | null = null
+                for (const pred of predictions) {
+                    const [x, y, w, h] = pred.bbox as [
+                        number,
+                        number,
+                        number,
+                        number
+                    ]
+
+                    // Relative area and aspect ratio checks
+                    const areaRatio = (w * h) / (videoWidth * videoHeight)
+                    const aspect = w / Math.max(1, h)
+
+                    const aspectOk =
+                        !constraints.aspectRatioRange ||
+                        (aspect >= constraints.aspectRatioRange.min &&
+                            aspect <= constraints.aspectRatioRange.max)
+                    const sizeOk =
+                        areaRatio >= constraints.minSize &&
+                        areaRatio <= constraints.maxSize
+
+                    if (!aspectOk || !sizeOk) continue
+
+                    // Prefer more rectangular classes if available, but don't restrict
+                    // Score blend: model score with aspect closeness and size fit
+                    const modelScore: number = pred.score || 0
+                    const aspectCenter = constraints.aspectRatioRange
+                        ? (constraints.aspectRatioRange.min +
+                              constraints.aspectRatioRange.max) /
+                          2
+                        : aspect
+                    const aspectCloseness =
+                        1 -
+                        Math.min(
+                            1,
+                            Math.abs(aspect - aspectCenter) / aspectCenter
+                        )
+                    const sizeCloseness =
+                        1 -
+                        Math.min(
+                            1,
+                            Math.abs(
+                                areaRatio -
+                                    (constraints.minSize +
+                                        constraints.maxSize) /
+                                        2
+                            ) /
+                                ((constraints.maxSize - constraints.minSize) /
+                                    2 || 1)
+                        )
+                    // Additional rectangularness and texture variance checks to reduce false positives
+                    const displayBBox = this.transformBoundingBoxToDisplay(
+                        x,
+                        y,
+                        w,
+                        h
+                    )
+                    const checks = this.computeDocRectChecks(displayBBox)
+                    if (checks.rectangularness < 0.7) continue
+                    if (checks.variance < 20) continue
+
+                    // Center check: prefer candidates near video center
+                    const vw = this.currentVideo.clientWidth || 640
+                    const vh = this.currentVideo.clientHeight || 480
+                    const cx = displayBBox.x + displayBBox.width / 2
+                    const cy = displayBBox.y + displayBBox.height / 2
+                    const dx = Math.abs(cx - vw / 2) / (vw / 2)
+                    const dy = Math.abs(cy - vh / 2) / (vh / 2)
+                    const centerPenalty = Math.min(1, (dx + dy) / 2)
+
+                    const score =
+                        modelScore * 0.5 +
+                        aspectCloseness * 0.15 +
+                        sizeCloseness * 0.1 +
+                        checks.rectangularness * 0.2 +
+                        (1 - centerPenalty) * 0.05
+
+                    if (!best || score > best.score) {
+                        best = { pred, score }
+                    }
+                }
+
+                if (best) {
+                    const [x, y, w, h] = best.pred.bbox as [
+                        number,
+                        number,
+                        number,
+                        number
+                    ]
+                    const displayBBox = this.transformBoundingBoxToDisplay(
+                        x,
+                        y,
+                        w,
+                        h
+                    )
+
+                    // Require brief steadiness across recent frames (documentHistory)
+                    const validated = this.validateDocSteady(
+                        displayBBox,
+                        best.score,
+                        constraints
+                    )
+                    if (!validated) {
+                        this.documentDetectionSubject.next(null)
+                    } else {
+                        const result: DocumentDetectionResult = {
+                            confidence: validated.confidence,
+                            quad: {
+                                topLeft: { x: displayBBox.x, y: displayBBox.y },
+                                topRight: {
+                                    x: displayBBox.x + displayBBox.width,
+                                    y: displayBBox.y,
+                                },
+                                bottomLeft: {
+                                    x: displayBBox.x,
+                                    y: displayBBox.y + displayBBox.height,
+                                },
+                                bottomRight: {
+                                    x: displayBBox.x + displayBBox.width,
+                                    y: displayBBox.y + displayBBox.height,
+                                },
+                            },
+                            boundingBox: displayBBox,
+                            steady: validated.steady,
+                            quality: validated.quality,
+                            aspectRatio: Math.max(1e-6, w / Math.max(1, h)),
+                            message: `Document candidate detected (${(
+                                validated.confidence * 100
+                            ).toFixed(1)}%)`,
+                        }
+
+                        this.updateDocumentHistory('document', result)
+                        this.documentDetectionSubject.next(result)
+                    }
+                } else {
+                    // If model returned any predictions, emit the top one for debug visualization
+                    if (predictions && predictions.length > 0) {
+                        let top = predictions[0]
+                        for (const p of predictions) {
+                            if ((p.score || 0) > (top.score || 0)) top = p
+                        }
+                        const [dx, dy, dw, dh] = top.bbox as [
+                            number,
+                            number,
+                            number,
+                            number
+                        ]
+                        const dbgBBox = this.transformBoundingBoxToDisplay(
+                            dx,
+                            dy,
+                            dw,
+                            dh
+                        )
+                        const dbgResult: DocumentDetectionResult = {
+                            confidence: Math.min(0.5, (top.score || 0) * 0.5),
+                            quad: {
+                                topLeft: { x: dbgBBox.x, y: dbgBBox.y },
+                                topRight: {
+                                    x: dbgBBox.x + dbgBBox.width,
+                                    y: dbgBBox.y,
+                                },
+                                bottomLeft: {
+                                    x: dbgBBox.x,
+                                    y: dbgBBox.y + dbgBBox.height,
+                                },
+                                bottomRight: {
+                                    x: dbgBBox.x + dbgBBox.width,
+                                    y: dbgBBox.y + dbgBBox.height,
+                                },
+                            },
+                            boundingBox: dbgBBox,
+                            steady: false,
+                            quality: top.score || 0,
+                            aspectRatio: Math.max(1e-6, dw / Math.max(1, dh)),
+                            message: 'Document candidate (debug)',
+                        }
+                        this.updateDocumentHistory('document', dbgResult)
+                        console.log(
+                            '🎯 ENHANCED-DETECTION: Debug document bbox emitted',
+                            dbgResult
+                        )
+                        this.documentDetectionSubject.next(dbgResult)
+                    } else {
+                        // Fallback: run a quick heuristic check this frame
+                        const heuristic =
+                            this.estimateDocumentFromEdges(constraints)
+                        if (heuristic) {
+                            this.updateDocumentHistory('document', heuristic)
+                            console.log(
+                                '🎯 ENHANCED-DETECTION: Heuristic document bbox emitted',
+                                heuristic
+                            )
+                            this.documentDetectionSubject.next(heuristic)
+                        } else {
+                            this.documentDetectionSubject.next(null)
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error(
+                '🎯 ENHANCED-DETECTION: coco-ssd detection error:',
+                error
+            )
+            this.detectionErrorSubject.next(
+                `Document detection error: ${
+                    error instanceof Error ? error.message : 'Unknown error'
+                }`
+            )
+        }
+
+        if (this.isDetecting) {
+            this.detectionLoop = requestAnimationFrame(() =>
+                this.detectDocumentWithCoco(constraints)
+            )
+        }
+    }
     private async detectFaces(
         constraints: DetectionConstraints
     ): Promise<void> {
@@ -286,6 +560,202 @@ export class EnhancedDetectionService {
                 this.detectFaces(constraints)
             )
         }
+    }
+
+    private async detectDocumentHeuristic(
+        constraints: DetectionConstraints
+    ): Promise<void> {
+        if (!this.isDetecting || !this.currentVideo) {
+            return
+        }
+
+        const now = performance.now()
+        if (now - this.lastDetectionTime < this.detectionInterval) {
+            this.detectionLoop = requestAnimationFrame(() =>
+                this.detectDocumentHeuristic(constraints)
+            )
+            return
+        }
+
+        this.lastDetectionTime = now
+
+        try {
+            const result = this.estimateDocumentFromEdges(constraints)
+            if (result) {
+                this.updateDocumentHistory('document', result)
+                this.documentDetectionSubject.next(result)
+            } else {
+                this.documentDetectionSubject.next(null)
+            }
+        } catch (error) {
+            console.error(
+                '🎯 ENHANCED-DETECTION: Document detection error:',
+                error
+            )
+            this.detectionErrorSubject.next(
+                `Document detection error: ${
+                    error instanceof Error ? error.message : 'Unknown error'
+                }`
+            )
+        }
+
+        if (this.isDetecting) {
+            this.detectionLoop = requestAnimationFrame(() =>
+                this.detectDocumentHeuristic(constraints)
+            )
+        }
+    }
+
+    private estimateDocumentFromEdges(
+        constraints: DetectionConstraints
+    ): DocumentDetectionResult | null {
+        if (!this.currentVideo) return null
+
+        const video = this.currentVideo
+        const targetWidth = 192
+        const scale = targetWidth / (video.videoWidth || 640)
+        const targetHeight = Math.max(
+            1,
+            Math.round((video.videoHeight || 480) * scale)
+        )
+
+        const canvas = document.createElement('canvas')
+        canvas.width = targetWidth
+        canvas.height = targetHeight
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })
+        if (!ctx) return null
+
+        ctx.drawImage(video, 0, 0, targetWidth, targetHeight)
+        const { data, width, height } = ctx.getImageData(
+            0,
+            0,
+            targetWidth,
+            targetHeight
+        )
+
+        // Convert to grayscale and compute simple gradient magnitude |dx|+|dy|
+        const edge = new Uint8ClampedArray(width * height)
+        const toGray = (i: number) => {
+            const r = data[i]
+            const g = data[i + 1]
+            const b = data[i + 2]
+            return (0.299 * r + 0.587 * g + 0.114 * b) | 0
+        }
+
+        for (let y = 1; y < height - 1; y++) {
+            for (let x = 1; x < width - 1; x++) {
+                const idx = y * width + x
+                const i = idx * 4
+                const gx = toGray(i + 4) - toGray(i - 4)
+                const gy = toGray(i + width * 4) - toGray(i - width * 4)
+                const mag = Math.abs(gx) + Math.abs(gy)
+                edge[idx] = mag > 60 ? 255 : 0 // threshold tuned for edges
+            }
+        }
+
+        // Find bounding box of edge pixels
+        let minX = width,
+            minY = height,
+            maxX = -1,
+            maxY = -1
+        let edgeCount = 0
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const idx = y * width + x
+                if (edge[idx] === 255) {
+                    edgeCount++
+                    if (x < minX) minX = x
+                    if (x > maxX) maxX = x
+                    if (y < minY) minY = y
+                    if (y > maxY) maxY = y
+                }
+            }
+        }
+
+        if (maxX <= minX || maxY <= minY) {
+            return null
+        }
+
+        const bboxW = maxX - minX + 1
+        const bboxH = maxY - minY + 1
+        const areaRatio = (bboxW * bboxH) / (width * height)
+        const aspect = bboxW / bboxH
+
+        // Check expected aspect and size
+        const aspectOk =
+            !constraints.aspectRatioRange ||
+            (aspect >= constraints.aspectRatioRange.min &&
+                aspect <= constraints.aspectRatioRange.max)
+
+        const sizeOk =
+            areaRatio >= constraints.minSize && areaRatio <= constraints.maxSize
+
+        // Estimate rectangularness: proportion of edge pixels near the bbox border
+        let borderEdge = 0
+        let borderSamples = 0
+        const borderThickness = 2
+        for (let y = minY; y <= maxY; y++) {
+            for (let x = minX; x <= maxX; x++) {
+                const onBorder =
+                    x - minX < borderThickness ||
+                    maxX - x < borderThickness ||
+                    y - minY < borderThickness ||
+                    maxY - y < borderThickness
+                if (onBorder) {
+                    borderSamples++
+                    const idx = y * width + x
+                    if (edge[idx] === 255) borderEdge++
+                }
+            }
+        }
+        const rectangularness =
+            borderSamples > 0 ? borderEdge / borderSamples : 0
+
+        // Confidence heuristic: combine rectangularness, size, and aspect closeness
+        let confidence = rectangularness
+        if (aspectOk) confidence = confidence * 0.7 + 0.3
+        if (sizeOk) confidence = confidence * 0.7 + 0.3
+        confidence = Math.max(0, Math.min(1, confidence))
+
+        if (confidence < (constraints.minConfidence || 0)) {
+            return null
+        }
+
+        // Map bbox from downscaled canvas to video display coordinates
+        const scaleX = (video.clientWidth || video.videoWidth || 1) / width
+        const scaleY = (video.clientHeight || video.videoHeight || 1) / height
+        const displayBBox = {
+            x: minX * scaleX,
+            y: minY * scaleY,
+            width: bboxW * scaleX,
+            height: bboxH * scaleY,
+        }
+
+        const result: DocumentDetectionResult = {
+            confidence,
+            quad: {
+                topLeft: { x: displayBBox.x, y: displayBBox.y },
+                topRight: {
+                    x: displayBBox.x + displayBBox.width,
+                    y: displayBBox.y,
+                },
+                bottomLeft: {
+                    x: displayBBox.x,
+                    y: displayBBox.y + displayBBox.height,
+                },
+                bottomRight: {
+                    x: displayBBox.x + displayBBox.width,
+                    y: displayBBox.y + displayBBox.height,
+                },
+            },
+            boundingBox: displayBBox,
+            steady: false,
+            quality: rectangularness,
+            aspectRatio: aspect,
+            message: 'Document-like rectangle detected',
+        }
+
+        return result
     }
 
     private async detectFaceWithMediaPipe(
@@ -459,6 +929,116 @@ export class EnhancedDetectionService {
             width: width * scaleX,
             height: height * scaleY,
         }
+    }
+
+    private computeDocRectChecks(bbox: {
+        x: number
+        y: number
+        width: number
+        height: number
+    }): { rectangularness: number; variance: number } {
+        if (!this.currentVideo) return { rectangularness: 0, variance: 0 }
+
+        const video = this.currentVideo
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })
+        if (!ctx) return { rectangularness: 0, variance: 0 }
+
+        const sampleW = Math.max(32, Math.round(bbox.width))
+        const sampleH = Math.max(24, Math.round(bbox.height))
+        canvas.width = sampleW
+        canvas.height = sampleH
+
+        // Draw the bbox region into the canvas
+        ctx.drawImage(
+            video,
+            (bbox.x / (video.clientWidth || 1)) * video.videoWidth,
+            (bbox.y / (video.clientHeight || 1)) * video.videoHeight,
+            (bbox.width / (video.clientWidth || 1)) * video.videoWidth,
+            (bbox.height / (video.clientHeight || 1)) * video.videoHeight,
+            0,
+            0,
+            sampleW,
+            sampleH
+        )
+
+        const { data, width, height } = ctx.getImageData(0, 0, sampleW, sampleH)
+
+        // Edge density near borders vs interior
+        let borderEdges = 0
+        let borderSamples = 0
+        let interiorEdges = 0
+        let interiorSamples = 0
+        let sum = 0
+        let sumSq = 0
+
+        const toGray = (i: number) =>
+            0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
+
+        const thickness = Math.max(
+            1,
+            Math.round(Math.min(width, height) * 0.06)
+        )
+
+        for (let y = 1; y < height - 1; y++) {
+            for (let x = 1; x < width - 1; x++) {
+                const p = (y * width + x) * 4
+                const gx = toGray(p + 4) - toGray(p - 4)
+                const gy = toGray(p + width * 4) - toGray(p - width * 4)
+                const mag = Math.abs(gx) + Math.abs(gy)
+
+                const onBorder =
+                    x < thickness ||
+                    y < thickness ||
+                    width - 1 - x < thickness ||
+                    height - 1 - y < thickness
+
+                if (onBorder) {
+                    borderSamples++
+                    if (mag > 60) borderEdges++
+                } else {
+                    interiorSamples++
+                    if (mag > 60) interiorEdges++
+                }
+
+                const g = toGray(p)
+                sum += g
+                sumSq += g * g
+            }
+        }
+
+        const rectangularness = borderSamples ? borderEdges / borderSamples : 0
+        const n = width * height
+        const mean = n ? sum / n : 0
+        const variance = n ? Math.max(0, sumSq / n - mean * mean) : 0
+
+        return { rectangularness, variance }
+    }
+
+    private validateDocSteady(
+        bbox: { x: number; y: number; width: number; height: number },
+        confidence: number,
+        constraints: DetectionConstraints
+    ): { confidence: number; steady: boolean; quality: number } | null {
+        // Track simple steadiness using last few document entries
+        const history = this.documentHistory.get('document') || []
+        const recent = history.slice(-constraints.steadyFrames)
+        let steadyCount = 0
+        for (const item of recent) {
+            const dx = Math.abs(item.boundingBox.x - bbox.x)
+            const dy = Math.abs(item.boundingBox.y - bbox.y)
+            const dw = Math.abs(item.boundingBox.width - bbox.width)
+            const dh = Math.abs(item.boundingBox.height - bbox.height)
+            if (dx < 20 && dy < 20 && dw < 20 && dh < 20) steadyCount++
+        }
+        const isSteady =
+            steadyCount >= Math.max(2, constraints.steadyFrames - 1)
+        if (!isSteady) {
+            // Require higher confidence if not steady yet
+            if (confidence < Math.max(0.9, constraints.minConfidence))
+                return null
+        }
+        return { confidence, steady: isSteady, quality: confidence }
     }
 
     private isBetterPrimaryFace(
@@ -637,12 +1217,12 @@ export class EnhancedDetectionService {
 
     public getDefaultDocumentConstraints(): DetectionConstraints {
         return {
-            minConfidence: 0.8,
-            minSize: 0.2,
-            maxSize: 0.8,
-            centerThreshold: 0.3,
-            steadyFrames: 10,
-            aspectRatioRange: { min: 1.2, max: 2.0 },
+            minConfidence: 0.75,
+            minSize: 0.1,
+            maxSize: 0.6,
+            centerThreshold: 0.25,
+            steadyFrames: 3,
+            aspectRatioRange: { min: 1.3, max: 2.0 },
         }
     }
 
