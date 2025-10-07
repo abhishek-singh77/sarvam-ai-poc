@@ -100,501 +100,514 @@
         </div>
     </div>
 
-    <!-- In-call Phase - Mobile Design -->
+    <!-- In-call Phase - Responsive Split Layout (Video Left, Steps Right on Desktop) -->
     <div
         *ngIf="state?.phase === 'in_call'"
         class="flex-1 flex flex-col bg-black">
-        <!-- Progress Indicator Bar -->
-        <div class="bg-white rounded-lg mx-4 mt-4 p-4 shadow-lg">
-            <div class="flex items-center justify-between">
-                <!-- Progress Icon -->
-                <div class="flex items-center">
+        <div
+            class="flex-1 lg:flex lg:items-stretch lg:gap-4 xl:gap-6 lg:px-4 lg:py-4 min-h-0">
+            <!-- Left: Video Area -->
+            <div
+                class="flex-1 lg:w-2/3 xl:w-3/4 relative mx-2 sm:mx-4 my-2 sm:my-4 lg:m-0 rounded-xl overflow-hidden min-h-0">
+                <!-- Floating End Session Button -->
+                <button
+                    (click)="endSession.emit()"
+                    class="absolute top-2 right-2 sm:top-4 sm:right-4 z-10 bg-red-600 hover:bg-red-700 text-white font-medium py-1 px-2 sm:py-2 sm:px-4 rounded-lg transition-colors flex items-center shadow-lg text-xs sm:text-sm">
+                    <svg
+                        class="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <span class="hidden sm:inline">End Session</span>
+                    <span class="sm:hidden">End</span>
+                </button>
+
+                <!-- Customer Video (Main) -->
+                <div
+                    class="w-full h-full relative bg-gray-900 min-h-[300px] sm:min-h-[400px] md:min-h-[500px] aspect-video lg:aspect-auto lg:h-[calc(100vh-6rem)] lg:min-h-[560px]"
+                    (mousemove)="showOverlayTemporarily()"
+                    (mouseenter)="showOverlayTemporarily()"
+                    (touchstart)="showOverlayTemporarily()">
+                    <app-meeting-panel
+                        (streamsActive)="onStreamsActive($event)"
+                        (micToggle)="onMicToggle()"
+                        (cameraToggle)="onCameraToggle()"
+                        (chatToggle)="onChatToggle()"
+                        (endCall)="onEndCall()">
+                    </app-meeting-panel>
+
+                    <!-- Detection Overlays -->
+                    <app-detection-overlays
+                        [detectionResult]="state?.detectionResult"
+                        [multipleFaceDetectionResult]="
+                            state?.multipleFaceDetectionResult
+                        "
+                        [documentDetectionResult]="
+                            state?.documentDetectionResult
+                        "
+                        [captureType]="state?.captureType || null"
+                        [showMultipleFaces]="true"
+                        [isCapturing]="isCapturing"
+                        (autoCaptureTriggered)="onAutoCaptureTriggered()">
+                    </app-detection-overlays>
+                    <!-- Bottom Scrim for Overlay Contrast -->
                     <div
-                        class="w-8 h-8 rounded-full flex items-center justify-center mr-3"
-                        [ngClass]="
-                            getStepCircleClass(
-                                state?.currentStep || { status: 'pending' }
-                            )
-                        ">
-                        <svg
-                            class="w-5 h-5 text-white"
-                            fill="currentColor"
-                            viewBox="0 0 20 20">
-                            <path
-                                fill-rule="evenodd"
-                                [attr.d]="
-                                    getStepIcon(
+                        class="pointer-events-none absolute inset-x-0 bottom-0 h-20 sm:h-24 bg-gradient-to-t from-black/60 to-transparent"></div>
+                    <!-- Bottom Controls Overlay -->
+                    <div
+                        class="absolute inset-x-0 bottom-0 p-3 sm:p-4"
+                        [class.opacity-0]="!overlayVisible"
+                        [class.pointer-events-none]="!overlayVisible"
+                        [class.transition]="true"
+                        [class.duration-300]="true">
+                        <div class="">
+                            <div
+                                class="rounded-none sm:rounded-full bg-black/50 supports-[backdrop-filter]:bg-black/40 backdrop-blur px-3 py-2 sm:px-4 sm:py-2.5 flex items-center justify-center gap-2 sm:gap-4"
+                                (mousemove)="showOverlayTemporarily()">
+                                <!-- Chat -->
+                                <button
+                                    (click)="onChatToggle()"
+                                    class="w-10 h-10 sm:w-11 sm:h-11 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors"
+                                    title="Chat">
+                                    <svg
+                                        class="w-5 h-5 text-white"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                                    </svg>
+                                </button>
+                                <!-- Mic -->
+                                <button
+                                    (click)="onMicToggle()"
+                                    class="w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-colors"
+                                    [ngClass]="
+                                        isMicMuted
+                                            ? 'bg-gray-500 hover:bg-gray-400'
+                                            : 'bg-green-500 hover:bg-green-600'
+                                    "
+                                    title="Toggle Mic (M)">
+                                    <svg
+                                        *ngIf="!isMicMuted"
+                                        class="w-5 h-5 text-white"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"></path>
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"></path>
+                                    </svg>
+                                    <svg
+                                        *ngIf="isMicMuted"
+                                        class="w-5 h-5 text-white"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"></path>
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"></path>
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path>
+                                    </svg>
+                                </button>
+                                <!-- Camera -->
+                                <button
+                                    (click)="onCameraToggle()"
+                                    class="w-10 h-10 sm:w-11 sm:h-11 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors"
+                                    title="Flip Camera (F)">
+                                    <svg
+                                        class="w-5 h-5 text-white"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                    </svg>
+                                </button>
+                                <!-- Capture with pulse ring when capturing -->
+                                <button
+                                    (click)="onCapturePhoto()"
+                                    [disabled]="!isCaptureButtonEnabled()"
+                                    class="relative w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-colors"
+                                    [ngClass]="
+                                        isCaptureButtonEnabled()
+                                            ? 'bg-blue-500 hover:bg-blue-600'
+                                            : 'bg-gray-500/60 cursor-not-allowed'
+                                    "
+                                    title="Capture (Space)">
+                                    <span
+                                        *ngIf="isCapturing"
+                                        class="absolute inline-block rounded-full border-2 border-blue-300 animate-ping w-12 h-12 sm:w-14 sm:h-14"></span>
+                                    <svg
+                                        class="w-5 h-5 text-white"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    </svg>
+                                </button>
+                                <!-- End Call -->
+                                <button
+                                    (click)="onEndCall()"
+                                    class="w-10 h-10 sm:w-11 sm:h-11 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center transition-colors"
+                                    title="End Call (Esc)">
+                                    <svg
+                                        class="w-5 h-5 text-white"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 3l18 18"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Steps & Controls -->
+            <div
+                class="mx-2 sm:mx-4 mb-2 sm:mb-4 lg:m-0 lg:flex lg:flex-col lg:space-y-4 lg:flex-none lg:w-[360px] xl:w-[400px] lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
+                <!-- Progress Indicator Bar -->
+                <div class="bg-white rounded-lg p-4 shadow-md">
+                    <div class="flex items-center justify-between">
+                        <!-- Progress Icon -->
+                        <div class="flex items-center">
+                            <div
+                                class="w-8 h-8 rounded-full flex items-center justify-center mr-3"
+                                [ngClass]="
+                                    getStepCircleClass(
                                         state?.currentStep || {
-                                            type: 'FRAME_CAPTURE'
+                                            status: 'pending'
                                         }
                                     )
-                                "
-                                clip-rule="evenodd"></path>
-                        </svg>
+                                ">
+                                <svg
+                                    class="block w-5 h-5 text-white"
+                                    fill="currentColor"
+                                    viewBox="0 0 20 20">
+                                    <path
+                                        fill-rule="evenodd"
+                                        [attr.d]="
+                                            getStepIcon(
+                                                state?.currentStep || {
+                                                    type: 'FRAME_CAPTURE'
+                                                }
+                                            )
+                                        "
+                                        clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+
+                            <!-- Step Progress -->
+                            <div class="flex items-center space-x-2">
+                                <!-- Current Step -->
+                                <div
+                                    class="flex items-center px-3 py-1 rounded-full"
+                                    [ngClass]="
+                                        getStepTextClass(
+                                            state?.currentStep || {
+                                                status: 'pending'
+                                            }
+                                        )
+                                    ">
+                                    <svg
+                                        class="block w-4 h-4 mr-1"
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20">
+                                        <path
+                                            fill-rule="evenodd"
+                                            [attr.d]="
+                                                getStepIcon(
+                                                    state?.currentStep || {
+                                                        type: 'FRAME_CAPTURE'
+                                                    }
+                                                )
+                                            "
+                                            clip-rule="evenodd"></path>
+                                    </svg>
+                                    <span class="text-sm font-medium">{{
+                                        state?.currentStep?.title ||
+                                            'Loading...'
+                                    }}</span>
+                                </div>
+
+                                <!-- Progress Counter -->
+                                <div class="flex items-center text-gray-500">
+                                    <span class="text-sm">
+                                        {{ getCompletedStepsCount() }}/{{
+                                            getTotalStepsCount()
+                                        }}
+                                        Steps
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Progress Percentage -->
+                        <div class="flex items-center text-blue-600">
+                            <div
+                                class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-2">
+                                <span class="text-xs font-bold"
+                                    >{{ getProgressPercentage() }}%</span
+                                >
+                            </div>
+                            <span class="text-sm font-medium">Complete</span>
+                        </div>
                     </div>
 
-                    <!-- Step Progress -->
-                    <div class="flex items-center space-x-2">
-                        <!-- Current Step -->
+                    <!-- Step Content - Dynamic based on current step type -->
+                    <div class="mx-2 mt-4">
+                        <!-- Questionnaire Step -->
+                        <app-questionnaire-step
+                            *ngIf="state?.currentStep?.type === 'QUESTIONNAIRE'"
+                            [questionnaireData]="getQuestionnaireData()"
+                            [isLastStep]="getStepCompletionData().isLastStep"
+                            (questionnaireCompleted)="
+                                onQuestionnaireCompleted($event)
+                            "
+                            (endKyc)="onFinishKyc()">
+                        </app-questionnaire-step>
+
+                        <!-- Image Capture Steps (Selfie, PAN, Aadhaar) -->
+                        <app-step-completion
+                            *ngIf="state?.currentStep?.type === 'FRAME_CAPTURE'"
+                            [data]="getStepCompletionData()"
+                            (startStep)="onStartImageCapture()"
+                            (nextStep)="onNextStep()"
+                            (finish)="onFinishKyc()">
+                        </app-step-completion>
+
+                        <!-- Other Steps -->
                         <div
-                            class="flex items-center px-3 py-1 rounded-full"
-                            [ngClass]="
-                                getStepTextClass(
-                                    state?.currentStep || { status: 'pending' }
-                                )
-                            ">
+                            *ngIf="
+                                !isQuestionnaireStep() && !isImageCaptureStep()
+                            "
+                            class="bg-white rounded-xl p-4 shadow-lg">
+                            <div class="text-center">
+                                <h3
+                                    class="text-lg font-semibold text-gray-900 mb-2">
+                                    {{ getCurrentStepTitle() }}
+                                </h3>
+                                <p class="text-sm text-gray-600 mb-4">
+                                    {{ getCurrentStepDescription() }}
+                                </p>
+                                <button
+                                    (click)="onNextStep()"
+                                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                                    {{ getNextButtonText() }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Responsive Workflow Steps Progress Indicator -->
+                    <div *ngIf="hasWorkflowSteps()" class="mt-4">
+                        <div class="bg-white rounded-xl p-3 sm:p-6 shadow-lg">
+                            <!-- Mobile: Vertical Stack -->
+                            <div class="block sm:hidden">
+                                <div class="space-y-3">
+                                    <div
+                                        *ngFor="
+                                            let step of getInCallSteps();
+                                            let i = index
+                                        "
+                                        class="flex items-center">
+                                        <!-- Step Circle -->
+                                        <div
+                                            class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0"
+                                            [ngClass]="
+                                                getStepCircleClass(step)
+                                            ">
+                                            <svg
+                                                class="block w-4 h-4 text-white"
+                                                fill="currentColor"
+                                                viewBox="0 0 20 20">
+                                                <path
+                                                    fill-rule="evenodd"
+                                                    [attr.d]="getStepIcon(step)"
+                                                    clip-rule="evenodd"></path>
+                                            </svg>
+                                        </div>
+
+                                        <!-- Step Info -->
+                                        <div class="ml-3 flex-1">
+                                            <div
+                                                class="text-sm font-medium transition-colors duration-300"
+                                                [ngClass]="
+                                                    getStepTextClass(step)
+                                                ">
+                                                {{ getStepDisplayTitle(step) }}
+                                            </div>
+                                            <div class="text-xs text-gray-500">
+                                                Step {{ i + 1 }} of
+                                                {{ getInCallSteps().length }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Desktop: Horizontal Layout -->
+                            <div
+                                class="hidden sm:flex items-center justify-center space-x-4 lg:space-x-8">
+                                <div
+                                    *ngFor="
+                                        let step of getInCallSteps();
+                                        let i = index;
+                                        let isLast = last
+                                    "
+                                    class="flex items-center">
+                                    <!-- Step Circle -->
+                                    <div class="flex flex-col items-center">
+                                        <div
+                                            class="w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center transition-all duration-300"
+                                            [ngClass]="
+                                                getStepCircleClass(step)
+                                            ">
+                                            <svg
+                                                class="block w-5 h-5 lg:w-6 lg:h-6 text-white"
+                                                fill="currentColor"
+                                                viewBox="0 0 20 20">
+                                                <path
+                                                    fill-rule="evenodd"
+                                                    [attr.d]="getStepIcon(step)"
+                                                    clip-rule="evenodd"></path>
+                                            </svg>
+                                        </div>
+                                        <div
+                                            class="mt-2 text-xs lg:text-sm font-medium transition-colors duration-300 text-center"
+                                            [ngClass]="getStepTextClass(step)">
+                                            {{ getStepDisplayTitle(step) }}
+                                        </div>
+                                    </div>
+
+                                    <!-- Connector Line (not for last step) -->
+                                    <div
+                                        *ngIf="!isLast"
+                                        class="flex items-center ml-4 lg:ml-8">
+                                        <div class="flex items-center">
+                                            <div
+                                                class="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                            <div
+                                                class="w-8 lg:w-16 h-0.5 bg-gray-300 border-dashed border-t-2 border-gray-300"></div>
+                                            <div
+                                                class="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Current Step Instructions -->
+                <div
+                    *ngIf="state?.currentStep"
+                    class="bg-blue-50 border border-blue-200 rounded-xl p-3 sm:p-4">
+                    <div class="flex items-start">
+                        <div
+                            class="w-6 h-6 sm:w-8 sm:h-8 bg-blue-500 rounded-full flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
                             <svg
-                                class="w-4 h-4 mr-1"
+                                class="w-3 h-3 sm:w-4 sm:h-4 text-white"
                                 fill="currentColor"
                                 viewBox="0 0 20 20">
                                 <path
                                     fill-rule="evenodd"
-                                    [attr.d]="
-                                        getStepIcon(
-                                            state?.currentStep || {
-                                                type: 'FRAME_CAPTURE'
-                                            }
-                                        )
-                                    "
+                                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
                                     clip-rule="evenodd"></path>
                             </svg>
-                            <span class="text-sm font-medium">{{
-                                state?.currentStep?.title || 'Loading...'
-                            }}</span>
                         </div>
-
-                        <!-- Progress Counter -->
-                        <div class="flex items-center text-gray-500">
-                            <span class="text-sm">
-                                {{ getCompletedStepsCount() }}/{{
-                                    getTotalStepsCount()
+                        <div class="flex-1">
+                            <h3
+                                class="text-sm sm:text-base font-semibold text-blue-900 mb-1">
+                                {{
+                                    state?.currentStep?.title || 'Current Step'
                                 }}
-                                Steps
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Progress Percentage -->
-                <div class="flex items-center text-blue-600">
-                    <div
-                        class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-2">
-                        <span class="text-xs font-bold"
-                            >{{ getProgressPercentage() }}%</span
-                        >
-                    </div>
-                    <span class="text-sm font-medium">Complete</span>
-                </div>
-            </div>
-
-            <!-- Step Content - Dynamic based on current step type -->
-            <div class="mx-4 mt-4">
-                <!-- Questionnaire Step -->
-                <app-questionnaire-step
-                    *ngIf="state?.currentStep?.type === 'QUESTIONNAIRE'"
-                    [questionnaireData]="getQuestionnaireData()"
-                    [isLastStep]="getStepCompletionData().isLastStep"
-                    (questionnaireCompleted)="onQuestionnaireCompleted($event)"
-                    (endKyc)="onFinishKyc()">
-                </app-questionnaire-step>
-
-                <!-- Image Capture Steps (Selfie, PAN, Aadhaar) -->
-                <app-step-completion
-                    *ngIf="state?.currentStep?.type === 'FRAME_CAPTURE'"
-                    [data]="getStepCompletionData()"
-                    (startStep)="onStartImageCapture()"
-                    (nextStep)="onNextStep()"
-                    (finish)="onFinishKyc()">
-                </app-step-completion>
-
-                <!-- Other Steps -->
-                <div
-                    *ngIf="!isQuestionnaireStep() && !isImageCaptureStep()"
-                    class="bg-white rounded-xl p-4 shadow-lg">
-                    <div class="text-center">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-2">
-                            {{ getCurrentStepTitle() }}
-                        </h3>
-                        <p class="text-sm text-gray-600 mb-4">
-                            {{ getCurrentStepDescription() }}
-                        </p>
-                        <button
-                            (click)="onNextStep()"
-                            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
-                            {{ getNextButtonText() }}
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Responsive Workflow Steps Progress Indicator -->
-            <div *ngIf="hasWorkflowSteps()" class="mt-4 mx-2 sm:mx-4">
-                <div class="bg-white rounded-xl p-3 sm:p-6 shadow-lg">
-                    <!-- Mobile: Vertical Stack -->
-                    <div class="block sm:hidden">
-                        <div class="space-y-3">
-                            <div
-                                *ngFor="
-                                    let step of getInCallSteps();
-                                    let i = index
-                                "
-                                class="flex items-center">
-                                <!-- Step Circle -->
-                                <div
-                                    class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0"
-                                    [ngClass]="getStepCircleClass(step)">
-                                    <svg
-                                        class="w-4 h-4 text-white"
-                                        fill="currentColor"
-                                        viewBox="0 0 20 20">
-                                        <path
-                                            fill-rule="evenodd"
-                                            [attr.d]="getStepIcon(step)"
-                                            clip-rule="evenodd"></path>
-                                    </svg>
-                                </div>
-
-                                <!-- Step Info -->
-                                <div class="ml-3 flex-1">
-                                    <div
-                                        class="text-sm font-medium transition-colors duration-300"
-                                        [ngClass]="getStepTextClass(step)">
-                                        {{ getStepDisplayTitle(step) }}
-                                    </div>
-                                    <div class="text-xs text-gray-500">
-                                        Step {{ i + 1 }} of
-                                        {{ getInCallSteps().length }}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Desktop: Horizontal Layout -->
-                    <div
-                        class="hidden sm:flex items-center justify-center space-x-4 lg:space-x-8">
-                        <div
-                            *ngFor="
-                                let step of getInCallSteps();
-                                let i = index;
-                                let isLast = last
-                            "
-                            class="flex items-center">
-                            <!-- Step Circle -->
-                            <div class="flex flex-col items-center">
-                                <div
-                                    class="w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center transition-all duration-300"
-                                    [ngClass]="getStepCircleClass(step)">
-                                    <svg
-                                        class="w-5 h-5 lg:w-6 lg:h-6 text-white"
-                                        fill="currentColor"
-                                        viewBox="0 0 20 20">
-                                        <path
-                                            fill-rule="evenodd"
-                                            [attr.d]="getStepIcon(step)"
-                                            clip-rule="evenodd"></path>
-                                    </svg>
-                                </div>
-                                <div
-                                    class="mt-2 text-xs lg:text-sm font-medium transition-colors duration-300 text-center"
-                                    [ngClass]="getStepTextClass(step)">
-                                    {{ getStepDisplayTitle(step) }}
-                                </div>
-                            </div>
-
-                            <!-- Connector Line (not for last step) -->
-                            <div
-                                *ngIf="!isLast"
-                                class="flex items-center ml-4 lg:ml-8">
-                                <div class="flex items-center">
-                                    <div
-                                        class="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                    <div
-                                        class="w-8 lg:w-16 h-0.5 bg-gray-300 border-dashed border-t-2 border-gray-300"></div>
-                                    <div
-                                        class="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Main Video Area - Responsive Design -->
-        <div
-            class="flex-1 relative mx-2 sm:mx-4 my-2 sm:my-4 rounded-xl overflow-hidden min-h-0">
-            <!-- Floating End Session Button -->
-            <button
-                (click)="endSession.emit()"
-                class="absolute top-2 right-2 sm:top-4 sm:right-4 z-10 bg-red-600 hover:bg-red-700 text-white font-medium py-1 px-2 sm:py-2 sm:px-4 rounded-lg transition-colors flex items-center shadow-lg text-xs sm:text-sm">
-                <svg
-                    class="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24">
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                <span class="hidden sm:inline">End Session</span>
-                <span class="sm:hidden">End</span>
-            </button>
-
-            <!-- Customer Video (Main) - Responsive -->
-            <div
-                class="w-full h-full relative bg-gray-900 min-h-[300px] sm:min-h-[400px] md:min-h-[500px] aspect-video">
-                <app-meeting-panel
-                    (streamsActive)="onStreamsActive($event)"
-                    (micToggle)="onMicToggle()"
-                    (cameraToggle)="onCameraToggle()"
-                    (chatToggle)="onChatToggle()"
-                    (endCall)="onEndCall()">
-                </app-meeting-panel>
-
-                <!-- Detection Overlays -->
-                <app-detection-overlays
-                    [detectionResult]="state?.detectionResult"
-                    [multipleFaceDetectionResult]="
-                        state?.multipleFaceDetectionResult
-                    "
-                    [documentDetectionResult]="state?.documentDetectionResult"
-                    [captureType]="state?.captureType || null"
-                    [showMultipleFaces]="true"
-                    [isCapturing]="isCapturing"
-                    (autoCaptureTriggered)="onAutoCaptureTriggered()">
-                </app-detection-overlays>
-            </div>
-        </div>
-
-        <!-- Step Instructions & Agent Message - Responsive -->
-        <div class="mx-2 sm:mx-4 mb-2 sm:mb-4 space-y-2 sm:space-y-3">
-            <!-- Current Step Instructions -->
-            <div
-                *ngIf="state?.currentStep"
-                class="bg-blue-50 border border-blue-200 rounded-xl p-3 sm:p-4">
-                <div class="flex items-start">
-                    <div
-                        class="w-6 h-6 sm:w-8 sm:h-8 bg-blue-500 rounded-full flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
-                        <svg
-                            class="w-3 h-3 sm:w-4 sm:h-4 text-white"
-                            fill="currentColor"
-                            viewBox="0 0 20 20">
-                            <path
-                                fill-rule="evenodd"
-                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                                clip-rule="evenodd"></path>
-                        </svg>
-                    </div>
-                    <div class="flex-1">
-                        <h3
-                            class="text-sm sm:text-base font-semibold text-blue-900 mb-1">
-                            {{ state?.currentStep?.title || 'Current Step' }}
-                        </h3>
-                        <p
-                            class="text-xs sm:text-sm text-blue-800 leading-relaxed">
-                            {{
-                                state?.currentStep?.description ||
-                                    'Please follow the instructions below...'
-                            }}
-                        </p>
-                        <!-- Step-specific instructions -->
-                        <div
-                            *ngIf="state?.currentStep?.type === 'FRAME_CAPTURE'"
-                            class="mt-2 p-2 bg-blue-100 rounded-lg">
+                            </h3>
                             <p
-                                class="text-xs sm:text-sm text-blue-900 font-medium">
-                                <span
-                                    *ngIf="
-                                        state?.currentStep?.data
-                                            ?.captureType === 'FACE_CAPTURE'
-                                    ">
-                                    📷 Look directly at the camera, ensure good
-                                    lighting, and keep your face centered.
-                                </span>
-                                <span
-                                    *ngIf="
-                                        state?.currentStep?.data
-                                            ?.captureType === 'DOCUMENT_CAPTURE'
-                                    ">
-                                    📄 Hold the document steady, ensure all text
-                                    is clearly visible and well-lit.
-                                </span>
+                                class="text-xs sm:text-sm text-blue-800 leading-relaxed">
+                                {{
+                                    state?.currentStep?.description ||
+                                        'Please follow the instructions below...'
+                                }}
                             </p>
+                            <!-- Step-specific instructions -->
+                            <div
+                                *ngIf="
+                                    state?.currentStep?.type === 'FRAME_CAPTURE'
+                                "
+                                class="mt-2 p-2 bg-blue-100 rounded-lg">
+                                <p
+                                    class="text-xs sm:text-sm text-blue-900 font-medium">
+                                    <span
+                                        *ngIf="
+                                            state?.currentStep?.data
+                                                ?.captureType === 'FACE_CAPTURE'
+                                        ">
+                                        📷 Look directly at the camera, ensure
+                                        good lighting, and keep your face
+                                        centered.
+                                    </span>
+                                    <span
+                                        *ngIf="
+                                            state?.currentStep?.data
+                                                ?.captureType ===
+                                            'DOCUMENT_CAPTURE'
+                                        ">
+                                        📄 Hold the document steady, ensure all
+                                        text is clearly visible and well-lit.
+                                    </span>
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <!-- Step Instructions -->
-            <div class="bg-white rounded-2xl p-3 sm:p-4 shadow-lg">
-                <div class="text-center">
-                    <p class="text-sm text-gray-600">
-                        Follow the steps above to complete your KYC verification
-                    </p>
-                </div>
-            </div>
-
-            <!-- Control Buttons - Responsive -->
-            <div class="bg-gray-800 bg-opacity-90 rounded-2xl p-3 sm:p-4">
-                <div
-                    class="flex items-center justify-center space-x-2 sm:space-x-4">
-                    <!-- 1. Chat Button -->
-                    <button
-                        (click)="onChatToggle()"
-                        class="w-10 h-10 sm:w-12 sm:h-12 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors"
-                        title="Chat">
-                        <svg
-                            class="w-5 h-5 sm:w-6 sm:h-6 text-white"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                        </svg>
-                    </button>
-
-                    <!-- 2. Mic Mute/Unmute Button -->
-                    <button
-                        (click)="onMicToggle()"
-                        class="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-colors"
-                        [ngClass]="
-                            isMicMuted
-                                ? 'bg-gray-500 hover:bg-gray-400'
-                                : 'bg-green-500 hover:bg-green-600'
-                        "
-                        [title]="
-                            isMicMuted ? 'Unmute Microphone' : 'Mute Microphone'
-                        ">
-                        <svg
-                            *ngIf="!isMicMuted"
-                            class="w-5 h-5 sm:w-6 sm:h-6 text-white"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"></path>
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"></path>
-                        </svg>
-                        <svg
-                            *ngIf="isMicMuted"
-                            class="w-5 h-5 sm:w-6 sm:h-6 text-white"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"></path>
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"></path>
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path>
-                        </svg>
-                    </button>
-
-                    <!-- 3. Camera Flip Button -->
-                    <button
-                        (click)="onCameraToggle()"
-                        class="w-10 h-10 sm:w-12 sm:h-12 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors"
-                        title="Flip Camera">
-                        <svg
-                            class="w-5 h-5 sm:w-6 sm:h-6 text-white"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                        </svg>
-                    </button>
-
-                    <!-- 4. Capture Photo Button -->
-                    <button
-                        (click)="onCapturePhoto()"
-                        [disabled]="!isCaptureButtonEnabled()"
-                        class="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-colors"
-                        [ngClass]="
-                            isCaptureButtonEnabled()
-                                ? 'bg-blue-500 hover:bg-blue-600'
-                                : 'bg-gray-400 cursor-not-allowed'
-                        "
-                        [title]="
-                            isCaptureButtonEnabled()
-                                ? 'Capture Photo'
-                                : 'Capture not available for current step'
-                        ">
-                        <svg
-                            class="w-5 h-5 sm:w-6 sm:h-6 text-white"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        </svg>
-                    </button>
-
-                    <!-- 5. End Call Button -->
-                    <button
-                        (click)="onEndCall()"
-                        class="w-10 h-10 sm:w-12 sm:h-12 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center transition-colors"
-                        title="End Call">
-                        <svg
-                            class="w-5 h-5 sm:w-6 sm:h-6 text-white"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 3l18 18"></path>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Journey Progress Component -->
-            <div class="bg-white rounded-2xl p-3 sm:p-4 shadow-lg">
-                <app-journey-progress
-                    [showDetails]="true"
-                    [showProgressBar]="true"
-                    [showTimestamps]="true"
-                    [compactMode]="false"
-                    [currentStepId]="state?.currentStep?.id">
-                </app-journey-progress>
-            </div>
         </div>
-
         <!-- Questionnaire is now handled by the agent prompt display component in the instructions area -->
     </div>
 

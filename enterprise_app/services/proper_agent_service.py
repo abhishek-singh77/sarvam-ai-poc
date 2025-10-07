@@ -325,16 +325,6 @@ class KYCVoiceAgent(Agent):
                             "sub_action_step": "in_call",
                             "frame_capture_type": "FACE_CAPTURE",
                             "sub_action_name": "Customer Selfie"
-                        },
-                        {
-                            "type": "FRAME_CAPTURE",
-                            "title": "PAN Upload",
-                            "sub_action_ref": "frame_capture-2",
-                            "description": "Capture PAN image (with flip camera option)",
-                            "sub_action_step": "in_call",
-                            "frame_capture_type": "DOCUMENT_CAPTURE",
-                            "strict_validation_type": "pan",
-                            "sub_action_name": "Details from ID Proof"
                         }
                     ]
                 }

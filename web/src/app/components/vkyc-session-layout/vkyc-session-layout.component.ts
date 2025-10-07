@@ -5,6 +5,7 @@ import {
     EventEmitter,
     OnInit,
     OnDestroy,
+    HostListener,
 } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { Subscription } from 'rxjs'
@@ -70,7 +71,6 @@ export interface WorkflowStep {
         // QuestionnaireFormComponent removed
         AgentJoinPopupComponent,
         MeetingPanelComponent,
-        JourneyProgressComponent,
         QuestionnaireStepComponent,
         StepCompletionComponent,
     ],
@@ -102,6 +102,9 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
     questionnaireAnswers: { [key: string]: any } = {}
     isCapturing: boolean = false
     private subscriptions = new Subscription()
+    // Controls overlay visibility management
+    overlayVisible: boolean = true
+    private overlayHideTimer: any = null
 
     constructor(
         private meetingService: MeetingService,
@@ -131,6 +134,9 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
                 }
             )
         )
+
+        // Show overlay initially and schedule auto-hide
+        this.showOverlayTemporarily()
     }
 
     ngOnDestroy(): void {
@@ -658,5 +664,41 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
             console.warn('🎯 LAYOUT: Error checking step completion:', error)
             return false
         }
+    }
+
+    // Keyboard shortcuts for quick actions
+    @HostListener('document:keydown', ['$event'])
+    onKeydown(event: KeyboardEvent): void {
+        // Reveal overlay when user interacts
+        this.showOverlayTemporarily()
+
+        const key = event.key.toLowerCase()
+        if (key === 'c') {
+            this.onChatToggle()
+        } else if (key === 'm') {
+            this.onMicToggle()
+        } else if (key === 'f') {
+            this.onCameraToggle()
+        } else if (key === ' ') {
+            event.preventDefault()
+            this.onCapturePhoto()
+        } else if (key === 'escape') {
+            this.onEndCall()
+        }
+    }
+
+    // Show controls overlay and auto-hide after delay
+    showOverlayTemporarily(delayMs: number = 2500): void {
+        this.overlayVisible = true
+        this.scheduleOverlayHide(delayMs)
+    }
+
+    private scheduleOverlayHide(delayMs: number): void {
+        if (this.overlayHideTimer) {
+            clearTimeout(this.overlayHideTimer)
+        }
+        this.overlayHideTimer = setTimeout(() => {
+            this.overlayVisible = false
+        }, delayMs)
     }
 }

@@ -1722,6 +1722,19 @@ export class VkycSessionComponent implements OnInit, OnDestroy {
                 console.log(
                     '🎯 VKYC-SESSION: Workflow already initialized, but no current step'
                 )
+                // Reset and re-initialize the workflow to recover from a stale state
+                try {
+                    this.workflowFacade.reset()
+                    this.workflowInitialized = false
+                    this.workflowInitialized = true
+                    this.workflowFacade.init()
+                    this.initializeAgentWorkflow()
+                } catch (e) {
+                    console.error(
+                        '🎯 VKYC-SESSION: Failed to reinitialize workflow:',
+                        e
+                    )
+                }
             }
             return
         }

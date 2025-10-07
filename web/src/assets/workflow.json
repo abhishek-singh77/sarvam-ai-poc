@@ -67,30 +67,6 @@
                     "perform_central_db_check_in_sync": false,
                     "allow_face_match_result_update": false,
                     "sub_action_name": "Customer Selfie"
-                },
-                {
-                    "type": "FRAME_CAPTURE",
-                    "title": "PAN Upload",
-                    "sub_action_ref": "frame_capture-2",
-                    "description": "Capture PAN image (with flip camera option)",
-                    "optional": true,
-                    "id_analysis_required": true,
-                    "strict_validation_type": "pan",
-                    "face_match_obj_type": "match_required",
-                    "perform_enrichment": true,
-                    "sub_action_step": "in_call",
-                    "allow_ocr_data_update": false,
-                    "frame_capture_type": "DOCUMENT_CAPTURE",
-                    "central_db_lookup_source": "OCR_DATA",
-                    "perform_liveness_check": false,
-                    "face_match_sources": [
-                        "ai_assisted_video-1:frame_capture-1"
-                    ],
-                    "perform_face_match_in_sync": true,
-                    "perform_central_db_check_in_sync": true,
-                    "allow_fuzzy_match_result_update": true,
-                    "allow_face_match_result_update": true,
-                    "sub_action_name": "Details from ID Proof"
                 }
             ],
             "action_config": {
