@@ -166,17 +166,17 @@
                         [class.pointer-events-none]="!overlayVisible"
                         [class.transition]="true"
                         [class.duration-300]="true">
-                        <div class="">
+                        <div class="flex justify-center">
                             <div
-                                class="rounded-none sm:rounded-full bg-black/50 supports-[backdrop-filter]:bg-black/40 backdrop-blur px-3 py-2 sm:px-4 sm:py-2.5 flex items-center justify-center gap-2 sm:gap-4"
+                                class="rounded-full bg-black/50 supports-[backdrop-filter]:bg-black/40 backdrop-blur px-2.5 py-1.5 sm:px-3 sm:py-2 flex items-center justify-center gap-2 sm:gap-3"
                                 (mousemove)="showOverlayTemporarily()">
                                 <!-- Chat -->
                                 <button
                                     (click)="onChatToggle()"
-                                    class="w-10 h-10 sm:w-11 sm:h-11 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors"
+                                    class="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors"
                                     title="Chat">
                                     <svg
-                                        class="w-5 h-5 text-white"
+                                        class="w-4 h-4 md:w-5 md:h-5 text-white"
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24">
@@ -190,7 +190,7 @@
                                 <!-- Mic -->
                                 <button
                                     (click)="onMicToggle()"
-                                    class="w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-colors"
+                                    class="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors"
                                     [ngClass]="
                                         isMicMuted
                                             ? 'bg-gray-500 hover:bg-gray-400'
@@ -199,7 +199,7 @@
                                     title="Toggle Mic (M)">
                                     <svg
                                         *ngIf="!isMicMuted"
-                                        class="w-5 h-5 text-white"
+                                        class="w-4 h-4 md:w-5 md:h-5 text-white"
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24">
@@ -216,7 +216,7 @@
                                     </svg>
                                     <svg
                                         *ngIf="isMicMuted"
-                                        class="w-5 h-5 text-white"
+                                        class="w-4 h-4 md:w-5 md:h-5 text-white"
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24">
@@ -240,10 +240,10 @@
                                 <!-- Camera -->
                                 <button
                                     (click)="onCameraToggle()"
-                                    class="w-10 h-10 sm:w-11 sm:h-11 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors"
+                                    class="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors"
                                     title="Flip Camera (F)">
                                     <svg
-                                        class="w-5 h-5 text-white"
+                                        class="w-4 h-4 md:w-5 md:h-5 text-white"
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24">
@@ -258,7 +258,7 @@
                                 <button
                                     (click)="onCapturePhoto()"
                                     [disabled]="!isCaptureButtonEnabled()"
-                                    class="relative w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-colors"
+                                    class="relative w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors"
                                     [ngClass]="
                                         isCaptureButtonEnabled()
                                             ? 'bg-blue-500 hover:bg-blue-600'
@@ -267,9 +267,9 @@
                                     title="Capture (Space)">
                                     <span
                                         *ngIf="isCapturing"
-                                        class="absolute inline-block rounded-full border-2 border-blue-300 animate-ping w-12 h-12 sm:w-14 sm:h-14"></span>
+                                        class="absolute inline-block rounded-full border-2 border-blue-300 animate-ping w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14"></span>
                                     <svg
-                                        class="w-5 h-5 text-white"
+                                        class="w-4 h-4 md:w-5 md:h-5 text-white"
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24">
@@ -288,10 +288,10 @@
                                 <!-- End Call -->
                                 <button
                                     (click)="onEndCall()"
-                                    class="w-10 h-10 sm:w-11 sm:h-11 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center transition-colors"
+                                    class="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center transition-colors"
                                     title="End Call (Esc)">
                                     <svg
-                                        class="w-5 h-5 text-white"
+                                        class="w-4 h-4 md:w-5 md:h-5 text-white"
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24">
