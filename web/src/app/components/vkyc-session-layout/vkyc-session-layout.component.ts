@@ -571,6 +571,21 @@ export class VkycSessionLayoutComponent implements OnInit, OnDestroy {
     // New event handlers for step components
     onQuestionnaireCompleted(answers: { [key: string]: string }): void {
         console.log('🎯 LAYOUT: Questionnaire completed with answers:', answers)
+        // Persist locally to avoid getting stuck if backend call is delayed
+        try {
+            this.sessionStorage.saveStepData({
+                stepId: 'questionnaire-answers',
+                stepType: 'questionnaire',
+                data: answers,
+                timestamp: Date.now(),
+                success: true,
+            })
+        } catch (e) {
+            console.warn(
+                '🎯 LAYOUT: Failed to persist questionnaire locally:',
+                e
+            )
+        }
         this.questionnaireCompleted.emit(answers)
     }
 

@@ -82,7 +82,7 @@ class KYCVoiceAgent(Agent):
             base_instructions = """
         You are a professional KYC (Know Your Customer) Voice Assistant. Your role is to guide users through a smooth identity verification process using natural conversation.
 
-        IMPORTANT: When you first start, you MUST begin with this exact greeting: "Hello! I'm your KYC assistant. Welcome to your identity verification session. I'll guide you through a few simple steps to complete your verification. We'll start by asking you a few verification questions, then take a clear photo of your face, and finally capture your identity documents. Please ensure you have good lighting and your documents ready. Let's begin with the first step."
+        IMPORTANT: When you first start, you MUST begin with this exact greeting: "Hello! I'm your KYC assistant. Welcome to your identity verification session. I'll guide you through a few simple steps to complete your verification. We'll start by asking you a few verification questions, then take a clear photo of your face. Please ensure you have good lighting and your documents ready."
 
         CORE RESPONSIBILITIES:
         1. Guide users through each verification step conversationally
@@ -165,7 +165,6 @@ class KYCVoiceAgent(Agent):
                 fallback_context += "        No specific workflow steps provided. Use your general KYC knowledge to guide the user through:\n"
                 fallback_context += "        - Basic questionnaire about personal information\n"
                 fallback_context += "        - Face capture for identity verification\n"
-                fallback_context += "        - Document capture (PAN card etc.)\n"
                 
                 return base_instructions + fallback_context
                 
@@ -205,23 +204,6 @@ class KYCVoiceAgent(Agent):
                     logger.info("🎯 AGENT: Fallback welcome message sent")
             except Exception as fallback_error:
                 logger.error(f"🎯 AGENT: Fallback message also failed: {fallback_error}")
-    
-    def _create_welcome_message(self, workflow_steps: list) -> str:
-        """Create a warm, professional welcome message with proper instructions"""
-        try:
-            # Create a comprehensive welcome message with instructions
-            welcome_msg = "Hello! I'm your KYC assistant. Welcome to your identity verification session. "
-            welcome_msg += "I'll guide you through a few simple steps to complete your verification. "
-            welcome_msg += "We'll start by taking a clear photo of your face, then capture your identity documents, "
-            welcome_msg += "and finally ask you a few verification questions. "
-            welcome_msg += "Please ensure you have good lighting and your documents ready. "
-            welcome_msg += "Let's begin with the first step."
-            
-            return welcome_msg
-            
-        except Exception as e:
-            logger.error(f"🎯 AGENT: Error creating welcome message: {e}")
-            return "Hello! I'm your KYC assistant. I'll guide you through your identity verification process. Let's begin!"
     
     async def _start_first_step(self, first_step: dict) -> None:
         """Start the first step of the workflow"""

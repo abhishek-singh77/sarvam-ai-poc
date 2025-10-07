@@ -541,36 +541,55 @@ export class WorkflowRunnerService {
     private async callStepCompletionAPI(step: WorkflowStep): Promise<void> {
         // Get session ID from session storage
         const sessionData = this.sessionStorage.getSessionData()
-        if (!sessionData?.sessionId) {
-            throw new Error('No session ID found')
-        }
-        const sessionId = sessionData.sessionId
+        const sessionId = sessionData?.sessionId
 
-        // Call the correct step completion API endpoint
-        const response = await fetch(
-            `${environment.apiUrl}/kyc/workflow-submissions/steps/${sessionId}/${step.id}/complete`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    step_id: step.id,
-                    data: step.data || {},
-                }),
+        // If no session or API URL is missing, operate in offline/no-op mode
+        if (!sessionId || !environment?.apiUrl) {
+            console.warn(
+                '🎯 WORKFLOW-RUNNER: Skipping backend step completion (no session/api). Advancing locally.'
+            )
+            return
+        }
+
+        try {
+            // Call the correct step completion API endpoint
+            const response = await fetch(
+                `${environment.apiUrl}/kyc/workflow-submissions/steps/${sessionId}/${step.id}/complete`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        step_id: step.id,
+                        data: step.data || {},
+                    }),
+                }
+            )
+
+            if (!response.ok) {
+                console.warn(
+                    '🎯 WORKFLOW-RUNNER: Step completion API returned non-ok response:',
+                    response.statusText
+                )
+                return
             }
-        )
 
-        if (!response.ok) {
-            throw new Error(`Step completion failed: ${response.statusText}`)
-        }
+            const result = await response.json()
+            console.log(
+                '🎯 WORKFLOW-RUNNER: Step completion API response:',
+                result
+            )
 
-        const result = await response.json()
-        console.log('🎯 WORKFLOW-RUNNER: Step completion API response:', result)
-
-        // Update step data with API response
-        if (result.data) {
-            step.data = { ...step.data, ...result.data }
+            // Update step data with API response
+            if (result?.data) {
+                step.data = { ...step.data, ...result.data }
+            }
+        } catch (error) {
+            console.warn(
+                '🎯 WORKFLOW-RUNNER: Step completion API call failed, continuing locally:',
+                error
+            )
         }
     }
 
